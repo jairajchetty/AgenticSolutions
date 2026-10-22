@@ -10,8 +10,12 @@ DEFAULT_MODEL = "claude-sonnet-5-5"
 
 
 def get_llm(model: str | None = None, **kwargs) -> ChatAnthropic:
+    """Build the Claude client.
+
+    No temperature is set by default: newer Claude models reject non-default
+    values. Pass `temperature=...` explicitly only for models that allow it.
+    """
     return ChatAnthropic(
         model=model or os.getenv("CLAUDE_MODEL", DEFAULT_MODEL),
-        temperature=kwargs.pop("temperature", 0),
         **kwargs,
     )
