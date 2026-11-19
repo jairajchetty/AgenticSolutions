@@ -34,6 +34,13 @@ EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
 # Minimum cosine similarity that counts as a threat. Lower = stricter (more
 # false alarms), higher = more lenient (more attacks slip through). The value
 # is model-specific: bge-small scores unrelated text around 0.4-0.6.
+#
+# Calibrated by hand against bge-small-en-v1.5 with the 9-phrase library:
+# attack paraphrases scored 0.65-0.96, harmless questions 0.37-0.79 (the
+# highest were "show me an example of a system prompt..." at 0.79). 0.80 is
+# the lowest value with no false alarms in that set, but it still misses
+# weaker paraphrases (0.65-0.78). The fix for those is more phrases in
+# threatlibrary.json, not a lower threshold, which would block real questions.
 DEFAULT_THRESHOLD = 0.80
 
 

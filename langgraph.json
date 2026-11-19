@@ -1,7 +1,8 @@
 {
   "dependencies": ["."],
   "graphs": {
-    "qa_agent": "./src/agentic_solutions/agents/qa_agent/graph.py:graph"
+    "qa_agent": "./src/agentic_solutions/agents/qa_agent/graph.py:graph",
+    "interrupt_chat_agent": "./src/agentic_solutions/agents/interrupt_chat_agent/graph.py:graph"
   },
   "env": ".env"
 }
