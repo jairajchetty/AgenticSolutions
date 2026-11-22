@@ -13,6 +13,8 @@ The dividing line from the other two multi-agent patterns: **Swarm has no coordi
 ## How this graph works
 This is a skeleton: the nodes below are placeholders, but the wiring is real.
 
+The line from [[collaboration/supervisor]] is visible in the shape: no node coordinates, and `billing` and `technical` hand off to each other directly.
+
 `triage` is only the entry point. It is not a manager. After it hands off, control moves between peers.
 
 - `triage` answers simple questions or hands off. Its router goes to `billing`, `technical`, or the end.

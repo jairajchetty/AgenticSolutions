@@ -13,7 +13,7 @@ The dividing line from the other two multi-agent patterns: **Hierarchy stacks su
 ## How this graph works
 This is a skeleton: the nodes below are placeholders, but the wiring is real. The teams are drawn as flat nodes so the whole structure fits in one diagram.
 
-The line from Supervisor is the extra level: `director` never talks to a worker directly. It talks to leads, and the leads talk to workers.
+The line from [[collaboration/supervisor]] is the extra level: `director` never talks to a worker directly. It talks to leads, and the leads talk to workers.
 
 - `director` is the top coordinator. Its router sends work to `research_lead`, to `writing_lead`, or to the end.
 - `research_lead` supervises `searcher` and `analyst`, then reports back to `director`.

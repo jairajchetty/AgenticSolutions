@@ -13,7 +13,7 @@ The dividing line from the other two multi-agent patterns: **Supervisor has exac
 ## How this graph works
 This is a skeleton: the nodes below are placeholders, but the wiring is real.
 
-The line from Hierarchy and Swarm is visible in the shape: every edge runs through `supervisor`, the single coordinator, and no worker links to another worker.
+The lines from [[collaboration/hierarchy]] and [[collaboration/swarm]] are visible in the shape: every edge runs through `supervisor`, the single coordinator, and no worker links to another worker.
 
 - `supervisor` reads the state and picks the next step. Its router sends control to `researcher`, to `writer`, or to the end when the work is done.
 - `researcher` gathers material and returns to `supervisor`.

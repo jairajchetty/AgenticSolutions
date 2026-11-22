@@ -13,6 +13,8 @@ The dividing line from Workflow: **in Planning the model writes the steps at run
 ## How this graph works
 This is a skeleton: the nodes below are placeholders, but the wiring is real.
 
+The line from Workflow: here the model writes the steps at run time, in `planner`. In [[execution/workflow]] the steps are fixed in code.
+
 - `planner` turns the goal into a short list of steps.
 - `executor` works on the current step. Its router has three exits: `tools` if the step needs a tool call, back to `executor` when a step finished and more remain, and `synthesizer` when all steps are done.
 - `tools` runs the requested calls and returns to `executor`.

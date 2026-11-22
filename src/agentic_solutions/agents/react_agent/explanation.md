@@ -15,6 +15,8 @@ Dividing lines:
 ## How this graph works
 This is a skeleton: the nodes below are placeholders, but the wiring is real.
 
+The lines from its neighbours are in the shape. ReAct is the short `agent` -> `tools` -> `agent` loop that answers one request, and [[execution/tool-use]] is the same loop seen as a capability. Unlike [[execution/autonomous]], which pursues an open goal over a long run, this loop ends when the model answers in plain text.
+
 - `ask` takes the next user message. Its router sends the turn to `agent`, back to `ask` on empty input, or to `__end__` when the user stops.
 - `agent` is the reasoning step. A live version would call the model with tools bound. Its router goes to `tools` when the model asked for any, otherwise back to `ask` with the final text.
 - `tools` runs the requested calls, then returns to `agent` so the model can read the results.

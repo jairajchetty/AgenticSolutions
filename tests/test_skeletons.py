@@ -35,6 +35,19 @@ SKELETONS = {
     "knowledge_graph_agent": ({"extract_entities", "query_graph", "answer", "update_graph"},
         {("__start__","extract_entities"), ("extract_entities","query_graph"), ("query_graph","answer"),
          ("answer","update_graph"), ("update_graph","__end__")}),
+    "routing_agent": ({"classify", "billing", "technical", "general"},
+        {("__start__","classify"), ("classify","billing"), ("classify","technical"), ("classify","general"),
+         ("billing","__end__"), ("technical","__end__"), ("general","__end__")}),
+    "workflow_agent": ({"extract", "validate", "transform", "load", "handle_error"},
+        {("__start__","extract"), ("extract","validate"), ("validate","transform"), ("validate","handle_error"),
+         ("transform","load"), ("load","__end__"), ("handle_error","__end__")}),
+    "event_driven_agent": ({"receive_event", "handle_order", "handle_refund", "ignore", "emit_result"},
+        {("__start__","receive_event"), ("receive_event","handle_order"), ("receive_event","handle_refund"),
+         ("receive_event","ignore"), ("handle_order","emit_result"), ("handle_refund","emit_result"),
+         ("ignore","__end__"), ("emit_result","__end__")}),
+    "autonomous_agent": ({"set_goal", "plan", "act", "observe", "check_goal", "report"},
+        {("__start__","set_goal"), ("set_goal","plan"), ("plan","act"), ("act","observe"), ("observe","check_goal"),
+         ("check_goal","plan"), ("check_goal","report"), ("report","__end__")}),
 }
 
 AGENTS_DIR = Path(__file__).resolve().parents[1] / "src" / "agentic_solutions" / "agents"

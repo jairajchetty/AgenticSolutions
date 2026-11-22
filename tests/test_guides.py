@@ -58,3 +58,27 @@ def test_guide_only_h1_is_taxonomy_name():
             assert first == f"# {p.name}", p.folder
             seen.add(p.folder)
     assert seen == H1_CHECK
+
+
+# folder -> routes that must appear as [[route]] markers inside "## How this graph works".
+DIVIDING: dict[str, set[str]] = {
+    "react_agent": {"execution/tool-use", "execution/autonomous"},
+    "reflection_agent": {"governance/review"},
+    "plan_execute_agent": {"execution/workflow"},
+    "supervisor_agent": {"collaboration/hierarchy", "collaboration/swarm"},
+    "swarm_agent": {"collaboration/supervisor"},
+    "hierarchy_agent": {"collaboration/supervisor"},
+    "episodic_memory_agent": {"memory/session"},
+    "semantic_memory_agent": {"memory/knowledge-graph"},
+    "knowledge_graph_agent": {"memory/semantic"},
+    "routing_agent": {"collaboration/supervisor"},
+    "workflow_agent": {"cognitive/planning"},
+    "autonomous_agent": {"cognitive/react"},
+}
+
+
+@pytest.mark.parametrize("folder", sorted(DIVIDING))
+def test_dividing_line_in_how_this_graph_works(folder):
+    text = (AGENTS / folder / "explanation.md").read_text()
+    section = text.split("## How this graph works", 1)[1].split("\n## ", 1)[0]
+    assert set(re.findall(r"\[\[([^\]]+)\]\]", section)) >= DIVIDING[folder]

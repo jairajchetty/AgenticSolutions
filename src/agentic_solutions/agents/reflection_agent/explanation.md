@@ -13,6 +13,8 @@ The dividing line from Review: **Reflection is the same agent critiquing its own
 ## How this graph works
 This is a skeleton: the nodes below are placeholders, but the wiring is real.
 
+The line from Review is in the shape: `critique` is a node of the same graph, so the agent judges its own draft. In [[governance/review]] the checker is a separate agent or a person.
+
 - `generate` writes the first draft from the task.
 - `critique` reads the draft and returns a score and written feedback. Its router either ends the run, when the score is high enough or the round limit is reached, or sends the draft to `revise`.
 - `revise` rewrites the draft using the feedback, then returns to `critique`.
