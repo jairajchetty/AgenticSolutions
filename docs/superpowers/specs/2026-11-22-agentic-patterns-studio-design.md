@@ -49,7 +49,7 @@ Seven patterns. The first four wrap the agents already in this repo; the last th
 | 7 | `plan_execute` | Plan-and-Execute | trigger | new `plan_execute_agent` |
 
 Also in scope:
-- **Offline mode** with scripted LLM responses (the default for anonymous visitors), and **Live mode** with real Claude, unlocked by an access code.
+- **Offline mode** with scripted LLM responses (the default for anonymous visitors), and **Live mode** with a real model (default **Claude Haiku 5.5**, see §3a), unlocked by an access code.
 - Public-hosting safeguards: per-session budgets, per-IP rate limits, input limits, session expiry, and safe tools only.
 - A Docker image with Docker Compose and Caddy (TLS) for a single VM with **2 GB of RAM or more** (the person's decision; 2 vCPU / 4 GB recommended, see §9a). The image installs **CPU-only PyTorch** and **bakes `bge-small-en-v1.5` into the image** at build time, so startup needs no Hugging Face download. `guard.py` and its 0.80 threshold are unchanged.
 
@@ -72,7 +72,7 @@ Browser ──HTTPS──► Caddy (TLS via Let's Encrypt, reverse proxy)
                            └─ POST /api/session/unlock  access code → Live mode
                          Pattern registry → LangGraph graphs (in-process)
                          SQLite checkpointer (volume)   ← one thread per conversation
-                         LLM provider: ChatAnthropic (live) | ScriptedChatModel (offline)
+                         LLM provider: init_chat_model(LIVE_MODEL) (live) | ScriptedChatModel (offline)
 ```
 
 Key decisions:
@@ -81,6 +81,25 @@ Key decisions:
 - **Topology comes from the compiled graph** (`graph.get_graph()`), never written by hand, so the picture can't drift from the code.
 - **The frontend uses no build step.** Libraries load from cdnjs/jsDelivr at pinned versions: Cytoscape.js with the dagre layout for the graph, marked + DOMPurify for Markdown. This keeps the repo Python-only; Node isn't needed.
 - **The LLM is injected.** Each graph gets its model through a factory, so the same graph runs against Claude, the offline script, or a test fake.
+
+## 3a. Model selection
+
+**Default Live model: Claude Haiku 5.5 (`claude-haiku-5-5`).** It costs $0.10 input and $0.50 output per million tokens, about 20× less than Sonnet 5.5. A typical demo run (about 3k tokens in, 500 out) costs well under a tenth of a cent, and the 2M-token daily cap costs at most about $1 a day. Haiku 5.5 supports the tool calling and structured output that patterns 5–7 need. Switch to Sonnet 5.5 by setting `LIVE_MODEL=anthropic:claude-sonnet-5-5`, with no code changes. The prices come from Anthropic's list and should be re-checked when deploying.
+
+**Provider-neutral configuration.** The web app creates its Live model with LangChain's `init_chat_model`, through `common/llm.py`:
+
+```python
+def make_chat_model(model: str, **kwargs) -> BaseChatModel:
+    """'anthropic:claude-haiku-5-5', 'ollama:qwen3', ... -> a LangChain chat model."""
+    return init_chat_model(model, **kwargs)
+```
+
+- Agents get their model only through the injected `LLMFactory`, so no graph code names a provider.
+- **Provider packages are optional extras:** `langchain-anthropic` stays a core dependency, and other integrations (for example `langchain-ollama`) are installed only when wanted, through a `providers` extra or manually. Selecting a provider whose package is missing fails at startup with a clear message, not on the first visitor's request.
+- **Provider-neutral pieces:** budgets read the standard `usage_metadata` on LangChain `AIMessage`s. Tool calls use `bind_tools`, and structured output uses `with_structured_output`. A model whose integration doesn't report `usage_metadata` is counted conservatively: each call is charged `LIVE_SESSION_TOKENS / LIVE_SESSION_CALLS` tokens.
+- **Quality bar for non-Claude models (builder's note):** small open models are often unreliable at tool calling and structured output, which patterns 5–7 depend on. The README documents this, and the app makes no attempt to repair malformed tool calls. A failure shows up as an `error` event in the trace.
+- **Not in v1:** per-pattern model overrides, letting visitors pick a model, and a provider-specific rate-limit mapping for anything other than Anthropic.
+- The existing CLIs keep using `get_llm()` and `CLAUDE_MODEL` unchanged.
 
 ## 4. Pattern catalog
 
@@ -212,7 +231,7 @@ Implementation: `graph.astream(input, config, stream_mode=["tasks", "messages"])
 - **Graph styling:** each node has a state: idle, active (pulsing accent), done (filled), error (red) or paused (amber ⏸). Edges flash when taken and keep a count of how often they were traversed. Conditional edges are dashed and labelled. `__start__` and `__end__` are small terminal dots.
 - **Timeline:** one row per step (`#n node · duration`). Clicking a row selects that step: its node is highlighted and the state view shows the state up to that step. That is inspection only, not replay.
 - **Pacing:** offline mode adds simulated latency (300–900 ms per LLM call, tokens streamed at about 40 per second) so the animation is easy to follow. Live mode shows real timing.
-- **Mode badge:** shows `Offline (scripted)` or `Live · Claude`, plus the remaining budget. 🔑 opens the unlock dialog.
+- **Mode badge:** shows `Offline (scripted)` or `Live · <model display name>` (e.g. `Live · Claude Haiku 5.5`), plus the remaining budget. 🔑 opens the unlock dialog.
 - **Responsive:** below 900 px the panels stack in the order Console, Trace, Guide. Light and dark themes follow `prefers-color-scheme`.
 - **Accessibility:** a node's state is shown by both colour and an icon or label. The timeline and console announce changes through an `aria-live` region.
 - The URL hash (`#react`) selects the pattern, so links can point straight at one.
@@ -264,7 +283,7 @@ Requirements:
 - **No blocking sleeps.** The offline `ScriptedChatModel` simulates latency with `asyncio.sleep` in its async path (`_agenerate`/`_astream`). If it's called synchronously from inside a node, it must not hold a worker thread longer than the simulated latency. The plan's spike picks the mechanism.
 - **The guard runs off the event loop.** Embedding is CPU work, about 10–30 ms per prompt. It runs inside a sync node and so in the thread pool, and PyTorch releases the GIL. Torch's intra-op threads are capped (`torch.set_num_threads(2)`) so that guard calls running at the same time can't oversubscribe the CPUs.
 - **SQLite tuned for concurrent writes:** `journal_mode=WAL`, `synchronous=NORMAL`, and one shared async connection. The 24-hour cleanup bounds the file's growth.
-- **Anthropic limits:** a 429 from the API becomes a friendly "Claude is busy, try again in a moment" `error` event. Retries stay as the SDK's defaults (2). The access codes and the daily cap keep Live traffic well below the account's rate limits.
+- **Provider limits:** a rate-limit error from the provider (`anthropic.RateLimitError` for Anthropic; any error a provider adapter maps to rate limiting) becomes a friendly "The model is busy, try again in a moment" `error` event. Retries stay as the SDK's defaults (2). The access codes and the daily cap keep Live traffic well below the account's rate limits.
 - **SSE through Caddy:** `flush_interval -1` on the reverse proxy, plus a heartbeat comment (`: ping`) every 15 s so idle streams aren't dropped.
 
 **Not covered:** high availability. One process on one VM means a restart interrupts the runs in progress and resets sessions. Scaling beyond about 1,000 visitors, or surviving a server failure, means a Postgres checkpointer, Redis for sessions and rate limits, and several workers. Sessions, the limiter and the checkpointer each sit behind a small interface so they can be swapped later, but that move isn't built in v1.
@@ -279,8 +298,9 @@ Requirements:
 
 | Var | Default | Purpose |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | none | Live mode (absent → Live disabled) |
-| `CLAUDE_MODEL` | `claude-sonnet-5-5` | existing setting, unchanged |
+| `LIVE_MODEL` | `anthropic:claude-haiku-5-5` | the web app's Live model, as a `provider:model` string for `init_chat_model` (§3a) |
+| `ANTHROPIC_API_KEY` | none | the credential for `anthropic:` models. Live is disabled when the selected provider's credential is missing. Other providers use their own variables. |
+| `CLAUDE_MODEL` | `claude-sonnet-5-5` | existing CLI setting, unchanged; used by `get_llm()` when no model string is given |
 | `SESSION_SECRET` | random per start (dev only) | cookie signing; required in production |
 | `ACCESS_CODE_HASHES` | empty | comma-separated SHA-256 hex digests |
 | `LIVE_SESSION_CALLS` / `LIVE_SESSION_TOKENS` | 40 / 60000 | per-session budget |
@@ -293,7 +313,7 @@ Requirements:
 
 ```
 src/agentic_solutions/
-  common/llm.py                 # get_llm (unchanged API) + LLMFactory type
+  common/llm.py                 # get_llm (unchanged API) + make_chat_model(model_string) + LLMFactory type
   agents/
     qa_agent/ chat_agent/ secure_chat_agent/ interrupt_chat_agent/   # + explanation.md each
     react_agent/        graph.py tools.py explanation.md __main__.py
@@ -327,6 +347,7 @@ Tests are written first (TDD) and run offline, with no network or API calls:
 - **Agents:** for each new graph, routing tests for every branch with the scripted or fake models: the tool loop and its round-trip cap, Reflection stopping on score and on the iteration cap, Plan-and-Execute running each step once and then synthesizing. Calculator safety tests reject `__import__`, attribute access and huge exponents.
 - **Topology:** the JSON for each registered pattern matches the graph's nodes and edges, with conditional edges flagged.
 - **Runner:** the event sequence for a scripted run (`run_started` → `node_started`/`node_finished` pairs → `edge`s → `interrupt` or `run_finished`); serialization of messages and tool calls; a budget running out mid-run.
+- **Model config:** `make_chat_model` parses provider strings; a missing provider package fails at startup; usage is counted from `usage_metadata`, with the conservative charge used when it's absent.
 - **API:** catalog and detail endpoints; thread ownership (another session gets 404); unlock success, failure and lockout; the 409 for concurrent runs; the 413 or 422 for oversized input; the rate-limit 429; and that no secrets appear in responses.
 - **Offline scripts:** every sample input of every pattern runs to `completed` or `paused` without reaching the default rule.
 - **Load:** the Locust test and pass criteria in §9a (milestone 3, run manually against the container, not in `pytest`).
