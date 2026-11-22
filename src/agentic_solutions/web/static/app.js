@@ -38,6 +38,22 @@ function showView(view, { bench = false } = {}) {
   $("pattern-view").hidden = view !== "pattern";
   $("bench").hidden = !(view === "pattern" && bench);
   $("guide-only").hidden = !(view === "pattern" && !bench);
+  updateSkipLink();
+}
+
+// The skip link (first tab stop) jumps to the current view's main content:
+// the console input on a live page, else the view heading. It is handled here
+// so the hash never changes: `#console` would otherwise route as unknown.
+function skipToContent(event) {
+  event.preventDefault();
+  if ($("pattern-view").hidden) $("home-title").focus();
+  else if ($("bench").hidden) $("page-title").focus();
+  else $("console-text").focus();
+}
+
+function updateSkipLink() {
+  const live = !$("bench").hidden && !$("pattern-view").hidden;
+  $("skip-link").textContent = live ? "Skip to the agent console" : "Skip to the main content";
 }
 
 // Move focus to the new view's heading (Catalog spec §4.4); not on first load.
@@ -190,6 +206,7 @@ function route() {
 }
 
 async function start() {
+  $("skip-link").addEventListener("click", skipToContent);
   try {
     state.session = await getSession();
   } catch (err) {
@@ -416,6 +433,7 @@ function leaveBench() {
   if (!bench) return;
   bench.abort.abort();
   bench.console.setBusy(true);  // a send now would run on the page being left
+  bench.graph.destroy();  // no live Cytoscape instance outlives its page
   bench = null;
   benchToken++;
   chatGen++;

@@ -27,6 +27,10 @@ def test_js_unit_tests_pass():
     node = _node()
     if node is None:
         pytest.skip("no Node.js found (set NODE_BIN)")
+    version = subprocess.run([node, "--version"], capture_output=True, text=True, timeout=30).stdout.strip()
+    major = int(version.lstrip("v").split(".")[0]) if version.startswith("v") else 0
+    if major < 21:
+        pytest.skip(f"Node {version or '?'} is too old: the test-file glob needs Node 21+")
     # A relative glob: Windows Node started from WSL resolves it against the WSL
     # cwd. (Node 22+ reads a bare directory argument as a file, so name the files.)
     # TAP output gives stable "# pass N" / "# fail N" summary lines to check.
