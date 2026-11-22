@@ -15,6 +15,7 @@ export const state = { pattern: null, threadId: null, session: null };
 const $ = (id) => document.getElementById(id);
 let patterns = [];
 let loadToken = 0;  // ignores late responses after a quicker tab switch
+let requestedId = null;  // the pattern last asked for (state.pattern lags until its fetch lands)
 
 function announce(text) {
   $("announcer").textContent = text;
@@ -40,7 +41,7 @@ function renderTabs() {
       tab.dataset.pattern = p.id;
       tab.setAttribute("role", "tab");
       tab.setAttribute("aria-controls", "bench");
-      tab.title = p.summary;
+      tab.title = p.title.replace(/`/g, "");  // the label may be cut short with an ellipsis
       renderInlineCode(label, p.title);
     } else {
       tab.classList.add("tab-soon");
@@ -80,7 +81,12 @@ function onTabKey(event) {
 }
 
 function patternFromHash() {
-  const id = decodeURIComponent(location.hash.slice(1));
+  let id;
+  try {
+    id = decodeURIComponent(location.hash.slice(1));
+  } catch {
+    return DEFAULT_PATTERN;  // malformed escape such as #%E0
+  }
   return patterns.some((p) => p.id === id) ? id : DEFAULT_PATTERN;
 }
 
@@ -96,6 +102,7 @@ function renderPatternChrome(detail) {
 
 async function selectPattern(id) {
   const token = ++loadToken;
+  requestedId = id;
   markActiveTab(id);
   try {
     const detail = await getPattern(id);
@@ -108,6 +115,7 @@ async function selectPattern(id) {
     document.dispatchEvent(new CustomEvent("pattern-change", { detail: { pattern: detail } }));
   } catch (err) {
     if (token !== loadToken) return;
+    requestedId = null;  // let a click on any tab, even this one, retry
     showGuideError(`Could not load this pattern: ${err.message}. Reload the page to try again.`);
   }
 }
@@ -139,7 +147,7 @@ async function start() {
   window.addEventListener("hashchange", () => {
     const id = patternFromHash();
     if (location.hash.slice(1) !== id) history.replaceState(null, "", `#${id}`);
-    if (state.pattern?.id !== id) selectPattern(id);
+    if (requestedId !== id) selectPattern(id);
   });
   const id = patternFromHash();
   if (location.hash.slice(1) !== id) history.replaceState(null, "", `#${id}`);
