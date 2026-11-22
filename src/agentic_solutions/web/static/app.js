@@ -1,133 +1,168 @@
-// App shell: owns the app state, the pattern tabs and hash routing (spec §6).
+// App shell: owns the app state, the views and hash routing (Catalog spec §4).
 //
-// The URL hash (#guardrail) selects the pattern; the default is `qa`.
-// Choosing a pattern loads its detail, renders the Guide and fires a
-// `pattern-change` event on `document`; the wiring below rebuilds the trace
-// graph, timeline and console for it and runs messages through `streamRun`.
-import { ApiError, createThread, getPatterns, getPattern, getSession, getState, streamRun } from "./api.js";
+// The URL hash picks the view (router.js): `#/` is the catalog home and
+// `#/<category>/<pattern>` a pattern page; M1's `#guardrail`-style links are
+// rewritten in place. A pattern page loads its catalog page data. When the
+// pattern has a live demo, the M1 workbench opens for it: its registry detail
+// is loaded, the Guide rendered and a `pattern-change` event fired on
+// `document`; the wiring below rebuilds the trace graph, timeline and console
+// for it and runs messages through `streamRun`. Otherwise the Guide-only view
+// shows.
+import {
+  ApiError, createThread, getCatalog, getCatalogPage, getPattern, getSession, getState, streamRun,
+} from "./api.js";
 import { renderGuide, renderInlineCode } from "./guide.js";
 import { createGraph } from "./graph.js";
 import { createTrace } from "./trace.js";
 import { createConsole } from "./console.js";
+import { formatHash, parseHash } from "./router.js";
 
-const DEFAULT_PATTERN = "qa";
-const TAB_SLOTS = 7;  // the full catalog (spec §4); unbuilt patterns show as placeholders
+const NOT_FOUND_TEXT = "That pattern wasn't found";
+const HOME = "home";  // requestedRoute while the catalog home is showing
 
 export const state = { pattern: null, threadId: null, session: null };
 
 const $ = (id) => document.getElementById(id);
-let patterns = [];
-let loadToken = 0;  // ignores late responses after a quicker tab switch
-let requestedId = null;  // the pattern last asked for (state.pattern lags until its fetch lands)
+let loadToken = 0;  // ignores late responses after a quicker route change
+let requestedRoute = null;  // the route last asked for (state.pattern lags until its fetch lands)
+let routed = false;  // after the first view, each route change moves focus to its heading
 
 function announce(text) {
   $("announcer").textContent = text;
 }
 
-function renderTabs() {
-  const list = $("pattern-tabs");
-  list.replaceChildren();
-  for (let i = 0; i < TAB_SLOTS; i++) {
-    const p = patterns[i];
-    const li = document.createElement("li");
-    li.setAttribute("role", "presentation");
-    const tab = document.createElement(p ? "a" : "span");
-    tab.className = "tab";
-    const num = document.createElement("span");
-    num.className = "tab-num";
-    num.textContent = String(i + 1);
-    const label = document.createElement("span");
-    label.className = "tab-label";
-    if (p) {
-      tab.href = `#${p.id}`;
-      tab.id = `tab-${p.id}`;
-      tab.dataset.pattern = p.id;
-      tab.setAttribute("role", "tab");
-      tab.setAttribute("aria-controls", "bench");
-      tab.title = p.title.replace(/`/g, "");  // the label may be cut short with an ellipsis
-      renderInlineCode(label, p.title);
-    } else {
-      tab.classList.add("tab-soon");
-      tab.setAttribute("aria-disabled", "true");
-      tab.title = "Coming soon";
-      label.classList.add("visually-hidden");  // number only, to keep the bar compact
-      label.textContent = `Pattern ${i + 1}, coming soon`;
-    }
-    tab.append(num, label);
-    li.append(tab);
-    list.append(li);
-  }
+// Show one view ("home" or "pattern"); `bench` picks the workbench over the
+// Guide-only view inside the pattern page.
+function showView(view, { bench = false } = {}) {
+  $("home").hidden = view !== "home";
+  $("pattern-view").hidden = view !== "pattern";
+  $("bench").hidden = !(view === "pattern" && bench);
+  $("guide-only").hidden = !(view === "pattern" && !bench);
 }
 
-function markActiveTab(id) {
-  for (const tab of document.querySelectorAll(".tab[data-pattern]")) {
-    const on = tab.dataset.pattern === id;
-    tab.setAttribute("aria-selected", String(on));
-    tab.tabIndex = on ? 0 : -1;
-  }
+// Move focus to the new view's heading (Catalog spec §4.4); not on first load.
+function focusHeading(id) {
+  if (routed) $(id).focus();
+  routed = true;
 }
 
-// Arrow keys move between the built tabs (WAI-ARIA tabs pattern).
-function onTabKey(event) {
-  const tabs = [...document.querySelectorAll(".tab[data-pattern]")];
-  const at = tabs.indexOf(document.activeElement);
-  if (at < 0) return;
-  const step = { ArrowRight: 1, ArrowLeft: -1 }[event.key];
-  let next = null;
-  if (step) next = tabs[(at + step + tabs.length) % tabs.length];
-  if (event.key === "Home") next = tabs[0];
-  if (event.key === "End") next = tabs[tabs.length - 1];
-  if (!next) return;
-  event.preventDefault();
-  next.focus();
-  location.hash = next.dataset.pattern;
+function setNotice(text) {
+  const el = $("home-notice");
+  el.textContent = text ?? "";
+  el.hidden = !text;
 }
 
-function patternFromHash() {
-  let id;
+// ---------- Catalog home ----------
+//
+// A placeholder list of every pattern; Task 10's catalog.js replaces the
+// body of showHome() with the real catalog (cards, search, status marks).
+
+let catalog = null;  // GET /api/catalog, fetched once
+
+async function showHome({ notice = null } = {}) {
+  const token = ++loadToken;
+  requestedRoute = HOME;
+  leaveBench();
+  showView("home");
+  setNotice(notice);
+  $("breadcrumbs").replaceChildren();
+  document.title = "Catalog · Agentic Patterns Studio";
+  focusHeading("home-title");
+  announce(notice ?? "Opened Catalog");
   try {
-    id = decodeURIComponent(location.hash.slice(1));
-  } catch {
-    return DEFAULT_PATTERN;  // malformed escape such as #%E0
+    catalog ??= await getCatalog();
+  } catch (err) {
+    if (token !== loadToken) return;
+    requestedRoute = null;  // let the next hash change retry
+    setNotice(`Could not load the catalog: ${err.message}. Reload the page to try again.`);
+    return;
   }
-  return patterns.some((p) => p.id === id) ? id : DEFAULT_PATTERN;
+  if (token !== loadToken) return;
+  renderCatalogList($("home-body"), catalog);
+}
+
+function renderCatalogList(el, data) {
+  const nav = document.createElement("nav");
+  nav.setAttribute("aria-label", "Patterns");
+  for (const category of data.categories) {
+    const h = document.createElement("h3");
+    h.textContent = category.name;
+    const list = document.createElement("ul");
+    for (const p of category.patterns) {
+      const li = document.createElement("li");
+      const a = document.createElement("a");
+      a.href = formatHash(p.route);
+      a.textContent = p.name;
+      li.append(a, ` (${p.status === "live" ? "Live demo" : "Guide"})`);
+      list.append(li);
+    }
+    nav.append(h, list);
+  }
+  el.replaceChildren(nav);
+}
+
+// ---------- Pattern page ----------
+
+async function selectRoute(route) {
+  const token = ++loadToken;
+  requestedRoute = route;
+  leaveBench();  // a stream from the page being left stops now, not when the fetch lands
+  try {
+    const page = await getCatalogPage(route);
+    if (token !== loadToken) return;
+    const detail = page.demo ? await getPattern(page.demo) : null;
+    if (token !== loadToken) return;
+    renderPageChrome(page);
+    if (detail) openLivePage(page, detail);
+    else showGuideOnly(page);
+    focusHeading("page-title");
+    announce(`Opened ${page.name}`);
+  } catch (err) {
+    if (token !== loadToken) return;
+    if (err instanceof ApiError && err.status === 404) return notFound();
+    showHome({ notice: `Could not load this pattern: ${err.message}. Reload the page to try again.` });
+    requestedRoute = null;  // so a hash change back to this route retries it
+  }
+}
+
+// The heading and title every pattern page shares (Catalog spec §4.3). Task
+// 10 adds the breadcrumb links and the ←/→ buttons.
+function renderPageChrome(page) {
+  $("page-title").textContent = page.name;
+  document.title = `${page.name} · ${page.category.name} · Agentic Patterns Studio`;
+}
+
+// A live demo: the M1 workbench, unchanged, for the registry pattern `demo`.
+function openLivePage(page, detail) {
+  showView("pattern", { bench: true });
+  state.pattern = detail;
+  state.threadId = null;
+  renderPatternChrome(detail);
+  renderGuide($("guide-body"), page.explanation_md);
+  document.dispatchEvent(new CustomEvent("pattern-change", { detail: { pattern: detail } }));
+}
+
+// A pattern with no demo yet: no thread, no run. Placeholder: Task 10 adds
+// the "Live demo coming" banner and the static diagram above the Guide.
+function showGuideOnly(page) {
+  showView("pattern");
+  state.pattern = null;
+  state.threadId = null;
+  renderGuide($("guide-only-body"), page.explanation_md);
+}
+
+function notFound() {
+  history.replaceState(null, "", formatHash());
+  showHome({ notice: NOT_FOUND_TEXT });
 }
 
 function renderPatternChrome(detail) {
   const heading = $("trace-pattern");
   heading.replaceChildren();
-  renderInlineCode(heading, detail.title);
+  renderInlineCode(heading, detail.title);  // the registry title, as the subtitle
   $("console-summary").textContent = detail.summary;
   $("console").dataset.mode = detail.mode;  // "chat" or "trigger"
   $("console-send").textContent = detail.mode === "chat" ? "Send" : "Run";
-  document.title = `${detail.title.replace(/`/g, "")} · Agentic Patterns Studio`;
-}
-
-async function selectPattern(id) {
-  const token = ++loadToken;
-  requestedId = id;
-  markActiveTab(id);
-  try {
-    const detail = await getPattern(id);
-    if (token !== loadToken) return;
-    state.pattern = detail;
-    state.threadId = null;
-    renderPatternChrome(detail);
-    renderGuide($("guide-body"), detail.explanation_md);
-    announce(`Pattern: ${detail.title.replace(/`/g, "")}`);
-    document.dispatchEvent(new CustomEvent("pattern-change", { detail: { pattern: detail } }));
-  } catch (err) {
-    if (token !== loadToken) return;
-    requestedId = null;  // let a click on any tab, even this one, retry
-    showGuideError(`Could not load this pattern: ${err.message}. Reload the page to try again.`);
-  }
-}
-
-function showGuideError(text) {
-  const p = document.createElement("p");
-  p.className = "error-note";
-  p.textContent = text;
-  $("guide-body").replaceChildren(p);
 }
 
 function renderSession(session) {
@@ -138,24 +173,33 @@ function renderSession(session) {
   if (session.max_input_chars) $("console-text").maxLength = session.max_input_chars;  // the server's limit
 }
 
+// Show whatever the hash names. A legacy M1 link is rewritten in place
+// (replaceState: no extra history entry); its remembered thread is keyed by
+// the registry id, so it still restores on the new route.
+function route() {
+  const where = parseHash(location.hash);
+  if (where.view === "legacy") {
+    history.replaceState(null, "", formatHash(where.route));
+    where.view = "pattern";
+  }
+  if (where.view === "unknown") return notFound();
+  const key = where.view === "home" ? HOME : where.route;
+  if (requestedRoute === key) return;  // already showing (or loading) it
+  if (where.view === "home") showHome();
+  else selectRoute(where.route);
+}
+
 async function start() {
-  $("pattern-tabs").addEventListener("keydown", onTabKey);
   try {
-    [patterns, state.session] = await Promise.all([getPatterns(), getSession()]);
+    state.session = await getSession();
   } catch (err) {
-    showGuideError(`Could not reach the Studio server: ${err.message}. Reload the page to try again.`);
+    showView("home");
+    setNotice(`Could not reach the Studio server: ${err.message}. Reload the page to try again.`);
     return;
   }
   renderSession(state.session);
-  renderTabs();
-  window.addEventListener("hashchange", () => {
-    const id = patternFromHash();
-    if (location.hash.slice(1) !== id) history.replaceState(null, "", `#${id}`);
-    if (requestedId !== id) selectPattern(id);
-  });
-  const id = patternFromHash();
-  if (location.hash.slice(1) !== id) history.replaceState(null, "", `#${id}`);
-  selectPattern(id);
+  window.addEventListener("hashchange", route);
+  route();
 }
 
 // ---------- Trace + console wiring (spec §5, §6) ----------
@@ -363,6 +407,18 @@ async function startNewChat(b) {
   showThreadCaption(b, null, null);
   b.console.setBusy(false);
   if (b.pattern.mode === "chat") await primeChat(b, gen);
+}
+
+// Leaving a live page (for the catalog, a Guide-only page or another demo):
+// hang up on its stream, which frees the session's run slot, and bump the
+// tokens so nothing still in flight lands in the next view (Review Focus 4).
+function leaveBench() {
+  if (!bench) return;
+  bench.abort.abort();
+  bench.console.setBusy(true);  // a send now would run on the page being left
+  bench = null;
+  benchToken++;
+  chatGen++;
 }
 
 async function openBench(pattern) {

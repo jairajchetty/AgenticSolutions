@@ -41,6 +41,11 @@ export const createThread = (patternId) =>
 export const getState = (threadId) =>
   request(`/api/threads/${encodeURIComponent(threadId)}/state`);
 
+// The catalog menu (Catalog spec §5.2): all categories, and one page by route.
+export const getCatalog = () => request("/api/catalog");
+export const getCatalogPage = (route) =>
+  request(`/api/catalog/${route.split("/").map(encodeURIComponent).join("/")}`);
+
 // Parse one SSE frame ("data: <json>" lines); returns null for frames with no data.
 function parseFrame(frame) {
   const data = frame

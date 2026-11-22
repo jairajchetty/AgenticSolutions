@@ -18,74 +18,92 @@
   <a class="skip-link" href="#console">Skip to the agent console</a>
 
   <header class="masthead">
-    <h1 class="brand">Agentic Patterns Studio</h1>
-    <nav class="patterns" aria-label="Patterns">
-      <ol class="pattern-tabs" id="pattern-tabs" role="tablist"></ol>
-    </nav>
+    <h1 class="brand"><a href="#/">Agentic Patterns Studio</a></h1>
+    <!-- Catalog › {Category} › {Pattern} on a pattern page (Catalog spec §4.3) -->
+    <nav class="breadcrumbs" id="breadcrumbs" aria-label="Breadcrumb"></nav>
     <div class="mode" id="mode-badge" aria-live="polite">
       <span class="mode-led" aria-hidden="true"></span>
       <span class="mode-text">Offline (scripted)</span>
     </div>
   </header>
 
-  <main class="bench" id="bench">
-    <section class="panel trace" id="trace" aria-labelledby="trace-title">
-      <header class="panel-head">
-        <h2 id="trace-title">Execution trace</h2>
-        <p class="panel-sub" id="trace-pattern"></p>
-        <p class="trace-thread" id="trace-thread" hidden></p>
-      </header>
-      <div class="trace-graph" id="trace-graph" role="img" aria-label="Graph of the selected pattern"></div>
-      <ul class="graph-legend" aria-label="Legend">
-        <li><span class="lg lg-active" aria-hidden="true">▶</span>running</li>
-        <li><span class="lg lg-done" aria-hidden="true">✓</span>done</li>
-        <li><span class="lg lg-paused" aria-hidden="true">⏸</span>paused</li>
-        <li><span class="lg lg-error" aria-hidden="true">✕</span>error</li>
-        <li><span class="lg-dash" aria-hidden="true"></span>conditional edge (if)</li>
-        <li><span class="lg-count" aria-hidden="true">×2</span>times taken</li>
-      </ul>
-      <div class="trace-lower">
-        <section class="trace-timeline" aria-labelledby="timeline-title">
-          <h3 id="timeline-title">Timeline</h3>
-          <ol class="timeline" id="trace-timeline" aria-live="polite">
-            <li class="empty-hint">Steps appear here as the graph runs.</li>
-          </ol>
+  <main id="main">
+    <!-- Catalog home (Catalog spec §4.2); catalog.js fills #home-body. -->
+    <section class="home" id="home" aria-labelledby="home-title" hidden>
+      <h2 class="view-title" id="home-title" tabindex="-1">Pattern catalog</h2>
+      <p class="notice" id="home-notice" role="status" hidden></p>
+      <div class="home-body" id="home-body"></div>
+    </section>
+
+    <!-- Pattern page (Catalog spec §4.3): the M1 workbench for a live demo, or
+         the Guide-only view for a pattern with no demo yet. -->
+    <div class="pattern-view" id="pattern-view" hidden>
+      <h2 class="view-title" id="page-title" tabindex="-1"></h2>
+
+      <section class="guide-only" id="guide-only" aria-labelledby="page-title" hidden>
+        <div class="guide-body" id="guide-only-body"></div>
+      </section>
+
+      <div class="bench" id="bench" hidden>
+        <section class="panel trace" id="trace" aria-labelledby="trace-title">
+          <header class="panel-head">
+            <h2 id="trace-title">Execution trace</h2>
+            <p class="panel-sub" id="trace-pattern"></p>
+            <p class="trace-thread" id="trace-thread" hidden></p>
+          </header>
+          <div class="trace-graph" id="trace-graph" role="img" aria-label="Graph of the selected pattern"></div>
+          <ul class="graph-legend" aria-label="Legend">
+            <li><span class="lg lg-active" aria-hidden="true">▶</span>running</li>
+            <li><span class="lg lg-done" aria-hidden="true">✓</span>done</li>
+            <li><span class="lg lg-paused" aria-hidden="true">⏸</span>paused</li>
+            <li><span class="lg lg-error" aria-hidden="true">✕</span>error</li>
+            <li><span class="lg-dash" aria-hidden="true"></span>conditional edge (if)</li>
+            <li><span class="lg-count" aria-hidden="true">×2</span>times taken</li>
+          </ul>
+          <div class="trace-lower">
+            <section class="trace-timeline" aria-labelledby="timeline-title">
+              <h3 id="timeline-title">Timeline</h3>
+              <ol class="timeline" id="trace-timeline" aria-live="polite">
+                <li class="empty-hint">Steps appear here as the graph runs.</li>
+              </ol>
+            </section>
+            <details class="trace-state" id="trace-state-box" open>
+              <summary>State</summary>
+              <div class="state-view" id="trace-state"></div>
+            </details>
+          </div>
         </section>
-        <details class="trace-state" id="trace-state-box" open>
-          <summary>State</summary>
-          <div class="state-view" id="trace-state"></div>
-        </details>
-      </div>
-    </section>
 
-    <section class="panel console" id="console" aria-labelledby="console-title">
-      <header class="panel-head">
-        <h2 id="console-title">Agent console</h2>
-        <p class="panel-sub" id="console-summary"></p>
-      </header>
-      <div class="console-messages" id="console-messages" aria-live="polite">
-        <p class="empty-hint">Pick a sample or type a message to run the graph.</p>
-      </div>
-      <div class="console-samples" id="console-samples" aria-label="Sample inputs"></div>
-      <form class="console-input" id="console-form" autocomplete="off">
-        <label class="visually-hidden" for="console-text">Message</label>
-        <textarea id="console-text" name="text" rows="2" maxlength="2000"
-                  placeholder="Type a message"></textarea>
-        <div class="console-actions">
-          <button type="submit" class="btn btn-primary" id="console-send">Send</button>
-          <button type="button" class="btn" id="console-new">New chat</button>
-        </div>
-      </form>
-    </section>
+        <section class="panel console" id="console" aria-labelledby="console-title">
+          <header class="panel-head">
+            <h2 id="console-title">Agent console</h2>
+            <p class="panel-sub" id="console-summary"></p>
+          </header>
+          <div class="console-messages" id="console-messages" aria-live="polite">
+            <p class="empty-hint">Pick a sample or type a message to run the graph.</p>
+          </div>
+          <div class="console-samples" id="console-samples" aria-label="Sample inputs"></div>
+          <form class="console-input" id="console-form" autocomplete="off">
+            <label class="visually-hidden" for="console-text">Message</label>
+            <textarea id="console-text" name="text" rows="2" maxlength="2000"
+                      placeholder="Type a message"></textarea>
+            <div class="console-actions">
+              <button type="submit" class="btn btn-primary" id="console-send">Send</button>
+              <button type="button" class="btn" id="console-new">New chat</button>
+            </div>
+          </form>
+        </section>
 
-    <section class="panel guide" id="guide" aria-labelledby="guide-title">
-      <header class="panel-head">
-        <h2 id="guide-title">Pattern guide</h2>
-      </header>
-      <div class="guide-body" id="guide-body">
-        <p class="empty-hint">Loading the guide…</p>
+        <section class="panel guide" id="guide" aria-labelledby="guide-title">
+          <header class="panel-head">
+            <h2 id="guide-title">Pattern guide</h2>
+          </header>
+          <div class="guide-body" id="guide-body">
+            <p class="empty-hint">Loading the guide…</p>
+          </div>
+        </section>
       </div>
-    </section>
+    </div>
   </main>
 
   <div class="visually-hidden" id="announcer" aria-live="polite"></div>
