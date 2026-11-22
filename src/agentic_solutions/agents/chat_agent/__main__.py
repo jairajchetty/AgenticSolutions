@@ -3,20 +3,13 @@
 Type a question and press Enter. Type "stop" to quit.
 """
 from agentic_solutions.agents.chat_agent.graph import STOP_WORD, graph
+from agentic_solutions.web.serialize import text_of
 
 # LangGraph aborts a run after `recursion_limit` steps (default 25) to stop
 # runaway loops. One question costs two steps (ask + answer), so the default
 # would end a long chat with an error after ~12 questions. A chat loop is
 # *meant* to run for a while, so we raise the limit.
 CONFIG = {"recursion_limit": 1000}
-
-
-def text_of(message) -> str:
-    """Return a message's text (Claude may reply with a list of content blocks)."""
-    content = message.content
-    if isinstance(content, str):
-        return content
-    return "".join(b.get("text", "") for b in content if isinstance(b, dict))
 
 
 def main() -> None:
