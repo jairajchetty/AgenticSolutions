@@ -13,7 +13,7 @@ The dividing line from the Studio's trace panel: **the trace panel is a live vie
 ## How this graph works
 This is a skeleton: the nodes below are placeholders, but the wiring is real.
 
-The line from the trace panel is about durability. A trace shows one run while you watch it; the entries `record` writes are meant to be kept and searched across runs. One source of such records is the checkpointer history, read with `aget_state_history` on a compiled graph that has a checkpointer. A real audit log usually also writes to its own durable store, because checkpoints exist to resume runs, not to answer audit queries.
+The line from the trace panel is about durability. A trace shows one run while you watch it; the entries `record` writes are meant to be kept and searched across runs. One source of such records is the checkpointer history, read with `aget_state_history` on a compiled graph that has a checkpointer. It lists the checkpoints of one thread (by `thread_id`), so you would read it per thread, or copy entries into a store you can query across threads. A real audit log usually also writes to its own durable store, because checkpoints exist to resume runs, not to answer audit queries.
 
 Audit also relates to [[governance/approval]]: an approval is an event, and an audit log should record who approved what, and when.
 
@@ -26,7 +26,7 @@ The skeleton's router is fixed to `summarize`, so the diagram shows the loop wit
 ## LangGraph concepts
 A live version would use:
 - **Conditional edges**: the router, annotated `Literal["act", "summarize"]`, follows `more_work`.
-- **Checkpointer**: saves state after each step. `aget_state_history` on a compiled graph with a checkpointer lists those saved snapshots, which makes them one source of records.
+- **Checkpointer**: saves state after each step. `aget_state_history` on a compiled graph with a checkpointer lists the saved snapshots of one thread, which makes them one per-thread source of records.
 - **State**: holds the task, the actions, the log entries and the final report.
 
 ## Trade-offs
@@ -54,5 +54,5 @@ return builder.compile()
 ## Try this
 - Which State field would `record` append to, and which node reads it back? Name both.
 - `route_record` is fixed to `summarize`. Which State field would a live router read to return `"act"` instead?
-- To also log a person's sign-off, which node would you give the extra write: `act` or `record`? Compare with [[governance/approval]].
-- Compare with [[governance/guardrails]]: when a guardrail blocks an action, should `record` still write an entry? Answer yes or no and say why.
+- Which State field does `summarize` read back to build `report`?
+- Is the edge from `record` back to `act` an `add_edge` edge or a router branch of `route_record`? See also [[governance/approval]] and [[governance/guardrails]] for events worth logging.

@@ -24,7 +24,7 @@ The skeleton's router is fixed to `approve`, so the diagram shows the send-back 
 ## LangGraph concepts
 A live version would use:
 - **Conditional edges**: the router, annotated `Literal["draft", "approve"]`, follows `accepted`.
-- **Interrupt**: when the reviewer is a person, `review` can pause the run with `langgraph.types.interrupt` and resume when they answer.
+- **Interrupt**: when the reviewer is a person, `review` can pause the run with `langgraph.types.interrupt` and resume when they answer. Pausing and resuming needs a checkpointer.
 - **State**: holds the task, the content, the comments, the accepted flag and the final result.
 
 ## Trade-offs
@@ -51,6 +51,6 @@ return builder.compile()
 
 ## Try this
 - Which State field carries the reviewer's feedback back to `draft`, and which node sets it?
-- `review` returns `"draft"` when `accepted` is false. Which State field must `draft` read to know what to fix?
+- `route_review` is the function that returns `"draft"` or `"approve"`. Which State field would a live version read to choose between them?
 - To stop an endless send-back cycle you would add a counter to State. Which function would read it: `draft` or `route_review`?
-- Compare with [[governance/approval]] and [[governance/guardrails]]: guardrails check automatically with rules, while approval and review involve a person or a separate agent. Which of the two live patterns pauses the run for a person?
+- Which of [[governance/approval]] and [[governance/guardrails]] pauses the run for a person?
