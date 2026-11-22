@@ -35,6 +35,14 @@
         <p class="panel-sub" id="trace-pattern"></p>
       </header>
       <div class="trace-graph" id="trace-graph" role="img" aria-label="Graph of the selected pattern"></div>
+      <ul class="graph-legend" aria-label="Legend">
+        <li><span class="lg lg-active" aria-hidden="true">▶</span>running</li>
+        <li><span class="lg lg-done" aria-hidden="true">✓</span>done</li>
+        <li><span class="lg lg-paused" aria-hidden="true">⏸</span>paused</li>
+        <li><span class="lg lg-error" aria-hidden="true">✕</span>error</li>
+        <li><span class="lg-dash" aria-hidden="true"></span>conditional edge (if)</li>
+        <li><span class="lg-count" aria-hidden="true">×2</span>times taken</li>
+      </ul>
       <div class="trace-lower">
         <section class="trace-timeline" aria-labelledby="timeline-title">
           <h3 id="timeline-title">Timeline</h3>
@@ -44,7 +52,7 @@
         </section>
         <details class="trace-state" id="trace-state-box" open>
           <summary>State</summary>
-          <pre class="state-view" id="trace-state">{}</pre>
+          <div class="state-view" id="trace-state"></div>
         </details>
       </div>
     </section>

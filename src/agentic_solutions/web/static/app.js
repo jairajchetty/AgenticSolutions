@@ -2,10 +2,13 @@
 //
 // The URL hash (#guardrail) selects the pattern; the default is `qa`.
 // Choosing a pattern loads its detail, renders the Guide and fires a
-// `pattern-change` event on `document` so the trace and console (Task 10)
-// can rebuild themselves from `state.pattern`.
-import { getPatterns, getPattern, getSession } from "./api.js";
+// `pattern-change` event on `document`; the wiring below rebuilds the trace
+// graph, timeline and console for it and runs messages through `streamRun`.
+import { ApiError, createThread, getPatterns, getPattern, getSession, getState, streamRun } from "./api.js";
 import { renderGuide, renderInlineCode } from "./guide.js";
+import { createGraph } from "./graph.js";
+import { createTrace } from "./trace.js";
+import { createConsole } from "./console.js";
 
 const DEFAULT_PATTERN = "qa";
 const TAB_SLOTS = 7;  // the full catalog (spec §4); unbuilt patterns show as placeholders
@@ -153,5 +156,212 @@ async function start() {
   if (location.hash.slice(1) !== id) history.replaceState(null, "", `#${id}`);
   selectPattern(id);
 }
+
+// ---------- Trace + console wiring (spec §5, §6) ----------
+//
+// One "bench" per selected pattern: its graph, trace and console. `benchToken`
+// plays the same role as `loadToken` above: every await re-checks it, so a
+// late response for a pattern the user has already left is dropped.
+
+const STARTED_NEW = "Started a new chat";
+const ENDED_TEXT = "This conversation has ended. Start a New chat.";
+let bench = null;
+let benchToken = 0;
+
+const threadKey = (patternId) => `studio.thread.${patternId}`;
+function rememberThread(patternId, threadId) {
+  try {
+    if (threadId) sessionStorage.setItem(threadKey(patternId), threadId);
+    else sessionStorage.removeItem(threadKey(patternId));
+  } catch { /* storage blocked: the chat just won't survive a reload */ }
+}
+function rememberedThread(patternId) {
+  try {
+    return sessionStorage.getItem(threadKey(patternId));
+  } catch {
+    return null;
+  }
+}
+
+function setThread(threadId) {
+  state.threadId = threadId;
+  rememberThread(state.pattern.id, threadId);
+}
+
+// Route one trace event to the graph, the trace and the console.
+function dispatch(b, evt) {
+  const g = b.graph;
+  switch (evt.type) {
+    case "run_started":
+      for (const n of b.pattern.topology.nodes) g.setNodeState(n.id, "idle");
+      break;
+    case "node_started":
+      g.setNodeState(evt.node, "active");
+      b.active = evt.node;
+      announce(`Running ${evt.node}`);
+      break;
+    case "node_finished":
+      g.setNodeState(evt.node, evt.update && evt.update.refusal ? "error" : "done");
+      if (b.active === evt.node) b.active = null;
+      break;
+    case "edge":
+      g.flashEdge(evt.source, evt.target);
+      break;
+    case "interrupt":
+      g.setNodeState(evt.node, "paused");
+      announce(`Paused at ${evt.node}`);
+      break;
+    case "error":
+      if (b.active) g.setNodeState(b.active, "error");
+      announce("The run failed");
+      break;
+    case "run_finished":
+      if (evt.status === "completed") announce("Finished");
+      break;
+    default:
+      break;
+  }
+  b.trace.onEvent(evt);
+  b.console.onEvent(evt);
+}
+
+// Show a thread's saved state in every panel (page reload, new thread).
+function restoreBench(b, saved, { fresh = false } = {}) {
+  b.graph.reset();
+  if (saved.paused) b.graph.setNodeState(saved.paused.node, "paused");
+  if (saved.ended) b.graph.setNodeState("__end__", "done");
+  b.trace.restore(saved, { fresh });
+  b.console.restore(saved);
+}
+
+async function newChatThread(b) {
+  const { thread_id } = await createThread(b.pattern.id);
+  if (b.token !== benchToken) return null;
+  setThread(thread_id);
+  const saved = await getState(thread_id);  // primed: paused at `ask`
+  if (b.token !== benchToken) return null;
+  restoreBench(b, saved, { fresh: true });
+  return thread_id;
+}
+
+async function runOnce(b, threadId, text) {
+  let started = false;
+  for await (const evt of streamRun(threadId, text, { signal: b.abort.signal })) {
+    if (b.token !== benchToken) return;
+    if (!started) {
+      started = true;
+      b.console.addUser(text);
+    }
+    dispatch(b, evt);
+  }
+}
+
+async function send(b, text) {
+  const chat = b.pattern.mode === "chat";
+  b.console.setBusy(true);
+  try {
+    let tid = state.threadId;
+    if (!chat) {
+      // A trigger thread runs once, so every Run gets a fresh thread and trace.
+      ({ thread_id: tid } = await createThread(b.pattern.id));
+      if (b.token !== benchToken) return;
+      setThread(tid);
+      b.graph.reset();
+      // The input is the run's starting state, not a node's update: seed it.
+      b.trace.restore({ values: { messages: [{ role: "user", content: text }] } }, { fresh: true });
+    }
+    if (!tid) tid = await newChatThread(b);
+    if (!tid) return;
+    try {
+      await runOnce(b, tid, text);
+    } catch (err) {
+      if (!(err instanceof ApiError && err.status === 404) || b.token !== benchToken) throw err;
+      // The server forgot this thread (it restarted): start over once, quietly.
+      tid = chat ? await newChatThread(b) : null;
+      if (!chat) {
+        ({ thread_id: tid } = await createThread(b.pattern.id));
+        if (b.token !== benchToken) return;
+        setThread(tid);
+      }
+      if (!tid) return;
+      b.console.showNotice(STARTED_NEW);
+      await runOnce(b, tid, text);
+    }
+  } catch (err) {
+    if (b.token !== benchToken || err.name === "AbortError") return;
+    if (err instanceof ApiError && err.status === 409 && err.detail === "conversation ended") {
+      b.console.showNotice(ENDED_TEXT, { action: "new-chat" });
+    } else if (err instanceof ApiError) {
+      b.console.showNotice(`Could not run the graph: ${err.message}.`);
+    } else {
+      b.console.showNotice("Lost the connection to the Studio server. Check that it is running, then send again.");
+    }
+    b.console.setDraft(text);
+  } finally {
+    if (b.token === benchToken) b.console.setBusy(false);
+  }
+}
+
+async function startNewChat(b) {
+  b.abort.abort();
+  b.abort = new AbortController();
+  setThread(null);
+  b.graph.reset();
+  b.trace.reset();
+  b.console.reset();
+  b.console.setBusy(false);
+  if (b.pattern.mode !== "chat") return;
+  try {
+    await newChatThread(b);
+  } catch (err) {
+    if (b.token === benchToken) b.console.showNotice(`Could not start a chat: ${err.message}.`);
+  }
+}
+
+async function openBench(pattern) {
+  bench?.abort.abort();  // leaving a running pattern hangs up on its stream
+  const b = {
+    pattern,
+    token: ++benchToken,
+    abort: new AbortController(),
+    active: null,
+  };
+  bench = b;
+  b.graph = createGraph($("trace-graph"), pattern.topology);
+  b.trace = createTrace($("trace-timeline"), $("trace-state"), { onSelect: (node) => b.graph.highlight(node) });
+  b.console = createConsole($("console"), {
+    mode: pattern.mode,
+    samples: pattern.samples,
+    onSend: (text) => send(b, text),
+    onNewChat: () => startNewChat(b),
+  });
+
+  // Reload mid-conversation: rebuild the panels from the saved checkpoint.
+  const saved = rememberedThread(pattern.id);
+  if (saved) {
+    try {
+      const snapshot = await getState(saved);
+      if (b.token !== benchToken) return;
+      state.threadId = saved;
+      restoreBench(b, snapshot);
+      return;
+    } catch (err) {
+      if (b.token !== benchToken) return;
+      rememberThread(pattern.id, null);  // unknown after a restart: start fresh below
+      if (!(err instanceof ApiError && err.status === 404)) {
+        b.console.showNotice(`Could not restore the last chat: ${err.message}.`);
+      }
+    }
+  }
+  if (pattern.mode === "chat") {
+    try {
+      await newChatThread(b);
+    } catch (err) {
+      if (b.token === benchToken) b.console.showNotice(`Could not start a chat: ${err.message}.`);
+    }
+  }
+}
+
+document.addEventListener("pattern-change", (e) => openBench(e.detail.pattern));
 
 start();
