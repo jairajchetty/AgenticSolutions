@@ -4,16 +4,10 @@ from typing import Any
 from langchain_core.messages import BaseMessage
 from pydantic import BaseModel
 
+from agentic_solutions.common.messages import text_of  # noqa: F401  (re-exported)
+
 ROLES = {"human": "user", "ai": "assistant", "tool": "tool", "system": "system"}
 ROLE_NAMES = set(ROLES.values())
-
-
-def text_of(message) -> str:
-    """Return a message's text (Claude may reply with a list of content blocks)."""
-    content = message.content
-    if isinstance(content, str):
-        return content
-    return "".join(b.get("text", "") for b in content if isinstance(b, dict))
 
 
 def _cut(text: str, limit: int) -> str:

@@ -13,7 +13,9 @@ How it works
 
 Why embeddings instead of keyword matching? "Please disregard the rules you
 were given" shares almost no words with "ignore previous instructions", but
-their meanings are close, so the embedding match still catches it.
+their meanings are close, so it can still be caught, because matching is by
+meaning. Whether it is depends on the threshold (see the calibration note
+below): a paraphrase scoring under it slips through.
 
 Limits to remember: this is a first line of defence, not a guarantee. It only
 catches attacks that resemble the library, so grow the library over time and

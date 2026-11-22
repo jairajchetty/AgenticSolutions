@@ -74,13 +74,6 @@ def ask(state: State) -> dict:
     return {"messages": [("user", text)]}
 
 
-def answer(state: State) -> dict:
-    """Node: call Claude with the conversation so far and store its reply."""
-    llm = get_llm()
-    reply = llm.invoke([SystemMessage(SYSTEM_PROMPT), *state["messages"]])
-    return {"messages": [reply]}
-
-
 # --------------------------------------------------------------------------
 # Router: the function behind the conditional edge.
 # --------------------------------------------------------------------------

@@ -66,3 +66,29 @@ async def test_node_failure_logs_original_exception_server_side(caplog):
     assert "secret-detail" in caplog.text
     assert "secret-detail" not in str(ev)
     assert {"type": "error", "message": "The run failed."} in ev
+
+@pytest.mark.anyio
+async def test_only_ai_messages_become_tokens():
+    from typing import Annotated, TypedDict
+    from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+    from langgraph.graph import START, END, StateGraph
+    from langgraph.graph.message import add_messages
+
+    class S(TypedDict):
+        messages: Annotated[list, add_messages]
+
+    def node(state):
+        return {"messages": [HumanMessage("human-text", id="h"),
+                             ToolMessage("tool-text", tool_call_id="1", id="t"),
+                             AIMessage([{"type": "text", "text": "ai-"}, {"type": "text", "text": "blocks"}], id="a")]}
+
+    b = StateGraph(S)
+    b.add_node("n", node)
+    b.add_edge(START, "n")
+    b.add_edge("n", END)
+    g = b.compile(checkpointer=InMemorySaver())
+    ev = [e async for e in run_events(g, {"messages": []}, {"configurable": {"thread_id": "f"}},
+                                      thread_id="f", mode="offline", resumed=False)]
+    tokens = [e["text"] for e in ev if e["type"] == "token"]
+    assert "human-text" not in tokens and "tool-text" not in tokens
+    assert tokens == ["ai-blocks"]

@@ -20,7 +20,7 @@ from agentic_solutions.agents.secure_chat_agent.guard import ThreatGuard
 from agentic_solutions.common.llm import LLMFactory
 from agentic_solutions.web.offline.model import ScriptedChatModel
 from agentic_solutions.web.offline.scripts import SCRIPTS
-from agentic_solutions.web.serialize import text_of
+from agentic_solutions.common.messages import text_of
 
 AGENTS_DIR = Path(__file__).resolve().parents[1] / "agents"
 

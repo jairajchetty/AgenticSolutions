@@ -4,7 +4,7 @@
 
 * ``tasks`` with ``input``  -> a node started
 * ``tasks`` with ``result`` -> a node finished (``interrupts`` lists any pause)
-* ``messages``              -> ``(AIMessageChunk, metadata)``, i.e. one LLM token
+* ``messages``              -> ``(message, metadata)``; an AI chunk is one LLM token
 
 The runner never raises: a failure or timeout becomes a safe ``error`` event
 followed by ``run_finished{status: "error"}``. Details go to the server log only.
@@ -15,9 +15,10 @@ import time
 import uuid
 from typing import Any, AsyncIterator, Callable, Literal
 
-from langchain_core.messages import AIMessage, BaseMessage, ToolMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, ToolMessage
 
-from agentic_solutions.web.serialize import text_of, to_jsonable
+from agentic_solutions.common.messages import text_of
+from agentic_solutions.web.serialize import to_jsonable
 
 log = logging.getLogger(__name__)
 
@@ -70,8 +71,12 @@ async def run_events(
 
             if kind == "messages":
                 chunk, meta = payload
-                text = chunk.content
-                if isinstance(text, str) and text:
+                # Only model output is a token. A node that returns a user or
+                # tool message shows up here too, and must not be "typed out".
+                if not isinstance(chunk, (AIMessageChunk, AIMessage)):
+                    continue
+                text = text_of(chunk)
+                if text:
                     yield {"type": "token", "node": meta.get("langgraph_node"), "text": text}
                 continue
             if kind != "tasks" or payload.get("name") in _HIDDEN_NODES:

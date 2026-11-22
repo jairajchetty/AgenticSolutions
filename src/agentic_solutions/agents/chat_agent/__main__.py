@@ -3,7 +3,7 @@
 Type a question and press Enter. Type "stop" to quit.
 """
 from agentic_solutions.agents.chat_agent.graph import STOP_WORD, graph
-from agentic_solutions.web.serialize import text_of
+from agentic_solutions.common.messages import text_of
 
 # LangGraph aborts a run after `recursion_limit` steps (default 25) to stop
 # runaway loops. One question costs two steps (ask + answer), so the default
