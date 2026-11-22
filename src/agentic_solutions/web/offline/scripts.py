@@ -35,15 +35,15 @@ def _given_name(messages: list[BaseMessage]) -> str | None:
 
 def _greet(messages: list[BaseMessage]) -> str:
     name = _given_name(messages) or "there"
-    return (f"Nice to meet you, {name}. Your message is now in the `messages` list, which "
-            "the checkpointer saves for this thread. Ask `What is my name?` next to see the "
+    return (f"Nice to meet you, {name}. Your message is now in the messages list, which "
+            "the checkpointer saves for this thread. Ask 'What is my name?' next to see the "
             "graph remember it.")
 
 
 def _recall(messages: list[BaseMessage]) -> str:
     name = _given_name(messages[:-1])
     if name is None:
-        return ("You haven't told me your name in this chat yet. Say `My name is Sam.` first, "
+        return ("You haven't told me your name in this chat yet. Say 'My name is Sam.' first, "
                 "then ask again.")
     return (f"You told me your name is {name}. This reply is scripted, but the name is real: "
             "it was read from the earlier message in this thread, because every turn sends "
@@ -54,7 +54,7 @@ QA = Script(
     rules=(
         Rule("reducer",
              "A reducer decides how a node's update merges into one state key. Without one the "
-             "new value replaces the old; with `Annotated[list, add_messages]` LangGraph "
+             "new value replaces the old; with Annotated[list, add_messages] LangGraph "
              "appends the new messages instead. That is how chat graphs keep their history."),
         Rule("langgraph",
              "LangGraph models an agent as a graph: nodes are Python functions that read and "
