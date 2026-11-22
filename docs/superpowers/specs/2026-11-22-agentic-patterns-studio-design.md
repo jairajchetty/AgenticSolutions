@@ -14,6 +14,24 @@ A web app that teaches agentic design patterns by running them live. For the sel
 
 The app will later be hosted on an internet-facing machine and shared with other people, so cost control and isolation between visitors are part of the first version, not an afterthought.
 
+**Why:** this repo is a learning repo for agentic AI with LangGraph. The app turns its command-line agents into something other people can watch and try, so each pattern is understood by seeing it run, not by reading code.
+
+**Anti-goals:** an attractive UI whose trace doesn't match what the graph actually did; a public demo that can run up an unbounded Claude bill; patterns made so complex that they stop teaching.
+
+## 1a. Approaches considered
+
+The person asked for an architecture suitable for later public hosting and chose **A**.
+
+| | Approach | Trade-offs |
+|---|---|---|
+| **A (chosen)** | One FastAPI container serves the static UI and the API, streams trace events, and runs the graphs in-process with a SQLite checkpointer. Caddy in front handles TLS. | Simplest to build and deploy (one `docker compose up` on a small VM). No Node build. Limited to one instance, which is fine for a demo audience. Switching to a Postgres checkpointer later would allow scaling out. |
+| B | The static frontend on a CDN host (Cloudflare or GitHub Pages) plus a separate API container. | Two deployments plus CORS. More moving parts for little gain at this size. |
+| C | Self-hosted LangGraph Server as the backend, using the existing `langgraph.json`, with a custom frontend calling `langgraph-sdk`. | Needs Postgres and Redis, and its licensing terms apply when self-hosting. Its event shapes are less suited to teaching traces. |
+
+Rejected earlier: Streamlit or Gradio (live graph animation and a custom three-region layout are awkward), and React/Vite (needs Node inside WSL plus a build step, for no benefit at this size).
+
+Other decisions the person made: patterns = the existing four plus ReAct, Reflection and Plan-and-Execute; the trace depth = graph animation + timeline + state view; offline scripted mode by default, with Live mode unlocked by an access code.
+
 ## 2. Scope
 
 ### In scope (v1)
@@ -33,7 +51,7 @@ Seven patterns. The first four wrap the agents already in this repo; the last th
 Also in scope:
 - **Offline mode** with scripted LLM responses (the default for anonymous visitors), and **Live mode** with real Claude, unlocked by an access code.
 - Public-hosting safeguards: per-session budgets, per-IP rate limits, input limits, session expiry, and safe tools only.
-- A Docker image with Docker Compose and Caddy (TLS) for a single VM.
+- A Docker image with Docker Compose and Caddy (TLS) for a single VM with **2 GB of RAM or more** (the person's decision). The image installs **CPU-only PyTorch** and **bakes `bge-small-en-v1.5` into the image** at build time, so startup needs no Hugging Face download. `guard.py` and its 0.80 threshold are unchanged.
 
 ### Out of scope (v1)
 
@@ -121,7 +139,7 @@ START → ask → (route) → agent ─(tool_calls?)→ tools ─→ agent
   - `unit_convert(value, from_unit, to_unit)`: a small table of length, mass and temperature units.
   - `pattern_glossary(term)`: looks up a canned glossary of agent terms.
 - The console shows each tool call as a chip (`🔧 calculator("17*23") → 391`).
-- Each run is capped at 8 agent↔tools round trips (enforced with `recursion_limit`); hitting the cap ends the turn with a short message.
+- **Tool-loop cap (builder's call):** a counter in state, `tool_rounds`, is reset by `ask` on each user turn and incremented by `agent`. The router after `agent` is `Literal["tools", "ask"]`. Once `tool_rounds` reaches 8, `agent` is called one last time without tools bound, so it must answer in text, and the route returns to `ask`. That keeps the thread paused at an interrupt and resumable. The cap is counted per user turn. `recursion_limit` (set to 60) is only a backstop, and the runner reports hitting it as an `error` event.
 
 ### 4.8 Pattern 6: Reflection (`reflection`, trigger) — new
 ```
@@ -135,11 +153,15 @@ START → generate → critique ─(score ≥ 8 or iteration = 3)→ END
 
 ### 4.9 Pattern 7: Plan-and-Execute (`plan_execute`, trigger) — new
 ```
-START → planner → executor ─(steps left?)→ executor
-                      └─(done)→ synthesizer → END
+START → planner → executor ─(tool_calls?)→ tools → executor
+                      ├─(step done, steps left)→ executor
+                      └─(all steps done)→ synthesizer → END
 ```
-- `planner` returns structured output with 2–5 steps (`Plan(steps: list[str])`). `executor` runs one step per visit, with the goal and previous results as context, and appends to `results`. `synthesizer` writes the final answer.
-- The executor has the same tools as ReAct (one bounded tool round per step), so plans like "compute X, then compare Y" can use the calculator and unit converter.
+- `planner` returns structured output with 2–5 steps (`Plan(steps: list[str])`). `executor` works on the current step, with the goal and previous results as context. `synthesizer` writes the final answer.
+- **Tools are real graph nodes (builder's call),** so the trace shows them, as the anti-goal requires. `executor` uses the same tools as ReAct, and `tools` is a `ToolNode`. The router after `executor` is `Literal["tools", "executor", "synthesizer"]`:
+  - `tool_calls` present and `step_tool_rounds < 2` → `tools`.
+  - Otherwise the step is done: its text is appended to `results`, `current_step` advances, `step_tool_rounds` resets, and the route goes to `executor` if steps remain or to `synthesizer` if not.
+  - On the last allowed round, `executor` is called without tools, so it must finish the step in text. Messages for each step are kept in a `step_messages` channel that is cleared when the step advances.
 - The state view shows the plan as a checklist that ticks off as steps finish. The Guide covers replanning as a variation that v1 doesn't implement.
 
 ## 5. Trace event protocol
@@ -212,6 +234,7 @@ Implementation: `graph.astream(input, config, stream_mode=["tasks", "messages"])
 - `ScriptedChatModel` is a `BaseChatModel` subclass. It supports `invoke`, streaming, `bind_tools` and `with_structured_output`. Each pattern supplies a **Script**: an ordered list of rules (`match` on the latest human text, or on the node or call kind) mapped to responses (text, an `AIMessage` with `tool_calls`, or a structured object). A default rule answers any unmatched input with something like: "(Offline demo) I'd normally ask Claude here. Unlock Live mode to try your own input."
 - The scripts cover every sample input and exercise every branch: ReAct runs at least one tool loop, Reflection goes through one revise round before passing, and Plan-and-Execute runs a three-step plan.
 - The guardrail always uses the real embedding guard (it is local and free).
+- **Free text in offline mode (builder's call):** the input box stays enabled in every pattern. Each pattern's script has a **generic fallback** that still runs every branch: ReAct does one calculator round, Reflection has a generic critique scoring 6 then 9 so it revises once, and Plan-and-Execute uses a generic three-step plan. Fallback replies say they're scripted, e.g. "(Offline demo: scripted response. Unlock Live mode for real answers.)". The test rule becomes: every sample input matches a *specific* rule, and any free text runs to `completed` or `paused` through the fallback.
 - The same scripted models back the automated tests, so the offline demo can't silently break.
 
 ## 9. Sessions, access and safeguards
@@ -220,6 +243,10 @@ Implementation: `graph.astream(input, config, stream_mode=["tasks", "messages"])
 - **Thread ownership:** a thread id is a server-generated UUID, recorded in the session that created it. Reaching a thread from another session returns 404.
 - **Unlock:** `POST /api/session/unlock {code}` compares the code with the SHA-256 hashes in `ACCESS_CODE_HASHES` using a constant-time comparison. Success turns on Live mode for that session. Each IP gets 5 attempts per 15 minutes.
 - **Live budget per session** (configurable): 40 LLM calls and 60k total tokens, counted from the response usage metadata. When the budget runs out, the run ends with `budget_exhausted` and the session drops back to offline mode.
+- **Mode is fixed per thread (builder's call).** A thread records `live` or `offline` when it is created. Graphs are compiled once per pattern and mode at startup, sharing the checkpointer, and a thread always runs on its own mode's graph.
+  - Unlocking Live mid-chat doesn't change the open thread. The console shows "Live unlocked. Start a New chat to use Claude."
+  - The budget is checked before every LLM call by a wrapper around the live model. If it runs out mid-run, the wrapper raises `BudgetExhausted`, and the runner catches it and emits `run_finished{status:"budget_exhausted"}`. The thread is then marked **closed**: its trace and messages stay visible, and the console offers New chat, which starts an offline thread. A closed thread rejects further runs with 409.
+  - Any other run error closes the thread in the same way.
 - **Global daily cap:** `LIVE_DAILY_TOKEN_CAP` (default 2M tokens). When it's reached, Live mode is unavailable to everyone until midnight UTC.
 - **Rate limits:** 20 runs per minute per IP (an in-memory token bucket keyed on the `X-Forwarded-For` value set by Caddy, trusted only from the proxy), and one active run per session at a time (409 otherwise).
 - **Input limits:** messages up to 2,000 characters; runs time out after 90 s; ReAct and Plan-and-Execute recursion limits are set as in §4.
