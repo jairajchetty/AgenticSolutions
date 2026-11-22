@@ -7,8 +7,8 @@ How a conversation flows:
    pauses at ``ask`` (``interrupt()``), so the first message is a resume.
 2. ``POST /api/threads/{tid}/runs`` feeds one message in and streams the
    runner's trace events back as Server-Sent Events (``data: <json>\\n\\n``).
-3. ``GET /api/threads/{tid}/state`` returns the checkpointed state, so a page
-   reload can rebuild the console.
+3. ``GET /api/threads/{tid}/state`` returns the checkpointed state (and how
+   many checkpoints the thread has), so a page reload can rebuild the console.
 
 Graphs are compiled once per pattern at startup and share one checkpointer;
 each thread id is its own checkpoint thread.
@@ -40,10 +40,6 @@ log = logging.getLogger(__name__)
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 MODE = "offline"  # M1 has no Live mode yet
 NOT_FOUND = "not found"  # same text for unknown and unowned, so ownership isn't leaked
-
-
-class RunRequest(BaseModel):
-    text: str = Field(min_length=1, max_length=2000)
 
 
 async def _open_sqlite_saver(path: str):
@@ -109,6 +105,9 @@ def create_app(settings: Settings | None = None, *, checkpointer=None, guard=Non
     settings = settings or Settings.from_env()
     store = ThreadStore()
 
+    class RunRequest(BaseModel):
+        text: str = Field(min_length=1, max_length=settings.max_input_chars)
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         # Sync graph nodes run in the loop's default executor: make it large (spec §9a).
@@ -170,7 +169,8 @@ def create_app(settings: Settings | None = None, *, checkpointer=None, guard=Non
     @app.get("/api/session")
     def get_session(request: Request):
         session_id(request)
-        return {"mode": MODE, "live_available": False}
+        # The UI sets its textarea's maxlength from this, so the two never drift.
+        return {"mode": MODE, "live_available": False, "max_input_chars": settings.max_input_chars}
 
     @app.post("/api/patterns/{pattern_id}/threads")
     async def create_thread(pattern_id: str, request: Request):
@@ -244,14 +244,20 @@ def create_app(settings: Settings | None = None, *, checkpointer=None, guard=Non
     @app.get("/api/threads/{thread_id}/state")
     async def thread_state(thread_id: str, request: Request):
         record = owned_thread(request, thread_id)
-        state = await request.app.state.graphs[record.pattern_id].aget_state(_config(record.id))
+        graph = request.app.state.graphs[record.pattern_id]
+        state = await graph.aget_state(_config(record.id))
+        # One checkpoint per saved step (spec §4.6): the trace shows this count.
+        checkpoints = 0
+        async for _ in graph.aget_state_history(_config(record.id)):
+            checkpoints += 1
         paused = None
         for task in state.tasks:
             if task.interrupts:
                 paused = {"node": task.name, "payload": to_jsonable(task.interrupts[0].value)}
                 break
         return {"values": to_jsonable(state.values), "next": list(state.next),
-                "paused": paused, "ended": record.ended, "closed": record.closed}
+                "paused": paused, "ended": record.ended, "closed": record.closed,
+                "checkpoints": checkpoints}
 
     @app.get("/", include_in_schema=False)
     def index():

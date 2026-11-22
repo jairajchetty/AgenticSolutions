@@ -1,6 +1,12 @@
 import json
 
 from fastapi.testclient import TestClient
+from langgraph.checkpoint.memory import InMemorySaver
+
+from agentic_solutions.web import app as app_module
+from agentic_solutions.web.app import create_app
+from agentic_solutions.web.config import Settings
+from fakes import make_guard
 
 
 def sse(resp):
@@ -80,4 +86,73 @@ def test_thread_disconnected_mid_run_is_closed(client):
 
 
 def test_session_reports_offline(client):
-    assert client.get("/api/session").json() == {"mode": "offline", "live_available": False}
+    assert client.get("/api/session").json() == {"mode": "offline", "live_available": False,
+                                                 "max_input_chars": 2000}
+
+
+def test_state_counts_checkpoints_and_the_count_grows(client):      # spec §4.6
+    tid = client.post("/api/patterns/human_in_loop/threads").json()["thread_id"]
+    before = client.get(f"/api/threads/{tid}/state").json()["checkpoints"]
+    assert isinstance(before, int) and before > 0
+    with client.stream("POST", f"/api/threads/{tid}/runs", json={"text": "What is a checkpointer?"}) as r:
+        sse(r)
+    assert client.get(f"/api/threads/{tid}/state").json()["checkpoints"] > before
+
+
+def test_whitespace_on_chat_pauses_again_without_answer(client):     # Review Focus 4
+    tid = client.post("/api/patterns/chat_loop/threads").json()["thread_id"]
+    with client.stream("POST", f"/api/threads/{tid}/runs", json={"text": "   "}) as r:
+        ev = sse(r)
+    assert ev[-1]["status"] == "paused"
+    assert not [e for e in ev if e["type"] == "node_started" and e["node"] == "answer"]
+
+
+def test_other_session_cannot_run_thread(client, app):
+    tid = client.post("/api/patterns/chat_loop/threads").json()["thread_id"]
+    with TestClient(app) as other:
+        assert other.post(f"/api/threads/{tid}/runs", json={"text": "hi"}).status_code == 404
+
+
+def test_max_input_chars_setting_limits_runs():
+    settings = Settings(session_secret="s", offline_latency_scale=0, checkpoint_db=":memory:", max_input_chars=5)
+    with TestClient(create_app(settings, checkpointer=InMemorySaver(), guard=make_guard())) as c:
+        assert c.get("/api/session").json()["max_input_chars"] == 5
+        tid = c.post("/api/patterns/qa/threads").json()["thread_id"]
+        assert c.post(f"/api/threads/{tid}/runs", json={"text": "123456"}).status_code == 422
+
+
+def test_max_input_chars_reads_env(monkeypatch):
+    monkeypatch.setenv("MAX_INPUT_CHARS", "123")
+    assert Settings.from_env().max_input_chars == 123
+
+
+def test_error_run_closes_the_thread(monkeypatch):
+    class Boom:
+        def invoke(self, *_a, **_k):
+            raise RuntimeError("secret-detail")
+
+    monkeypatch.setattr(app_module, "offline_factory", lambda *_a, **_k: (lambda: Boom()))
+    settings = Settings(session_secret="s", offline_latency_scale=0, checkpoint_db=":memory:")
+    with TestClient(create_app(settings, checkpointer=InMemorySaver(), guard=make_guard())) as c:
+        tid = c.post("/api/patterns/chat_loop/threads").json()["thread_id"]
+        with c.stream("POST", f"/api/threads/{tid}/runs", json={"text": "hello"}) as r:
+            ev = sse(r)
+        assert ev[-1]["status"] == "error" and "secret-detail" not in str(ev)
+        r = c.post(f"/api/threads/{tid}/runs", json={"text": "hello again"})
+        assert r.status_code == 409 and r.json() == {"detail": "conversation ended"}
+        assert c.get(f"/api/threads/{tid}/state").json()["closed"] is True
+
+
+def test_priming_failure_is_a_safe_500(client, app):
+    class BrokenGraph:
+        def astream(self, *_a, **_k):
+            async def gen():
+                raise RuntimeError("secret-detail")
+                yield  # pragma: no cover  (makes this an async generator)
+            return gen()
+
+    app.state.graphs["chat_loop"] = BrokenGraph()
+    r = client.post("/api/patterns/chat_loop/threads")
+    assert r.status_code == 500
+    assert r.json() == {"detail": "could not start the conversation"}
+    assert "secret-detail" not in r.text
