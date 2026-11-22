@@ -18,9 +18,14 @@
   <a class="skip-link" id="skip-link" href="#console">Skip to the agent console</a>
 
   <header class="masthead">
-    <h1 class="brand"><a href="#/">Agentic Patterns Studio</a></h1>
+    <p class="brand"><a href="#/">Agentic Patterns Studio</a></p>
     <!-- Catalog › {Category} › {Pattern} on a pattern page (Catalog spec §4.3) -->
     <nav class="breadcrumbs" id="breadcrumbs" aria-label="Breadcrumb"></nav>
+    <!-- ← / → through the breadcrumb's category, wrapping at the ends -->
+    <div class="stepper" id="stepper" hidden>
+      <a class="btn step" id="step-prev" href="#/"><span aria-hidden="true">←</span></a>
+      <a class="btn step" id="step-next" href="#/"><span aria-hidden="true">→</span></a>
+    </div>
     <div class="mode" id="mode-badge" aria-live="polite">
       <span class="mode-led" aria-hidden="true"></span>
       <span class="mode-text">Offline (scripted)</span>
@@ -30,7 +35,7 @@
   <main id="main">
     <!-- Catalog home (Catalog spec §4.2); catalog.js fills #home-body. -->
     <section class="home" id="home" aria-labelledby="home-title" hidden>
-      <h2 class="view-title" id="home-title" tabindex="-1">Pattern catalog</h2>
+      <h1 class="view-title" id="home-title" tabindex="-1">Pattern catalog</h1>
       <p class="notice" id="home-notice" role="status" hidden></p>
       <div class="home-body" id="home-body"></div>
     </section>
@@ -38,11 +43,36 @@
     <!-- Pattern page (Catalog spec §4.3): the M1 workbench for a live demo, or
          the Guide-only view for a pattern with no demo yet. -->
     <div class="pattern-view" id="pattern-view" hidden>
-      <h2 class="view-title" id="page-title" tabindex="-1"></h2>
+      <div class="page-head">
+        <h1 class="view-title" id="page-title" tabindex="-1"></h1>
+        <p class="page-note" id="page-note" hidden></p>
+      </div>
 
-      <section class="guide-only" id="guide-only" aria-labelledby="page-title" hidden>
-        <div class="guide-body" id="guide-only-body"></div>
-      </section>
+      <!-- A pattern with no demo yet: banner, static diagram, Guide. No
+           console and no timeline, so nothing here creates a thread or a run. -->
+      <div class="guide-only" id="guide-only" hidden>
+        <p class="demo-banner" role="note">
+          <strong class="demo-banner-title">Live demo coming</strong>
+          <span>This pattern doesn't have a live demo yet. The diagram below is its graph; the explanation covers how it works.</span>
+        </p>
+        <section class="panel diagram" aria-labelledby="diagram-title">
+          <header class="panel-head">
+            <h2 id="diagram-title">Graph</h2>
+            <p class="panel-sub">The pattern's LangGraph skeleton, not running</p>
+          </header>
+          <div class="trace-graph diagram-graph" id="guide-only-graph" role="img" aria-label="Diagram of the pattern's graph"></div>
+          <ul class="graph-legend" aria-label="Legend">
+            <li><span class="lg-solid" aria-hidden="true"></span>always taken</li>
+            <li><span class="lg-dash" aria-hidden="true"></span>conditional edge (if)</li>
+          </ul>
+        </section>
+        <section class="panel guide" aria-labelledby="guide-only-title">
+          <header class="panel-head">
+            <h2 id="guide-only-title">Pattern guide</h2>
+          </header>
+          <div class="guide-body" id="guide-only-body"></div>
+        </section>
+      </div>
 
       <div class="bench" id="bench" hidden>
         <section class="panel trace" id="trace" aria-labelledby="trace-title">

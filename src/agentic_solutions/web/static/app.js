@@ -12,6 +12,7 @@ import {
   ApiError, createThread, getCatalog, getCatalogPage, getPattern, getSession, getState, streamRun,
 } from "./api.js";
 import { renderGuide, renderInlineCode } from "./guide.js";
+import { renderHome } from "./catalog.js";
 import { createGraph } from "./graph.js";
 import { createTrace } from "./trace.js";
 import { createConsole } from "./console.js";
@@ -69,24 +70,36 @@ function setNotice(text) {
 }
 
 // ---------- Catalog home ----------
-//
-// A placeholder list of every pattern; Task 10's catalog.js replaces the
-// body of showHome() with the real catalog (cards, search, status marks).
 
 let catalog = null;  // GET /api/catalog, fetched once
+let names = new Map();  // route -> pattern name, from the catalog listing
+let pendingCategory = null;  // the breadcrumb's category link: focus its card on arrival
+
+async function loadCatalog() {
+  if (!catalog) {
+    catalog = await getCatalog();
+    names = new Map(catalog.categories.flatMap((c) => c.patterns.map((p) => [p.route, p.name])));
+  }
+  return catalog;
+}
+
+// Guide links and breadcrumbs name patterns as the catalog does (null: unknown).
+const nameFor = (route) => names.get(route) ?? null;
 
 async function showHome({ notice = null } = {}) {
   const token = ++loadToken;
   requestedRoute = HOME;
-  leaveBench();
+  leavePattern();
   showView("home");
   setNotice(notice);
-  $("breadcrumbs").replaceChildren();
+  renderCrumbs(null);
   document.title = "Catalog · Agentic Patterns Studio";
-  focusHeading("home-title");
+  const category = pendingCategory;
+  pendingCategory = null;
+  if (!category) focusHeading("home-title");
   announce(notice ?? "Opened Catalog");
   try {
-    catalog ??= await getCatalog();
+    await loadCatalog();
   } catch (err) {
     if (token !== loadToken) return;
     requestedRoute = null;  // let the next hash change retry
@@ -94,27 +107,13 @@ async function showHome({ notice = null } = {}) {
     return;
   }
   if (token !== loadToken) return;
-  renderCatalogList($("home-body"), catalog);
-}
-
-function renderCatalogList(el, data) {
-  const nav = document.createElement("nav");
-  nav.setAttribute("aria-label", "Patterns");
-  for (const category of data.categories) {
-    const h = document.createElement("h3");
-    h.textContent = category.name;
-    const list = document.createElement("ul");
-    for (const p of category.patterns) {
-      const li = document.createElement("li");
-      const a = document.createElement("a");
-      a.href = formatHash(p.route);
-      a.textContent = p.name;
-      li.append(a, ` (${p.status === "live" ? "Live demo" : "Guide"})`);
-      list.append(li);
-    }
-    nav.append(h, list);
+  const home = renderHome($("home-body"), catalog, {
+    onOpen: (route) => { location.hash = formatHash(route); },
+  });
+  if (category) {
+    home.focusCategory(category);
+    routed = true;
   }
-  el.replaceChildren(nav);
 }
 
 // ---------- Pattern page ----------
@@ -122,9 +121,10 @@ function renderCatalogList(el, data) {
 async function selectRoute(route) {
   const token = ++loadToken;
   requestedRoute = route;
-  leaveBench();  // a stream from the page being left stops now, not when the fetch lands
+  leavePattern();  // a stream from the page being left stops now, not when the fetch lands
   try {
-    const page = await getCatalogPage(route);
+    // The listing names the breadcrumb and Guide links; a page still opens without it.
+    const [page] = await Promise.all([getCatalogPage(route), loadCatalog().catch(() => null)]);
     if (token !== loadToken) return;
     const detail = page.demo ? await getPattern(page.demo) : null;
     if (token !== loadToken) return;
@@ -132,7 +132,7 @@ async function selectRoute(route) {
     if (detail) openLivePage(page, detail);
     else showGuideOnly(page);
     focusHeading("page-title");
-    announce(`Opened ${page.name}`);
+    announce(`Opened ${nameFor(page.route) ?? page.name}`);
   } catch (err) {
     if (token !== loadToken) return;
     if (err instanceof ApiError && err.status === 404) return notFound();
@@ -141,11 +141,50 @@ async function selectRoute(route) {
   }
 }
 
-// The heading and title every pattern page shares (Catalog spec §4.3). Task
-// 10 adds the breadcrumb links and the ←/→ buttons.
+// Catalog › {Category} › {Pattern} (Catalog spec §4.3, §4.4). `page` null
+// (the home) leaves the breadcrumb empty. The last crumb is the REQUESTED
+// entry, so a cross-list reads "Execution › Tool Use" over ReAct's content.
+function renderCrumbs(page) {
+  const nav = $("breadcrumbs");
+  $("stepper").hidden = !page;
+  if (!page) return nav.replaceChildren();
+  const list = document.createElement("ol");
+  const crumb = (text, href, extra) => {
+    const li = document.createElement("li");
+    const a = document.createElement("a");
+    a.href = href;
+    a.textContent = text;
+    extra?.(a);
+    li.append(a);
+    list.append(li);
+  };
+  crumb("Catalog", formatHash());
+  crumb(page.category.name, formatHash(), (a) => {
+    a.addEventListener("click", () => { pendingCategory = page.category.id; });
+  });
+  crumb(nameFor(page.route) ?? page.name, formatHash(page.route), (a) => a.setAttribute("aria-current", "page"));
+  nav.replaceChildren(list);
+
+  for (const [id, route, word] of [["step-prev", page.prev, "Previous"], ["step-next", page.next, "Next"]]) {
+    const a = $(id);
+    a.href = formatHash(route);
+    const label = `${word} in ${page.category.name}: ${nameFor(route) ?? route}`;
+    a.setAttribute("aria-label", label);
+    a.title = label;
+  }
+}
+
+// The heading, breadcrumb and title every pattern page shares (Catalog spec
+// §4.3). The heading is the content's own name (ReAct, for Tool Use); a
+// cross-list says so underneath.
 function renderPageChrome(page) {
+  const listed = nameFor(page.route) ?? page.name;
   $("page-title").textContent = page.name;
-  document.title = `${page.name} · ${page.category.name} · Agentic Patterns Studio`;
+  const note = $("page-note");
+  note.hidden = page.target === page.route;
+  note.textContent = note.hidden ? "" : `${listed} is listed under ${page.category.name}; it opens the ${page.name} page.`;
+  renderCrumbs(page);
+  document.title = `${listed} · ${page.category.name} · Agentic Patterns Studio`;
 }
 
 // A live demo: the M1 workbench, unchanged, for the registry pattern `demo`.
@@ -154,17 +193,38 @@ function openLivePage(page, detail) {
   state.pattern = detail;
   state.threadId = null;
   renderPatternChrome(detail);
-  renderGuide($("guide-body"), page.explanation_md);
+  renderGuide($("guide-body"), page.explanation_md, { linkFor: nameFor });
   document.dispatchEvent(new CustomEvent("pattern-change", { detail: { pattern: detail } }));
 }
 
-// A pattern with no demo yet: no thread, no run. Placeholder: Task 10 adds
-// the "Live demo coming" banner and the static diagram above the Guide.
+// A pattern with no demo yet (Catalog spec §4.3): the banner, its skeleton as
+// a static diagram, and the Guide. No thread and no run (Review Focus 5).
+let staticGraph = null;
 function showGuideOnly(page) {
   showView("pattern");
   state.pattern = null;
   state.threadId = null;
-  renderGuide($("guide-only-body"), page.explanation_md);
+  staticGraph = createGraph($("guide-only-graph"), page.topology, { static: true });
+  renderGuide($("guide-only-body"), page.explanation_md, { linkFor: nameFor });
+}
+
+// Leaving any pattern page: stop a live bench, drop a static diagram.
+function leavePattern() {
+  leaveBench();
+  staticGraph?.destroy();
+  staticGraph = null;
+}
+
+// Plain ←/→ step through the breadcrumb's category (Catalog spec §4.3), but
+// never while typing, and never with a modifier: Alt+←/→ are Back/Forward.
+function stepWithArrows(e) {
+  if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+  if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.defaultPrevented) return;
+  if ($("pattern-view").hidden || $("stepper").hidden) return;
+  const t = e.target;
+  if (t instanceof Element && t.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])")) return;
+  e.preventDefault();
+  location.hash = $(e.key === "ArrowLeft" ? "step-prev" : "step-next").getAttribute("href");
 }
 
 function notFound() {
@@ -207,6 +267,7 @@ function route() {
 
 async function start() {
   $("skip-link").addEventListener("click", skipToContent);
+  document.addEventListener("keydown", stepWithArrows);
   try {
     state.session = await getSession();
   } catch (err) {
