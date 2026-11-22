@@ -70,5 +70,14 @@ def test_disconnect_mid_stream_frees_the_session(client):     # Review Focus 2
         assert sse(r)[-1]["status"] == "paused"
 
 
+def test_thread_disconnected_mid_run_is_closed(client):
+    tid = client.post("/api/patterns/chat_loop/threads").json()["thread_id"]
+    with client.stream("POST", f"/api/threads/{tid}/runs", json={"text": "hello"}) as r:
+        next(r.iter_lines())                                   # hang up before run_finished
+    r = client.post(f"/api/threads/{tid}/runs", json={"text": "hello again"})
+    assert r.status_code == 409 and r.json() == {"detail": "conversation ended"}
+    assert client.get(f"/api/threads/{tid}/state").json()["closed"] is True
+
+
 def test_session_reports_offline(client):
     assert client.get("/api/session").json() == {"mode": "offline", "live_available": False}

@@ -1,6 +1,6 @@
 import pytest
 
-from agentic_solutions.web.threads import ThreadStore
+from agentic_solutions.web.threads import ThreadStore, once
 
 
 def test_get_by_another_session_raises_keyerror():
@@ -20,3 +20,13 @@ def test_one_active_run_per_session():
     assert store.begin_run("s2") is True       # other sessions are unaffected
     store.end_run("s1")
     assert store.begin_run("s1") is True
+
+
+def test_release_is_once_only_so_a_late_release_cannot_free_the_next_run():
+    store = ThreadStore()
+    assert store.begin_run("s1")
+    release_a = once(lambda: store.end_run("s1"))
+    release_a()                                # run A's stream finishes and releases
+    assert store.begin_run("s1")               # run B claims the slot
+    release_a()                                # A's late second release (on_close) is a no-op
+    assert store.begin_run("s1") is False      # B still holds the slot

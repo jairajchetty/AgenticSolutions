@@ -32,7 +32,7 @@ from agentic_solutions.web.config import Settings
 from agentic_solutions.web.registry import PATTERNS, BuildContext, offline_factory
 from agentic_solutions.web.runner import run_events
 from agentic_solutions.web.serialize import to_jsonable
-from agentic_solutions.web.threads import ThreadRecord, ThreadStore
+from agentic_solutions.web.threads import ThreadRecord, ThreadStore, once
 from agentic_solutions.web.topology import graph_topology
 
 log = logging.getLogger(__name__)
@@ -98,9 +98,11 @@ class _RunResponse(StreamingResponse):
         try:
             await super().__call__(scope, receive, send)
         finally:
-            self._on_close()
-            with anyio.CancelScope(shield=True):
-                await self.body_iterator.aclose()
+            try:  # stop the run first, then release
+                with anyio.CancelScope(shield=True):
+                    await self.body_iterator.aclose()
+            finally:
+                self._on_close()
 
 
 def create_app(settings: Settings | None = None, *, checkpointer=None, guard=None) -> FastAPI:
@@ -201,7 +203,20 @@ def create_app(settings: Settings | None = None, *, checkpointer=None, guard=Non
             raise HTTPException(409, "a run is already in progress")
         graph = request.app.state.graphs[spec.id]
 
+        finished = False
+
+        def finish() -> None:
+            # No run_finished means the stream was cut mid-run (disconnect or
+            # cancellation): the checkpoint may not be paused at `ask`, so
+            # resuming is unsafe. Close the thread; the UI offers New chat.
+            if not finished:
+                record.closed = True
+            store.end_run(sid)
+
+        finish = once(finish)  # called from the generator AND the response: must run once
+
         async def stream():
+            nonlocal finished
             events = run_events(
                 graph, spec.make_input(body.text), _config(record.id),
                 thread_id=record.id, mode=record.mode,
@@ -210,16 +225,19 @@ def create_app(settings: Settings | None = None, *, checkpointer=None, guard=Non
             try:
                 async for event in events:
                     if event["type"] == "run_finished":
+                        finished = True
                         if event["status"] == "error":
                             record.closed = True
                         elif event["status"] == "completed":  # chat `stop`, or a trigger's one run
                             record.ended = True
                     yield _sse(event)
-            finally:
-                store.end_run(sid)  # runs on a client disconnect too
-                await events.aclose()  # stop the graph now, not whenever GC finalizes it
+            finally:  # runs on a client disconnect too
+                try:
+                    await events.aclose()  # stop the graph now, not whenever GC finalizes it
+                finally:
+                    finish()
 
-        return _RunResponse(stream(), on_close=lambda: store.end_run(sid),
+        return _RunResponse(stream(), on_close=finish,
                             media_type="text/event-stream",
                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 

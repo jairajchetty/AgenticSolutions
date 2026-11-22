@@ -7,6 +7,7 @@ acceptable for a demo (the UI then starts a New chat).
 """
 import uuid
 from dataclasses import dataclass
+from typing import Callable
 
 
 @dataclass
@@ -48,3 +49,21 @@ class ThreadStore:
     def end_run(self, session_id: str) -> None:
         """Release the run slot. Safe to call more than once."""
         self._active_runs.discard(session_id)
+
+
+def once(fn: Callable[[], None]) -> Callable[[], None]:
+    """Wrap ``fn`` so that only the first call runs it.
+
+    The run slot is keyed by session, not by run, so a response that released
+    its slot and then released it again could free the NEXT run's slot. Each
+    response therefore gets one once-only release.
+    """
+    done = False
+
+    def wrapper() -> None:
+        nonlocal done
+        if not done:
+            done = True
+            fn()
+
+    return wrapper
