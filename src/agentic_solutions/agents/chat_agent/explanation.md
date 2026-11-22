@@ -52,5 +52,5 @@ builder.add_edge("answer", "ask")  # after answering, loop back
 
 ## Try this
 - Ask `My name is Sam.` then `What is my name?` to see memory working.
-- Send an empty message. The trace goes `ask` to `ask` with no `answer` step and no model call.
+- Send a message containing only spaces. The trace goes `ask` to `ask` with no `answer` step and no model call.
 - Type `stop`. The run goes to `__end__` and the chat is over.

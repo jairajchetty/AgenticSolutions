@@ -51,5 +51,5 @@ return builder.compile(checkpointer=checkpointer)
 ## Try this
 - Send any question. Watch the run pause at `ask`, then continue to `answer` once you reply.
 - Look for the "resumed" mark on `ask` in the trace after you send a message.
-- Send an empty message. The graph returns to `ask` and pauses again with no model call.
+- Send a message containing only spaces. The graph returns to `ask` and pauses again with no model call.
 - Type `stop`. The run goes to `__end__`.

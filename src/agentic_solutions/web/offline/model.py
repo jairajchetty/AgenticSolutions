@@ -27,10 +27,14 @@ from langchain_core.outputs import ChatGeneration, ChatGenerationChunk, ChatResu
 
 @dataclass(frozen=True)
 class Rule:
-    """A str ``match`` is a case-insensitive substring of the human message."""
+    """A str ``match`` is a case-insensitive substring of the human message.
+
+    ``reply`` is fixed text, or a function of the whole message list for a
+    reply that depends on the conversation (e.g. recalling an earlier turn).
+    """
 
     match: str | Callable[[str], bool]
-    reply: str
+    reply: str | Callable[[list[BaseMessage]], str]
 
 
 @dataclass(frozen=True)
@@ -69,7 +73,8 @@ class ScriptedChatModel(BaseChatModel):
             hit = rule.match(human) if callable(rule.match) else rule.match.lower() in lowered
             if hit:
                 self.matched_rule = i
-                return rule.reply, human
+                reply = rule.reply(messages) if callable(rule.reply) else rule.reply
+                return reply, human
         self.matched_rule = None
         return self.script.fallback, human
 

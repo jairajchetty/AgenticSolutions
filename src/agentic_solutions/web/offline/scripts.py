@@ -2,9 +2,14 @@
 
 Each script is an ordered list of rules. A rule matches when its keyword is a
 case-insensitive substring of the latest human message, and the first match
-wins. Every sample input offered in the UI has its own rule, and anything else
-falls through to the pattern's fallback reply.
+wins. Every sample input offered in the UI, and every input a Guide's "Try
+this" section suggests, has its own rule; anything else falls through to the
+pattern's fallback reply.
 """
+
+import re
+
+from langchain_core.messages import BaseMessage
 
 from agentic_solutions.web.offline.model import Rule, Script
 
@@ -15,8 +20,42 @@ def _fallback(lead: str) -> str:
     return f"{lead} {OFFLINE_NOTE}"
 
 
+_NAME = re.compile(r"\bmy name is\s+([A-Za-z][\w'-]*)", re.IGNORECASE)
+
+
+def _given_name(messages: list[BaseMessage]) -> str | None:
+    """The latest name the user gave with "My name is ..." in this thread."""
+    for m in reversed(messages):
+        if m.type == "human" and isinstance(m.content, str):
+            found = _NAME.search(m.content)
+            if found:
+                return found.group(1)
+    return None
+
+
+def _greet(messages: list[BaseMessage]) -> str:
+    name = _given_name(messages) or "there"
+    return (f"Nice to meet you, {name}. Your message is now in the `messages` list, which "
+            "the checkpointer saves for this thread. Ask `What is my name?` next to see the "
+            "graph remember it.")
+
+
+def _recall(messages: list[BaseMessage]) -> str:
+    name = _given_name(messages[:-1])
+    if name is None:
+        return ("You haven't told me your name in this chat yet. Say `My name is Sam.` first, "
+                "then ask again.")
+    return (f"You told me your name is {name}. This reply is scripted, but the name is real: "
+            "it was read from the earlier message in this thread, because every turn sends "
+            "the whole message list back to the model.")
+
+
 QA = Script(
     rules=(
+        Rule("reducer",
+             "A reducer decides how a node's update merges into one state key. Without one the "
+             "new value replaces the old; with `Annotated[list, add_messages]` LangGraph "
+             "appends the new messages instead. That is how chat graphs keep their history."),
         Rule("langgraph",
              "LangGraph models an agent as a graph: nodes are Python functions that read and "
              "update a shared state, and edges decide which node runs next. Because the flow is "
@@ -25,6 +64,10 @@ QA = Script(
              "A single LLM call sends one prompt and gets one answer, with no loop, tools or "
              "memory. It is the simplest pattern and often the right one: start here, and add "
              "structure only when the task proves it needs it."),
+        Rule("explain that",
+             "I can't tell what \"that\" refers to: this graph makes one fresh call per run "
+             "and keeps no memory, so your earlier question is not in my input. The Chat loop "
+             "pattern fills this gap by keeping the message list between turns."),
         Rule("state",
              "State is the data that flows through a graph, usually a TypedDict. Each node "
              "returns a partial update, and a reducer such as add_messages decides how that "
@@ -36,6 +79,8 @@ QA = Script(
 
 CHAT_LOOP = Script(
     rules=(
+        Rule("what is my name", _recall),
+        Rule("my name is", _greet),
         Rule("remember",
              "The graph remembers through its state: the add_messages reducer appends every "
              "question and answer to the message list, and a checkpointer saves that list per "
@@ -55,6 +100,9 @@ CHAT_LOOP = Script(
 
 GUARDRAIL = Script(
     rules=(
+        Rule("capital of france",
+             "The capital of France is Paris. Your question passed the guard, so it reached "
+             "the model: the trace went ask, guard, answer."),
         Rule("embedding",
              "An embedding turns text into a vector so similar meanings land close together. "
              "The guard embeds your prompt and compares it with a library of known attack "
