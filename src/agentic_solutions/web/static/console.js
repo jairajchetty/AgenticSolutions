@@ -195,7 +195,8 @@ export function createConsole(el, { mode, samples = [], onSend, onNewChat }) {
     stream = null;
     card = null;
     const values = stateResponse.values || {};
-    for (const m of values.messages || []) {
+    const messages = values.messages || [];
+    for (const m of messages) {
       if (m.role === "user") bubble("user", m.content ?? "", "You");
       else if (m.role === "assistant" && trigger) {
         const c = resultCard();
@@ -206,7 +207,15 @@ export function createConsole(el, { mode, samples = [], onSend, onNewChat }) {
         if (m.content) bubble("assistant", m.content, "Agent");
       } else if (m.role === "tool") chip("chip-result", `Tool result: ${m.name ?? "tool"}`, m.content);
     }
-    if (values.refusal) bubble("refusal", values.refusal, "✕ Refused by the guardrail");
+    // The guardrail removed the refused prompt from `messages`, so stand in for
+    // it. `refusal` outlives later turns (a blank message or `stop` keeps it),
+    // so it is drawn only while it is still the latest event: when the last
+    // message is not a newer user turn.
+    if (values.refusal && messages.at(-1)?.role !== "user") {
+      bubble("user", "(message removed by the guardrail)", "You").querySelector(".msg-text")
+        .classList.add("msg-blank");
+      bubble("refusal", values.refusal, "✕ Refused by the guardrail");
+    }
     if (stateResponse.paused) setPrompt(stateResponse.paused.payload);
     else if (!trigger && (stateResponse.ended || stateResponse.closed)) {
       showNotice(ENDED_TEXT, { action: "new-chat" });

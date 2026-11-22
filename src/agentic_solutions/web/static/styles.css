@@ -268,6 +268,15 @@ a.tab[aria-selected="true"] .tab-num {
   color: var(--muted);
   font-size: var(--step--1);
 }
+/* Chat threads: "⏸ paused at ask · thread 3f2a… · 7 checkpoints" (spec §4.6). */
+.trace-thread {
+  margin: 0 0 0 auto;
+  color: var(--muted);
+  font-family: var(--font-code);
+  font-size: 0.75rem;
+  white-space: pre-wrap;
+}
+.trace-thread[hidden] { display: none; }
 
 h3 {
   margin: 0 0 8px;
