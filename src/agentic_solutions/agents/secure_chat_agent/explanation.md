@@ -26,7 +26,7 @@ In the web demo the `ask` node waits with `interrupt()` (see Human-in-the-loop);
 - **Closure over setup work**: nodes are defined inside `build_graph`, so they can use the `ThreatGuard`, created once at startup, without putting it in the state.
 
 ## Trade-offs
-- It uses embeddings (meaning), not keywords, so a paraphrase like "disregard the rules you were given" is caught.
+- It uses embeddings (meaning), not keywords, so a paraphrase can still be caught, because matching is by meaning.
 - It only catches attacks that resemble the library. Weaker paraphrases can slip through, so grow the library over time.
 - The threshold is a trade: lower catches more attacks but blocks more real questions.
 - Startup is slower because the embedding model loads and the library is embedded once.
