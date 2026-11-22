@@ -81,3 +81,11 @@ def test_guardrail_refuses_attack_sample_and_answers_harmless_ones():
         v = g.invoke(spec.make_input(sample), cfg)
         attack = "ignore previous instructions" in sample.lower()
         assert bool(v["refusal"]) == attack, sample
+
+def test_titles_match_spec():
+    assert [p.title for p in PATTERNS.values()] == [
+        "Single LLM call",
+        "Loop with conditional routing and memory",
+        "Input guardrail (embedding threat screen)",
+        "Human-in-the-loop: `interrupt()` + checkpointer",
+    ]
