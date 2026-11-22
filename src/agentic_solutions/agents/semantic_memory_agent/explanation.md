@@ -21,6 +21,8 @@ This is a skeleton: the nodes below are placeholders, but the wiring is real.
 4. `rewrite_query` rephrases the query and loops back to `retrieve`.
 5. `answer` responds from the passages and goes to `__end__`.
 
+Unlike [[memory/knowledge-graph]], `retrieve` returns text passages stored in `documents`, not entities and the relations between them.
+
 The loop from `rewrite_query` back to `retrieve` is the point of the pattern. The skeleton's router is fixed to `answer`, so the diagram shows the loop without running it. A live version needs a cap on rewrites.
 
 ## LangGraph concepts

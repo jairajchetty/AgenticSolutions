@@ -18,6 +18,8 @@ This is a skeleton: the nodes below are placeholders, but the wiring is real. Th
 3. `answer` responds from the relations that were found.
 4. `update_graph` writes newly learned entities and relations back, so the graph grows.
 
+Unlike [[memory/semantic]], `query_graph` follows relations between entities rather than matching passages of text.
+
 Writing comes last, after the answer. The relations are stored as (subject, relation, object) triples in the State.
 
 ## LangGraph concepts
@@ -53,5 +55,5 @@ return builder.compile()
 
 ## Try this
 - Which State field holds the facts that `query_graph` finds? Answer with its name from the skeleton.
-- Which node runs last, and why must it come after `answer`?
+- Which node runs last? Answer with its name from the diagram.
 - Compare with [[memory/session]], the live pattern. It keeps the raw messages of one conversation. What does a graph keep instead?
