@@ -52,3 +52,17 @@ async def test_timeout_becomes_error_event():
     ev = [e async for e in run_events(g, spec.make_input(spec.samples[0]), {"configurable": {"thread_id": "d"}},
                                       thread_id="d", mode="offline", resumed=False, timeout_s=0.2)]
     assert {"type": "error", "message": "The run timed out."} in ev
+
+@pytest.mark.anyio
+async def test_node_failure_logs_original_exception_server_side(caplog):
+    class Boom:
+        def invoke(self, *_a, **_k):
+            raise RuntimeError("secret-detail")
+    spec = PATTERNS["qa"]
+    g = spec.build(BuildContext(lambda: Boom(), InMemorySaver(), None))
+    with caplog.at_level("ERROR"):
+        ev = [e async for e in run_events(g, spec.make_input("hi"), {"configurable": {"thread_id": "e"}},
+                                          thread_id="e", mode="offline", resumed=False)]
+    assert "secret-detail" in caplog.text
+    assert "secret-detail" not in str(ev)
+    assert {"type": "error", "message": "The run failed."} in ev

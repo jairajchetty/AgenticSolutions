@@ -90,7 +90,8 @@ async def run_events(
                 first_node = False
             elif "result" in payload or "error" in payload:
                 if payload.get("error"):
-                    raise RuntimeError(f"node {node} failed")
+                    err = payload["error"]  # LangGraph hands us the real exception: log it, never send it
+                    raise err if isinstance(err, BaseException) else RuntimeError(f"node {node} failed")
                 n, t0 = started.pop(payload["id"], (step, time.monotonic()))
                 result = payload["result"]
                 for msg in _messages_in(result):
