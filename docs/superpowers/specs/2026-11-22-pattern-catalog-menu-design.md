@@ -221,7 +221,7 @@ Topology note: the ReAct, Reflection and Planning skeletons must keep the node n
 ## 7. Guide content for Guide-only patterns
 
 - **Same seven `##` headings, in order:** What it is, When to use it, How this graph works, LangGraph concepts, Trade-offs, Key code, Try this. The existing heading test applies to every `explanation.md` in `agents/*/`.
-- **H1** is the taxonomy name, e.g. `# Episodic memory` or `# Routing`.
+- **H1** is the taxonomy name, e.g. `# Episodic` or `# Routing`.
 - **"How this graph works"** names every skeleton node exactly as the diagram shows it, and states the pattern's dividing line from §3.3 where one applies.
 - **"LangGraph concepts"** names the real LangGraph features a live version would use, e.g. `Send` for fan-out, `Command(goto=...)` for handoffs, `Store` for episodic memory, subgraphs for hierarchy. The text says "a live version would use…" rather than implying the skeleton does it.
 - **"Key code":**
