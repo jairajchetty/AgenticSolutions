@@ -9,8 +9,8 @@ from test_skeletons import SKELETONS
 
 AGENTS = Path("src/agentic_solutions/agents")
 GUIDES = sorted(AGENTS.glob("*/explanation.md"))
-# Folders whose H1 must equal the taxonomy name. Task 7 extends this to the live four.
-H1_CHECK = set(SKELETONS)
+# Folders whose H1 must equal the taxonomy name: every catalog entry that has a folder.
+H1_CHECK = {p.folder for c in catalog.CATALOG for p in c.patterns if p.folder}
 
 
 def ids(paths):
@@ -62,6 +62,10 @@ def test_guide_only_h1_is_taxonomy_name():
 
 # folder -> routes that must appear as [[route]] markers inside "## How this graph works".
 DIVIDING: dict[str, set[str]] = {
+    "qa_agent": {"collaboration/supervisor", "collaboration/swarm", "collaboration/hierarchy"},
+    "chat_agent": {"memory/episodic"},
+    "interrupt_chat_agent": {"governance/review"},
+    "secure_chat_agent": {"governance/review"},
     "react_agent": {"execution/tool-use", "execution/autonomous"},
     "reflection_agent": {"governance/review"},
     "plan_execute_agent": {"execution/workflow"},

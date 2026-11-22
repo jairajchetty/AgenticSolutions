@@ -1,4 +1,4 @@
-# Input guardrail
+# Guardrails
 
 ## What it is
 The chat loop with a security check in front of the model. Every message passes through a `guard` node that compares it with a library of known attack phrases. If it looks like an attack, a fixed `refuse` node replies and the model never sees it.
@@ -6,6 +6,7 @@ The chat loop with a security check in front of the model. Every message passes 
 ## When to use it
 - Assistants exposed to untrusted users, where prompt injection is a real risk.
 - When refusals must be predictable and must not depend on the model being attacked.
+- Pair it with [[governance/audit]] to keep a record of what was blocked.
 - As one layer of defence, next to a strong system prompt and least-privilege tools.
 
 ## How this graph works
@@ -17,7 +18,9 @@ The trace shows `ask`, `guard`, then either `answer` or `refuse`, then back to `
 4. `refuse` removes the bad message from the history and sets a fixed refusal text. `answer` calls the model as usual.
 5. Both return to `ask`.
 
-In the web demo the `ask` node waits with `interrupt()` (see Human-in-the-loop); in the CLI it uses `input()`.
+In the web demo the `ask` node waits with `interrupt()` (see [[governance/approval]]); in the CLI it uses `input()`.
+
+The dividing line: Guardrails screen the input before the model ever sees it. [[governance/review]] checks the output afterwards, with a separate agent or person who can send it back for another try.
 
 ## LangGraph concepts
 - **Two conditional edges**: one after `ask`, one after `guard`.
