@@ -16,7 +16,7 @@ The app will later be hosted on an internet-facing machine and shared with other
 
 **Why:** this repo is a learning repo for agentic AI with LangGraph. The app turns its command-line agents into something other people can watch and try, so each pattern is understood by seeing it run, not by reading code.
 
-**Anti-goals:** an attractive UI whose trace doesn't match what the graph actually did; a public demo that can run up an unbounded Claude bill; patterns made so complex that they stop teaching.
+**Anti-goals:** an attractive UI whose trace doesn't match what the graph actually did; a public demo that can run up an unbounded model bill; patterns made so complex that they stop teaching.
 
 ## 1a. Approaches considered
 
@@ -80,7 +80,7 @@ Key decisions:
 - **The run endpoint streams its response.** `POST /api/threads/{tid}/runs` returns `text/event-stream`, and the browser reads it with `fetch()` plus a stream reader. `EventSource` can't send POST bodies. One request carries both the user's input and its trace.
 - **Topology comes from the compiled graph** (`graph.get_graph()`), never written by hand, so the picture can't drift from the code.
 - **The frontend uses no build step.** Libraries load from cdnjs/jsDelivr at pinned versions: Cytoscape.js with the dagre layout for the graph, marked + DOMPurify for Markdown. This keeps the repo Python-only; Node isn't needed.
-- **The LLM is injected.** Each graph gets its model through a factory, so the same graph runs against Claude, the offline script, or a test fake.
+- **The LLM is injected.** Each graph gets its model through a factory, so the same graph runs against the Live model (Claude by default), the offline script, or a test fake.
 
 ## 3a. Model selection
 
@@ -151,7 +151,7 @@ The same loop as pattern 2, but this Guide is about pausing: the trace shows a *
 START → ask → (route) → agent ─(tool_calls?)→ tools ─→ agent
                   ↑                └─(no)────────────→ ask
 ```
-- `agent` calls Claude with the tools bound (`bind_tools`). `tools` is LangGraph's prebuilt `ToolNode`, and the route after `agent` is `tools_condition`, re-labeled to return to `ask`.
+- `agent` calls the model with the tools bound (`bind_tools`). `tools` is LangGraph's prebuilt `ToolNode`. The route after `agent` is a custom `Literal["tools", "ask"]` router (it works like `tools_condition`, but returns to `ask` and enforces the cap below).
 - Tools are safe, deterministic and free of side effects:
   - `calculator(expression)`: arithmetic evaluated by an AST whitelist (no `eval`).
   - `current_time(timezone)`: uses `zoneinfo`.
@@ -250,7 +250,7 @@ Implementation: `graph.astream(input, config, stream_mode=["tasks", "messages"])
 
 ## 8. Offline mode
 
-- `ScriptedChatModel` is a `BaseChatModel` subclass. It supports `invoke`, streaming, `bind_tools` and `with_structured_output`. Each pattern supplies a **Script**: an ordered list of rules (`match` on the latest human text, or on the node or call kind) mapped to responses (text, an `AIMessage` with `tool_calls`, or a structured object). A default rule answers any unmatched input with something like: "(Offline demo) I'd normally ask Claude here. Unlock Live mode to try your own input."
+- `ScriptedChatModel` is a `BaseChatModel` subclass. It supports `invoke`, streaming, `bind_tools` and `with_structured_output`. Each pattern supplies a **Script**: an ordered list of rules (`match` on the latest human text, or on the node or call kind) mapped to responses (text, an `AIMessage` with `tool_calls`, or a structured object). A default rule answers any unmatched input with something like: "(Offline demo) I'd normally ask the model here. Unlock Live mode to try your own input."
 - The scripts cover every sample input and exercise every branch: ReAct runs at least one tool loop, Reflection goes through one revise round before passing, and Plan-and-Execute runs a three-step plan.
 - The guardrail always uses the real embedding guard (it is local and free).
 - **Free text in offline mode (builder's call):** the input box stays enabled in every pattern. Each pattern's script has a **generic fallback** that still runs every branch: ReAct does one calculator round, Reflection has a generic critique scoring 6 then 9 so it revises once, and Plan-and-Execute uses a generic three-step plan. Fallback replies say they're scripted, e.g. "(Offline demo: scripted response. Unlock Live mode for real answers.)". The test rule becomes: every sample input matches a *specific* rule, and any free text runs to `completed` or `paused` through the fallback.
@@ -263,7 +263,7 @@ Implementation: `graph.astream(input, config, stream_mode=["tasks", "messages"])
 - **Unlock:** `POST /api/session/unlock {code}` compares the code with the SHA-256 hashes in `ACCESS_CODE_HASHES` using a constant-time comparison. Success turns on Live mode for that session. Each IP gets 5 attempts per 15 minutes.
 - **Live budget per session** (configurable): 40 LLM calls and 60k total tokens, counted from the response usage metadata. When the budget runs out, the run ends with `budget_exhausted` and the session drops back to offline mode.
 - **Mode is fixed per thread (builder's call).** A thread records `live` or `offline` when it is created. Graphs are compiled once per pattern and mode at startup, sharing the checkpointer, and a thread always runs on its own mode's graph.
-  - Unlocking Live mid-chat doesn't change the open thread. The console shows "Live unlocked. Start a New chat to use Claude."
+  - Unlocking Live mid-chat doesn't change the open thread. The console shows "Live unlocked. Start a New chat to use the live model."
   - The budget is checked before every LLM call by a wrapper around the live model. If it runs out mid-run, the wrapper raises `BudgetExhausted`, and the runner catches it and emits `run_finished{status:"budget_exhausted"}`. The thread is then marked **closed**: its trace and messages stay visible, and the console offers New chat, which starts an offline thread. A closed thread rejects further runs with 409.
   - Any other run error closes the thread in the same way.
 - **Global daily cap:** `LIVE_DAILY_TOKEN_CAP` (default 2M tokens). When it's reached, Live mode is unavailable to everyone until midnight UTC.
@@ -276,7 +276,7 @@ Implementation: `graph.astream(input, config, stream_mode=["tasks", "messages"])
 
 ## 9a. Capacity
 
-**Target:** 100–200 visitors at once, which means roughly 20–50 runs in progress at any moment, on one VM with **2 vCPU and 4 GB of RAM** (2 GB is the minimum). The work is mostly I/O-bound: runs spend their time waiting on Claude or on the simulated delay.
+**Target:** 100–200 visitors at once, which means roughly 20–50 runs in progress at any moment, on one VM with **2 vCPU and 4 GB of RAM** (2 GB is the minimum). The work is mostly I/O-bound: runs spend their time waiting on the model API or on the simulated delay.
 
 Requirements:
 - **A large thread pool for sync nodes.** The graph nodes stay synchronous, so the existing agents and their CLIs (`graph.stream`) keep working. LangGraph runs sync nodes in the event loop's default executor. At startup the app installs a `ThreadPoolExecutor(max_workers=WORKER_THREADS)` (default 128) as that executor. The plan's first task verifies that `astream` really dispatches sync nodes there.
