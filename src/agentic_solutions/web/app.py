@@ -12,12 +12,18 @@ How a conversation flows:
 
 Graphs are compiled once per pattern at startup and share one checkpointer;
 each thread id is its own checkpoint thread.
+
+The catalog menu (Catalog spec §5.2) is read-only: ``GET /api/catalog`` lists
+all 21 patterns, and ``GET /api/catalog/{category}/{pattern}`` returns one
+page. Both are computed once at startup, so opening a page never runs a graph
+or makes a thread.
 """
 import asyncio
 import json
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
+from importlib import import_module
 from pathlib import Path
 from uuid import uuid4
 
@@ -28,8 +34,9 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.middleware.sessions import SessionMiddleware
 
+from agentic_solutions.web import catalog
 from agentic_solutions.web.config import Settings
-from agentic_solutions.web.registry import PATTERNS, BuildContext, offline_factory
+from agentic_solutions.web.registry import AGENTS_DIR, PATTERNS, BuildContext, PatternSpec, offline_factory
 from agentic_solutions.web.runner import run_events
 from agentic_solutions.web.serialize import to_jsonable
 from agentic_solutions.web.threads import ThreadRecord, ThreadStore, once
@@ -101,8 +108,57 @@ class _RunResponse(StreamingResponse):
                 self._on_close()
 
 
-def create_app(settings: Settings | None = None, *, checkpointer=None, guard=None) -> FastAPI:
+def _skeleton_topology(folder: str) -> dict:
+    """Compile a Guide-only folder's skeleton (no checkpointer) and flatten it."""
+    try:
+        build_skeleton = import_module(f"agentic_solutions.agents.{folder}.graph").build_skeleton
+        return graph_topology(build_skeleton())
+    except Exception as exc:  # fail startup loudly: never serve a half-built catalog
+        raise RuntimeError(f"could not build the skeleton graph for {folder!r}") from exc
+
+
+def _catalog_pages(registry: dict[str, PatternSpec], topologies: dict[str, dict]) -> dict[str, dict]:
+    """Page data for every catalog route (Catalog spec §5.2), keyed by route.
+
+    A cross-list (Tool Use) takes its content from its target (ReAct) but keeps
+    its own route, category and neighbours, so the breadcrumb and arrows follow
+    the category it was reached from.
+    """
+    pages = {}
+    for category in catalog.CATALOG:
+        for p in category.patterns:
+            t = catalog.target(p)
+            status = catalog.status(p, registry)
+            demo = t.demo if status == "live" else None
+            prev, next_ = catalog.neighbours(p.route)
+            pages[p.route] = {
+                "route": p.route, "target": t.route,
+                "category": {"id": category.id, "name": category.name},
+                "name": t.name, "status": status,
+                "demo": demo, "demo_title": registry[demo].title if demo else None,
+                "explanation_md": (AGENTS_DIR / t.folder / "explanation.md").read_text(encoding="utf-8"),
+                "topology": topologies[demo] if demo else _skeleton_topology(t.folder),
+                "prev": prev, "next": next_,
+            }
+    return pages
+
+
+def _catalog_listing(registry: dict[str, PatternSpec]) -> dict:
+    return {"categories": [
+        {"id": k.id, "name": k.name, "question": k.question, "patterns": [
+            {"id": p.id, "name": p.name, "hint": p.hint, "aliases": list(p.aliases),
+             "status": catalog.status(p, registry), "route": p.route,
+             "target": catalog.target(p).route}
+            for p in k.patterns]}
+        for k in catalog.CATALOG]}
+
+
+def create_app(settings: Settings | None = None, *, checkpointer=None, guard=None,
+               registry: dict[str, PatternSpec] | None = None) -> FastAPI:
+    """Build the app. ``registry`` (default ``PATTERNS``) is the set of runnable
+    demos; tests pass a larger one to see a catalog entry turn live."""
     settings = settings or Settings.from_env()
+    registry = PATTERNS if registry is None else registry
     store = ThreadStore()
 
     class RunRequest(BaseModel):
@@ -121,10 +177,12 @@ def create_app(settings: Settings | None = None, *, checkpointer=None, guard=Non
         graphs = {
             pid: spec.build(BuildContext(
                 offline_factory(pid, settings.offline_latency_scale), saver, threat_guard))
-            for pid, spec in PATTERNS.items()
+            for pid, spec in registry.items()
         }
         app.state.graphs = graphs
         app.state.topologies = {pid: graph_topology(g) for pid, g in graphs.items()}
+        app.state.catalog_pages = _catalog_pages(registry, app.state.topologies)
+        app.state.catalog_listing = _catalog_listing(registry)
         try:
             yield
         finally:
@@ -133,6 +191,7 @@ def create_app(settings: Settings | None = None, *, checkpointer=None, guard=Non
             executor.shutdown(wait=False)
 
     app = FastAPI(title="Agentic Patterns Studio", lifespan=lifespan)
+    app.state.store = store
     app.add_middleware(SessionMiddleware, secret_key=settings.session_secret,
                        same_site="lax", https_only=False)  # M3 turns https_only on in production
 
@@ -146,7 +205,7 @@ def create_app(settings: Settings | None = None, *, checkpointer=None, guard=Non
             raise HTTPException(404, NOT_FOUND) from None
 
     def pattern(pattern_id: str):
-        spec = PATTERNS.get(pattern_id)
+        spec = registry.get(pattern_id)
         if spec is None:
             raise HTTPException(404, NOT_FOUND)
         return spec
@@ -154,7 +213,7 @@ def create_app(settings: Settings | None = None, *, checkpointer=None, guard=Non
     @app.get("/api/patterns")
     def list_patterns():
         return [{"id": s.id, "title": s.title, "summary": s.summary, "mode": s.mode}
-                for s in PATTERNS.values()]
+                for s in registry.values()]
 
     @app.get("/api/patterns/{pattern_id}")
     def pattern_detail(pattern_id: str, request: Request):
@@ -165,6 +224,17 @@ def create_app(settings: Settings | None = None, *, checkpointer=None, guard=Non
             "explanation_md": spec.explanation_path.read_text(encoding="utf-8"),
             "topology": request.app.state.topologies[spec.id],
         }
+
+    @app.get("/api/catalog")
+    def catalog_listing(request: Request):
+        return request.app.state.catalog_listing
+
+    @app.get("/api/catalog/{category}/{pattern}")
+    def catalog_page(category: str, pattern: str, request: Request):
+        page = request.app.state.catalog_pages.get(f"{category}/{pattern}")
+        if page is None:
+            raise HTTPException(404, NOT_FOUND)
+        return page
 
     @app.get("/api/session")
     def get_session(request: Request):
@@ -194,7 +264,7 @@ def create_app(settings: Settings | None = None, *, checkpointer=None, guard=Non
         record = owned_thread(request, thread_id)
         if record.ended or record.closed:
             raise HTTPException(409, "conversation ended")
-        spec = PATTERNS[record.pattern_id]
+        spec = registry[record.pattern_id]
         chat = spec.mode == "chat"
         if not chat and not body.text.strip():
             raise HTTPException(422, "text must not be empty")
