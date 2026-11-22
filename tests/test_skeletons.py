@@ -48,6 +48,10 @@ SKELETONS = {
     "autonomous_agent": ({"set_goal", "plan", "act", "observe", "check_goal", "report"},
         {("__start__","set_goal"), ("set_goal","plan"), ("plan","act"), ("act","observe"), ("observe","check_goal"),
          ("check_goal","plan"), ("check_goal","report"), ("report","__end__")}),
+    "audit_agent": ({"act", "record", "summarize"},
+        {("__start__","act"), ("act","record"), ("record","act"), ("record","summarize"), ("summarize","__end__")}),
+    "review_agent": ({"draft", "review", "approve"},
+        {("__start__","draft"), ("draft","review"), ("review","draft"), ("review","approve"), ("approve","__end__")}),
 }
 
 AGENTS_DIR = Path(__file__).resolve().parents[1] / "src" / "agentic_solutions" / "agents"

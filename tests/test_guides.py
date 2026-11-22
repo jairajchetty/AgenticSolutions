@@ -74,6 +74,8 @@ DIVIDING: dict[str, set[str]] = {
     "routing_agent": {"collaboration/supervisor"},
     "workflow_agent": {"cognitive/planning"},
     "autonomous_agent": {"cognitive/react"},
+    "review_agent": {"cognitive/reflection"},
+    "audit_agent": {"governance/approval"},
 }
 
 
