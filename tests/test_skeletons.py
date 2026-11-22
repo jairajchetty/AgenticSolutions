@@ -27,6 +27,14 @@ SKELETONS = {
          ("searcher","research_lead"), ("analyst","research_lead"),
          ("writing_lead","drafter"), ("writing_lead","editor"), ("writing_lead","director"),
          ("drafter","writing_lead"), ("editor","writing_lead")}),
+    "episodic_memory_agent": ({"recall_episodes", "answer", "store_episode"},
+        {("__start__","recall_episodes"), ("recall_episodes","answer"), ("answer","store_episode"), ("store_episode","__end__")}),
+    "semantic_memory_agent": ({"retrieve", "grade", "answer", "rewrite_query"},
+        {("__start__","retrieve"), ("retrieve","grade"), ("grade","answer"), ("grade","rewrite_query"),
+         ("rewrite_query","retrieve"), ("answer","__end__")}),
+    "knowledge_graph_agent": ({"extract_entities", "query_graph", "answer", "update_graph"},
+        {("__start__","extract_entities"), ("extract_entities","query_graph"), ("query_graph","answer"),
+         ("answer","update_graph"), ("update_graph","__end__")}),
 }
 
 AGENTS_DIR = Path(__file__).resolve().parents[1] / "src" / "agentic_solutions" / "agents"
