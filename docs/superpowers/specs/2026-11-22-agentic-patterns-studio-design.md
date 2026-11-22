@@ -51,7 +51,7 @@ Seven patterns. The first four wrap the agents already in this repo; the last th
 Also in scope:
 - **Offline mode** with scripted LLM responses (the default for anonymous visitors), and **Live mode** with real Claude, unlocked by an access code.
 - Public-hosting safeguards: per-session budgets, per-IP rate limits, input limits, session expiry, and safe tools only.
-- A Docker image with Docker Compose and Caddy (TLS) for a single VM with **2 GB of RAM or more** (the person's decision). The image installs **CPU-only PyTorch** and **bakes `bge-small-en-v1.5` into the image** at build time, so startup needs no Hugging Face download. `guard.py` and its 0.80 threshold are unchanged.
+- A Docker image with Docker Compose and Caddy (TLS) for a single VM with **2 GB of RAM or more** (the person's decision; 2 vCPU / 4 GB recommended, see §9a). The image installs **CPU-only PyTorch** and **bakes `bge-small-en-v1.5` into the image** at build time, so startup needs no Hugging Face download. `guard.py` and its 0.80 threshold are unchanged.
 
 ### Out of scope (v1)
 
@@ -255,6 +255,26 @@ Implementation: `graph.astream(input, config, stream_mode=["tasks", "messages"])
 - **Headers:** Caddy sets HSTS. The app sets a CSP that allows its own origin and the two pinned CDN hosts, plus `X-Content-Type-Options`.
 - **Persistence:** the SQLite checkpointer file lives on a volume, and a background task deletes threads idle for more than 24 h. Sessions are in memory, so a restart sends every visitor back to offline mode. That is acceptable for a demo.
 
+## 9a. Capacity
+
+**Target:** 100–200 visitors at once, which means roughly 20–50 runs in progress at any moment, on one VM with **2 vCPU and 4 GB of RAM** (2 GB is the minimum). The work is mostly I/O-bound: runs spend their time waiting on Claude or on the simulated delay.
+
+Requirements:
+- **A large thread pool for sync nodes.** The graph nodes stay synchronous, so the existing agents and their CLIs (`graph.stream`) keep working. LangGraph runs sync nodes in the event loop's default executor. At startup the app installs a `ThreadPoolExecutor(max_workers=WORKER_THREADS)` (default 128) as that executor. The plan's first task verifies that `astream` really dispatches sync nodes there.
+- **No blocking sleeps.** The offline `ScriptedChatModel` simulates latency with `asyncio.sleep` in its async path (`_agenerate`/`_astream`). If it's called synchronously from inside a node, it must not hold a worker thread longer than the simulated latency. The plan's spike picks the mechanism.
+- **The guard runs off the event loop.** Embedding is CPU work, about 10–30 ms per prompt. It runs inside a sync node and so in the thread pool, and PyTorch releases the GIL. Torch's intra-op threads are capped (`torch.set_num_threads(2)`) so that guard calls running at the same time can't oversubscribe the CPUs.
+- **SQLite tuned for concurrent writes:** `journal_mode=WAL`, `synchronous=NORMAL`, and one shared async connection. The 24-hour cleanup bounds the file's growth.
+- **Anthropic limits:** a 429 from the API becomes a friendly "Claude is busy, try again in a moment" `error` event. Retries stay as the SDK's defaults (2). The access codes and the daily cap keep Live traffic well below the account's rate limits.
+- **SSE through Caddy:** `flush_interval -1` on the reverse proxy, plus a heartbeat comment (`: ping`) every 15 s so idle streams aren't dropped.
+
+**Not covered:** high availability. One process on one VM means a restart interrupts the runs in progress and resets sessions. Scaling beyond about 1,000 visitors, or surviving a server failure, means a Postgres checkpointer, Redis for sessions and rate limits, and several workers. Sessions, the limiter and the checkpointer each sit behind a small interface so they can be swapped later, but that move isn't built in v1.
+
+**Load test (acceptance criterion for milestone 3):** a Locust script in `loadtest/` simulates 200 users in offline mode. Each user opens a pattern, creates a thread and sends a message every 5–15 s, across all 7 patterns. Run for 5 minutes against the production container on the target VM size, it must show:
+- 0 errors.
+- p95 time from POST to first SSE event < 1 s.
+- p95 time from POST to `run_finished` < the scripted latency + 2 s.
+- App container RSS < 1.5 GB.
+
 ## 10. Configuration (environment)
 
 | Var | Default | Purpose |
@@ -267,6 +287,7 @@ Implementation: `graph.astream(input, config, stream_mode=["tasks", "messages"])
 | `LIVE_DAILY_TOKEN_CAP` | 2000000 | global cap |
 | `CHECKPOINT_DB` | `./data/checkpoints.sqlite` | checkpointer path |
 | `TRUST_PROXY` | `false` | read the client IP from `X-Forwarded-For` |
+| `WORKER_THREADS` | `128` | size of the executor that runs sync graph nodes |
 
 ## 11. Code layout
 
@@ -297,7 +318,7 @@ tests/  test_topology.py test_runner.py test_sessions.py test_api.py
         test_offline_scripts.py
 ```
 
-New dependencies: `fastapi`, `uvicorn[standard]`, `langgraph-checkpoint-sqlite`, `aiosqlite`, `itsdangerous`; `httpx` (dev, for `TestClient`). New agents are also registered in `langgraph.json` without a checkpointer, as the repo's convention requires.
+New dependencies: `fastapi`, `uvicorn[standard]`, `langgraph-checkpoint-sqlite`, `aiosqlite`, `itsdangerous`; `httpx` (dev, for `TestClient`); `locust` (optional extra `load`). New agents are also registered in `langgraph.json` without a checkpointer, as the repo's convention requires.
 
 ## 12. Testing
 
@@ -308,6 +329,7 @@ Tests are written first (TDD) and run offline, with no network or API calls:
 - **Runner:** the event sequence for a scripted run (`run_started` → `node_started`/`node_finished` pairs → `edge`s → `interrupt` or `run_finished`); serialization of messages and tool calls; a budget running out mid-run.
 - **API:** catalog and detail endpoints; thread ownership (another session gets 404); unlock success, failure and lockout; the 409 for concurrent runs; the 413 or 422 for oversized input; the rate-limit 429; and that no secrets appear in responses.
 - **Offline scripts:** every sample input of every pattern runs to `completed` or `paused` without reaching the default rule.
+- **Load:** the Locust test and pass criteria in §9a (milestone 3, run manually against the container, not in `pytest`).
 - **Frontend:** a manual checklist in the plan (all 7 patterns, both themes, mobile width). An automated browser smoke test can come later.
 
 The existing tests must still pass unchanged.
@@ -316,7 +338,7 @@ The existing tests must still pass unchanged.
 
 1. **Core:** LLM injection in the existing agents, topology, runner, registry for patterns 1–4, the API, offline scripts, and the UI shell with trace, console and guide.
 2. **New patterns:** ReAct, Reflection, Plan-and-Execute, with their explanations and scripts.
-3. **Public hardening and deploy:** sessions, unlock, budgets, rate limits, CSP, Dockerfile, Compose and Caddy, and a README section.
+3. **Public hardening and deploy:** sessions, unlock, budgets, rate limits, CSP, Dockerfile, Compose and Caddy, the load test passing the §9a criteria, and a README section.
 
 Follow-ups after v1: replaying runs from checkpoints, Router, Supervisor (multi-agent), parallel fan-out, guardrail + HITL combined, bring-your-own-key, LangSmith links.
 
