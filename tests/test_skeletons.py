@@ -78,3 +78,13 @@ def test_skeleton_exports_only_build_skeleton_and_routers_are_literal(folder):
 @pytest.mark.parametrize("folder", sorted(SKELETONS))
 def test_skeleton_has_no_main_module(folder):
     assert not (AGENTS_DIR / folder / "__main__.py").exists()
+
+
+@pytest.mark.parametrize("folder", sorted(SKELETONS))
+def test_skeleton_nodes_return_empty_dict(folder):
+    mod = importlib.import_module(f"agentic_solutions.agents.{folder}.graph")
+    nodes = [fn for name, fn in inspect.getmembers(mod, inspect.isfunction)
+             if fn.__module__ == mod.__name__ and not name.startswith("route_") and name != "build_skeleton"]
+    assert nodes, folder
+    for fn in nodes:
+        assert fn({}) == {}, fn.__name__

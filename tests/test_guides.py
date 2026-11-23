@@ -7,10 +7,15 @@ import pytest
 from agentic_solutions.web import catalog
 from test_skeletons import SKELETONS
 
-AGENTS = Path("src/agentic_solutions/agents")
+AGENTS = Path(__file__).resolve().parents[1] / "src" / "agentic_solutions" / "agents"
 GUIDES = sorted(AGENTS.glob("*/explanation.md"))
 # Folders whose H1 must equal the taxonomy name: every catalog entry that has a folder.
 H1_CHECK = {p.folder for c in catalog.CATALOG for p in c.patterns if p.folder}
+
+
+def test_guides_are_found():
+    # An empty glob would make every parametrized guide test vanish silently.
+    assert len(GUIDES) >= 20, AGENTS
 
 
 def ids(paths):
