@@ -45,3 +45,17 @@ def test_fonts_only_from_google():
 
 def test_no_dark_scheme_override():
     assert "prefers-color-scheme" not in (STATIC / "styles.css").read_text()
+
+
+def test_no_personal_contact_strings_in_served_files():          # Blueprint spec §5
+    # Separators are allowed between phone digit groups so spaced, dashed or
+    # dotted numbers match, but unrelated digits elsewhere in a file do not
+    # (stripping every non-digit from a whole file would concatenate them).
+    phone = re.compile(rb"(?:\+27|(?<![\d.])0)\D{0,2}[6-8]\d\D{0,3}\d{3}\D{0,3}\d{4}(?!\d)")
+    files = [p for p in STATIC.rglob("*") if p.is_file()]
+    assert files
+    for path in files:
+        data = path.read_bytes()
+        assert b"@".join([b"jairajchetty", b"gmail.com"]) not in data, path
+        assert phone.search(data) is None, path
+        assert b"+27" not in data, path
