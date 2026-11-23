@@ -14,6 +14,30 @@ def _root_block(css: str) -> str:
 TOKENS = dict(re.findall(r"(--[a-z-]+)\s*:\s*(#[0-9a-fA-F]{6})\b", _root_block(CSS)))
 
 
+def _mix(a: str, pct_a: int, b: str) -> str:
+    """CSS color-mix(in srgb, a pct_a%, b) for two #rrggbb colours."""
+    ha, hb = a.lstrip("#"), b.lstrip("#")
+    out = ""
+    for i in (0, 2, 4):
+        v = (int(ha[i:i + 2], 16) * pct_a + int(hb[i:i + 2], 16) * (100 - pct_a)) / 100
+        out += f"{round(v):02x}"
+    return "#" + out
+
+
+def _derive_paper_surfaces() -> dict:
+    """Resolve `--x: color-mix(in srgb, var(--a) N%, var(--b))` tokens that sit under text."""
+    found = {}
+    for name, a, pct, b in re.findall(
+            r"(--paper-[a-z]+)\s*:\s*color-mix\(\s*in srgb\s*,\s*var\((--[a-z-]+)\)\s*(\d+)%\s*,"
+            r"\s*var\((--[a-z-]+)\)\s*\)", _root_block(CSS)):
+        found[name] = _mix(TOKENS[a], int(pct), TOKENS[b])
+    return found
+
+
+DERIVED = _derive_paper_surfaces()
+TOKENS.update(DERIVED)
+
+
 def _lin(c: int) -> float:
     s = c / 255
     return s / 12.92 if s <= 0.03928 else ((s + 0.055) / 1.055) ** 2.4
@@ -32,18 +56,19 @@ def ratio(a: str, b: str) -> float:
 
 
 PAIRS_AA = [("--ink", "--paper"), ("--muted-ink", "--paper"), ("--line", "--navy"),
-            ("--paper", "--navy"), ("--ink", "--amber"), ("--signal-red", "--paper")]
-PAIRS_LARGE = [("--amber", "--navy")]
+            ("--paper", "--navy"), ("--ink", "--amber"), ("--signal-red", "--paper"),
+            ("--amber", "--navy")]  # amber is normal-size text: node labels, legend glyph, edge labels
+for _surface in ("--paper-sunk", "--paper-tint"):
+    PAIRS_AA += [("--ink", _surface), ("--muted-ink", _surface)]
+
+
+def test_derived_paper_surfaces_are_found():
+    assert {"--paper-sunk", "--paper-tint"} <= set(DERIVED), DERIVED
 
 
 def test_text_pairs_meet_aa():
     for a, b in PAIRS_AA:
         assert ratio(a, b) >= 4.5, (a, b, ratio(a, b))
-
-
-def test_large_pairs_meet_3_to_1():
-    for a, b in PAIRS_LARGE:
-        assert ratio(a, b) >= 3.0, (a, b, ratio(a, b))
 
 
 def test_tokens_have_exact_values():
