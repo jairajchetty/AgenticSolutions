@@ -7,8 +7,9 @@
 // Search is word-wise. The query is split on whitespace and punctuation other
 // than "-", and a pattern matches when EVERY word is a case-insensitive
 // substring of its text: name, hint, aliases, category name and category
-// question. A word ending in "s" also matches without it. So "remember users"
-// finds Episodic: "remember" from Memory's question, "user" from its hint.
+// question. A word of 4+ characters ending in "s" also matches without it, so
+// "remember users" finds Episodic: "remember" from Memory's question, "user"
+// from its hint. Shorter words get no fallback, or "is" would match every "i".
 
 export const queryWords = (query) =>
   String(query ?? "").toLowerCase().split(/[^\p{L}\p{N}-]+/u).filter(Boolean);
@@ -17,7 +18,7 @@ export function matches(query, pattern, category) {
   const haystack = [pattern.name, pattern.hint, ...(pattern.aliases ?? []), category.name, category.question]
     .join("\n").toLowerCase();
   return queryWords(query).every((w) =>
-    haystack.includes(w) || (w.length > 1 && w.endsWith("s") && haystack.includes(w.slice(0, -1))));
+    haystack.includes(w) || (w.length >= 4 && w.endsWith("s") && haystack.includes(w.slice(0, -1))));
 }
 
 const STATUS_LABEL = { live: "Live demo", guide: "Guide" };
@@ -191,7 +192,8 @@ export function renderHome(el, catalog, { onOpen } = {}) {
   });
   form.addEventListener("submit", (e) => {
     e.preventDefault();
-    if (first) onOpen?.(first);
+    // A blank box shows every pattern; Enter there would just open the first.
+    if (input.value.trim() && first) onOpen?.(first);
   });
 
   el.replaceChildren(form, status, empty, nav, legend());

@@ -45,3 +45,26 @@ test("a trailing s is dropped only as a fallback", () => {
   assert.ok(hits("tools").includes("cognitive/react"));
   assert.ok(hits("users").includes("memory/episodic"));
 });
+
+// The plain-substring rule with no fallback, built from the same fields.
+const plainHits = (word) => all.filter(({ p, c }) =>
+  [p.name, p.hint, ...(p.aliases ?? []), c.name, c.question].join("\n").toLowerCase().includes(word))
+  .map(({ p }) => p.route);
+
+test("a word of 4+ characters can match only through the fallback", () => {
+  // "users" appears nowhere in the catalog text; "user" is in Episodic's hint.
+  assert.deepEqual(plainHits("users"), []);
+  assert.deepEqual(hits("users"), ["memory/episodic"]);
+});
+
+test("short words ending in s get no fallback", () => {
+  // Otherwise "is" would match every "i" and "us" every "u".
+  assert.deepEqual(hits("is"), plainHits("is"));
+  assert.deepEqual(hits("us"), plainHits("us"));
+  assert.ok(hits("is").length < hits("i").length);
+  assert.ok(hits("us").length < hits("u").length);
+});
+
+test("the fallback still finds Episodic for remember users", () => {
+  assert.deepEqual(hits("remember users"), ["memory/episodic"]);
+});

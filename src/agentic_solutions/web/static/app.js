@@ -160,7 +160,11 @@ function renderCrumbs(page) {
   };
   crumb("Catalog", formatHash());
   crumb(page.category.name, formatHash(), (a) => {
-    a.addEventListener("click", () => { pendingCategory = page.category.id; });
+    a.addEventListener("click", (e) => {
+      // A modifier or middle click opens a new tab: this view is not leaving.
+      if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+      pendingCategory = page.category.id;
+    });
   });
   crumb(nameFor(page.route) ?? page.name, formatHash(page.route), (a) => a.setAttribute("aria-current", "page"));
   nav.replaceChildren(list);
