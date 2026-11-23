@@ -294,6 +294,30 @@ Requirements:
 - p95 time from POST to `run_finished` < the scripted latency + 2 s.
 - App container RSS < 1.5 GB.
 
+## 9b. Target host (decided 2026-11-23)
+
+The person chose **Oracle Cloud Infrastructure (OCI) Always Free, Ampere A1**: up to **2 OCPUs and 12 GB RAM** for this instance. On A1, one OCPU is one physical Arm core, so this is 2 cores. It exceeds the §9a recommendation (2 vCPU / 4 GB), and the load test in §9a runs on this machine. Prefer the Johannesburg region (`af-johannesburg-1`) when A1 capacity is available there.
+
+Deployment requirements that follow from this host (Milestone 4, "hardening + deploy"):
+- **ARM64 images:**
+  - Build the image for `linux/arm64`, either on the VM itself or with `docker buildx build --platform linux/arm64`.
+  - The base images (`python:3.x-slim`, `caddy`) are multi-architecture.
+  - All Python dependencies have aarch64 wheels: torch, sentence-transformers, langgraph, fastapi, uvicorn and aiosqlite.
+  - The default PyPI `torch` wheel on aarch64 is already CPU-only, so the "CPU-only PyTorch" step needs no special index there. Keep the x86 path working for local builds.
+- **Ports open twice:**
+  - Allow TCP 80 and 443 in the VCN security list or network security group.
+  - Also allow them in the VM's own firewall: OCI's Ubuntu and Oracle Linux images block inbound ports by default.
+  - Document both steps, plus SSH (22) restricted to the person's IP.
+- **Idle reclamation:**
+  - Oracle's published policy lets it reclaim Always Free compute that stays idle over 7 days. The low-utilisation thresholds cover CPU, network and, for A1, memory.
+  - A quiet demo can look idle, so the deploy guide recommends upgrading the tenancy to Pay-As-You-Go. Always Free resources stay free, and the reclamation no longer applies.
+  - Re-check the current thresholds in Oracle's docs at deploy time.
+- **Capacity errors:** A1 launches can fail with "out of host capacity" in busy regions. The deploy guide says to retry, or to try another availability domain or region.
+- **Account limits:** the Always Free A1 allowance is 4 OCPUs / 24 GB across the tenancy. This instance uses about half of it.
+- **Persistence:**
+  - The SQLite checkpoint file and Caddy's certificate store live on named Docker volumes on the boot volume.
+  - Note that a reclaimed or terminated instance loses them, which is acceptable for a demo.
+
 ## 10. Configuration (environment)
 
 | Var | Default | Purpose |
@@ -365,5 +389,5 @@ Follow-ups after v1: replaying runs from checkpoints, Router, Supervisor (multi-
 
 ## 14. Open questions
 
-- The domain and host for deployment. They aren't needed until milestone 3, and Caddy needs only a domain name.
+- The domain name for deployment, which Caddy needs. The host is decided (§9b). Needed in Milestone 4.
 - The budget and cap defaults above are guesses, to tune after watching real usage.
