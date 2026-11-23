@@ -96,15 +96,15 @@ python -m agentic_solutions.web   # then open http://localhost:8000
 
 The interface uses the Blueprint design system (`docs/superpowers/specs/2026-11-23-blueprint-redesign-design.md`): navy drafting-grid pages, paper-coloured sheets, an amber accent for the active node, the current step and the one primary action, and a single theme with no dark-mode variant.
 
-- Colour tokens, type and spacing are CSS custom properties in the `:root` block of `web/static/styles.css`.
-- The About text (name, role and record) lives in `web/static/about.js`; it is the one file to edit to change them. The email address is kept in parts and assembled at runtime, so it never appears whole in any served file; "Get in touch" opens a `mailto:` link and also shows the address as selectable text.
+- Colour tokens, type and spacing are CSS custom properties in the `:root` block of `src/agentic_solutions/web/static/styles.css`.
+- The About text (name, role and record) lives in `src/agentic_solutions/web/static/about.js`; it is the one place to edit to change them (the title block and the footer name are both rendered from it). The one other place is the `<noscript>` line in `index.html`, which shows the address without JavaScript and must be edited too if the address changes. The email address is kept in parts and assembled at runtime, so it never appears whole in any served file; "Get in touch" opens a `mailto:` link and also shows the address as selectable text.
 - Fonts (Barlow Condensed and Public Sans) load from Google Fonts, so the page needs network access for them and falls back to system fonts without it.
 
 ### Catalog and routes
 
-- `#/` is the catalog home: a search box ("remember users", "human sign-off", "HITL", "RAG" all find a pattern) above five category cards.
+- `#/` is the catalog home: a hero with a search box ("remember users", "human sign-off", "HITL", "RAG" all find a pattern) above one catalog sheet of the five categories, plus a title block about the architect.
 - `#/<category>/<pattern>` opens a pattern, e.g. `#/governance/approval`, with a breadcrumb and ←/→ buttons that step through that category (wrapping at the ends).
-- A pattern with a live demo opens the workbench (graph, timeline, state, console, Guide). Any other pattern is Guide-only: a "Live demo coming" banner, its static graph diagram and its Guide. Guide-only pages create no thread and make no `/runs` call.
+- A pattern with a live demo opens the purpose sheet, then the workbench (graph, timeline, state, console), then the rest of the guide. Any other pattern is Guide-only: the purpose sheet, then its static graph diagram, then the rest of the guide. Guide-only pages create no thread and make no `/runs` call.
 - `Tool Use` is listed under Execution but opens the ReAct page; its status follows ReAct's.
 - Old links still work: `#qa`, `#chat_loop`, `#guardrail` and `#human_in_loop` redirect to their new routes (a remembered conversation restores). An unknown route shows the catalog with a "That pattern wasn't found" notice.
 - The catalog is served read-only at `GET /api/catalog` and `GET /api/catalog/<category>/<pattern>`.

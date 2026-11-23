@@ -1,7 +1,7 @@
 # Blueprint Redesign + About Section: Design Spec
 
 - **Date:** 2026-11-23
-- **Status:** Draft, builder-checked, awaiting the person's approval
+- **Status:** Approved; implemented on feature/cognitive-live
 - **Builds on:** the Studio spec (§6 UI), the Catalog spec (§4 UX). It supersedes their visual styling and page order. Behaviour, routes, API and accessibility rules are unchanged unless stated here.
 - **Branch:** `feature/cognitive-live`. This lands **before** Milestone 3's code, so Milestone 3's new UI pieces (the Live switch, tool chips, drafts list and plan checklist) are built in this design.
 
@@ -145,6 +145,8 @@ The cross-list note (Tool Use → ReAct) sits under the h1 inside the purpose sh
 - **Chat bubbles, notices, chips and result cards** use the paper palette, with the error and refusal styling in `--signal-red`.
 
 ## 5. Contact (email)
+
+Note: §9.1 supersedes the `#contact` href and the "on focus" wording below.
 
 - The email address is never present as one string in any served file:
   - `about.js` holds it split, e.g. `["jairajchetty", "gmail.com"]`.

@@ -15,15 +15,12 @@
   --font-ui: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-code: ui-monospace, "Cascadia Code", "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
 
-  --step--1: 1rem;
   --step-0: 1rem;
   --step-1: 1.25rem;
   --step-2: 1.5625rem;
   --step-3: 1.9375rem;
-  --step-4: 2.4375rem;
   --step-5: 3.0625rem;
 
-  --gap: 16px;
   --frame: 1600px;
   --frame-pad: 32px;
   --frame-rule: color-mix(in srgb, var(--line) 35%, transparent);
@@ -407,6 +404,7 @@ code, pre, kbd { font-family: var(--font-code); font-size: 0.92em; }
   .hero { padding: 32px 0 32px; }
   .hero-title { font-size: 38px; }
   .hero-graph { width: 80%; }
+  .hero-edge-label { font-size: 17px; }  /* 17 x 0.78 = 13.3 px on a 375 px screen */
   .title-block { grid-template-columns: minmax(0, 1fr); }
   .tb-cell + .tb-cell { border-left: 0; border-top: 1.5px solid var(--line); }
   .cat-sheet { grid-template-columns: minmax(0, 1fr); }
@@ -450,7 +448,6 @@ h3, .purpose-body h2 {
 }
 
 .empty-hint { margin: 0; color: var(--muted-ink); }
-.error-note { margin: 0; color: var(--signal-red); }
 
 /* The purpose sheet: the pattern's name, then what it is and when to use it. */
 .purpose { padding: 28px 32px 30px; }
@@ -821,7 +818,9 @@ h3, .purpose-body h2 {
   box-shadow: 1px 0 0 var(--rule), 0 1px 0 var(--rule);
 }
 .guide-intro,
-.guide-how-this-graph-works { grid-column: 1 / -1; }
+.guide-how-this-graph-works,
+.guide-what-it-is,
+.guide-when-to-use-it { grid-column: 1 / -1; }
 .guide-text { max-width: 75ch; }
 .guide-text > :first-child { margin-top: 0; }
 .guide-text > :last-child { margin-bottom: 0; }
@@ -851,7 +850,6 @@ h3, .purpose-body h2 {
 }
 .guide-text pre code { font-size: inherit; }
 .guide-body > .empty-hint,
-.guide-body > .error-note,
 .guide-fallback {
   grid-column: 1 / -1;
   margin: 0;

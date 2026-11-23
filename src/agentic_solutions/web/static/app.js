@@ -290,6 +290,7 @@ function route() {
 // The title block's copy lives in about.js, so it is edited in one place.
 function renderAbout() {
   $("about-name").textContent = ABOUT.name;
+  $("footer-name").textContent = ABOUT.name;
   $("about-role").textContent = ABOUT.role;
   $("about-record").textContent = ABOUT.record;
 }
