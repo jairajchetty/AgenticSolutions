@@ -35,10 +35,41 @@
   </header>
 
   <main id="main">
-    <!-- Catalog home (Catalog spec §4.2); catalog.js fills #home-body. -->
+    <!-- Landing (Blueprint spec §4.1): hero, title block, catalog sheet.
+         catalog.js fills #home-search and #home-body; hero.js draws #hero-graph;
+         app.js fills the title block from about.js. -->
     <section class="home" id="home" aria-labelledby="home-title" hidden>
-      <h1 class="view-title" id="home-title" tabindex="-1">Pattern catalog</h1>
       <p class="notice" id="home-notice" role="status" hidden></p>
+      <div class="hero">
+        <div class="hero-copy">
+          <h1 class="hero-title" id="home-title" tabindex="-1">Agent architectures, drawn to scale and running live.</h1>
+          <p class="hero-lede">Twenty-one agentic design patterns, each with the problem it solves, when to use it, and a working graph you can step through.</p>
+          <div class="home-search" id="home-search"></div>
+        </div>
+        <figure class="hero-figure">
+          <svg class="hero-graph" id="hero-graph" aria-hidden="true" focusable="false"></svg>
+          <figcaption class="visually-hidden">Diagram of the ReAct pattern's graph</figcaption>
+        </figure>
+      </div>
+
+      <section class="title-block" aria-label="About the architect">
+        <div class="tb-cell">
+          <p class="tb-label">Architect</p>
+          <p class="tb-name" id="about-name"></p>
+          <p class="tb-text" id="about-role"></p>
+        </div>
+        <div class="tb-cell">
+          <p class="tb-label">Record</p>
+          <p class="tb-text" id="about-record"></p>
+        </div>
+        <div class="tb-cell tb-contact">
+          <p class="tb-label">Contact</p>
+          <a class="btn-contact" href="#" data-contact rel="nofollow">Get in touch</a>
+          <span class="contact-reveal" data-contact-reveal hidden></span>
+          <noscript><p class="tb-text">jairajchetty at gmail dot com</p></noscript>
+        </div>
+      </section>
+
       <div class="home-body" id="home-body"></div>
     </section>
 
@@ -137,6 +168,11 @@
       </div>
     </div>
   </main>
+
+  <footer class="site-footer">
+    <p>Built by Jairaj Chetty with LangGraph and Claude. <a href="#" data-contact rel="nofollow">Get in touch</a>
+      <span class="contact-reveal" data-contact-reveal hidden></span></p>
+  </footer>
 
   <div class="visually-hidden" id="announcer" aria-live="polite"></div>
 </body>

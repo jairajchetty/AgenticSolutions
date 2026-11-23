@@ -1,4 +1,5 @@
-// The catalog home (Catalog spec §4.2): five category cards and a search box.
+// The catalog home (Catalog spec §4.2, Blueprint spec §4.1): a search box in
+// the hero and the five categories as columns on one paper sheet.
 //
 // `matches()` is the search rule and is pure, so Node's test runner imports
 // this module directly (tests/js/search.test.mjs): nothing here touches the
@@ -63,8 +64,8 @@ function patternRow(p, names) {
   return li;
 }
 
-function categoryCard(c, names) {
-  const card = make("section", "cat-card");
+function categoryColumn(c, names) {
+  const card = make("section", "cat-col");
   const h = make("h2", "cat-title", c.name);
   h.id = `cat-${c.id}`;
   h.tabIndex = -1;  // the breadcrumb's category link lands here
@@ -121,10 +122,11 @@ function bindSlash() {
   });
 }
 
-// renderHome(el, catalog, {onOpen}): the search box, the cards and the legend.
-// `onOpen(route)` is called when Enter picks the first visible match; the rows
-// themselves are plain links.
-export function renderHome(el, catalog, { onOpen } = {}) {
+// renderHome(el, catalog, {onOpen, searchEl}): the search box (with its match
+// count) in `searchEl`, or at the top of `el` without one; the catalog sheet
+// and the legend in `el`. `onOpen(route)` is called when Enter picks the first
+// visible match; the rows themselves are plain links.
+export function renderHome(el, catalog, { onOpen, searchEl = null } = {}) {
   const names = new Map(catalog.categories.flatMap((c) => c.patterns.map((p) => [p.route, p.name])));
 
   const form = make("form", "cat-search");
@@ -132,8 +134,6 @@ export function renderHome(el, catalog, { onOpen } = {}) {
   const label = make("label", "cat-search-label", "What are you trying to do?");
   label.htmlFor = "cat-search-input";
   const field = make("div", "cat-search-field");
-  const icon = make("span", "cat-search-icon", "⌕");
-  icon.setAttribute("aria-hidden", "true");
   const input = make("input", "cat-search-input");
   Object.assign(input, { id: "cat-search-input", type: "search", autocomplete: "off", spellcheck: false });
   input.placeholder = 'e.g. "remember users", "human sign-off"';
@@ -141,7 +141,7 @@ export function renderHome(el, catalog, { onOpen } = {}) {
   input.setAttribute("aria-controls", "cat-cards");
   const key = make("kbd", "cat-search-key", "/");
   key.setAttribute("aria-hidden", "true");
-  field.append(icon, input, key);
+  field.append(input, key);
   const hint = make("p", "cat-search-hint", "Press Enter to open the first match, Esc to clear.");
   hint.id = "cat-search-hint";
   form.append(label, field, hint);
@@ -151,10 +151,10 @@ export function renderHome(el, catalog, { onOpen } = {}) {
   const empty = make("p", "cat-empty");
   empty.hidden = true;
 
-  const nav = make("nav", "cat-cards");
+  const nav = make("nav", "cat-sheet");
   nav.id = "cat-cards";
   nav.setAttribute("aria-label", "Patterns by category");
-  const cards = catalog.categories.map((c) => categoryCard(c, names));
+  const cards = catalog.categories.map((c) => categoryColumn(c, names));
   nav.append(...cards.map((x) => x.card));
 
   let first = null;
@@ -196,7 +196,12 @@ export function renderHome(el, catalog, { onOpen } = {}) {
     if (input.value.trim() && first) onOpen?.(first);
   });
 
-  el.replaceChildren(form, status, empty, nav, legend());
+  if (searchEl) {
+    searchEl.replaceChildren(form, status, empty);
+    el.replaceChildren(nav, legend());
+  } else {
+    el.replaceChildren(form, status, empty, nav, legend());
+  }
   activeInput = input;
   bindSlash();
   filter();

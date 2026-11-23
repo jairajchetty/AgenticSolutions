@@ -13,6 +13,8 @@ import {
 } from "./api.js";
 import { renderGuide, renderInlineCode } from "./guide.js";
 import { renderHome } from "./catalog.js";
+import { ABOUT, bindContact } from "./about.js";
+import { buildHero, playHero } from "./hero.js";
 import { createGraph } from "./graph.js";
 import { createTrace } from "./trace.js";
 import { createConsole } from "./console.js";
@@ -92,6 +94,7 @@ async function showHome({ notice = null } = {}) {
   leavePattern();
   showView("home");
   setNotice(notice);
+  playHero($("hero-graph"));
   renderCrumbs(null);
   document.title = "Catalog · Agentic Patterns Studio";
   const category = pendingCategory;
@@ -109,6 +112,7 @@ async function showHome({ notice = null } = {}) {
   if (token !== loadToken) return;
   const home = renderHome($("home-body"), catalog, {
     onOpen: (route) => { location.hash = formatHash(route); },
+    searchEl: $("home-search"),
   });
   if (category) {
     home.focusCategory(category);
@@ -269,8 +273,18 @@ function route() {
   else selectRoute(where.route);
 }
 
+// The title block's copy lives in about.js, so it is edited in one place.
+function renderAbout() {
+  $("about-name").textContent = ABOUT.name;
+  $("about-role").textContent = ABOUT.role;
+  $("about-record").textContent = ABOUT.record;
+}
+
 async function start() {
   $("skip-link").addEventListener("click", skipToContent);
+  bindContact(document.body);
+  renderAbout();
+  buildHero($("hero-graph"));
   document.addEventListener("keydown", stepWithArrows);
   try {
     state.session = await getSession();
