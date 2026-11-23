@@ -45,7 +45,7 @@ Mockups are in `.superpowers/brainstorm/redesign/directions.html`.
 |---|---|---|
 | `--navy` | `#0F2B46` | the drafting frame: page background, masthead, hero, the graph canvas |
 | `--line` | `#9CC7E8` | line work: graph edges and nodes, grid, frame rules, secondary text on navy |
-| `--paper` | `#F3F6F8` | sheets: every reading surface (purpose, console, guide, cards, title-block body) |
+| `--paper` | `#F3F6F8` | sheets: every reading surface (purpose, console, guide, catalog) |
 | `--ink` | `#13202B` | text on paper |
 | `--amber` | `#E2A33B` | the **one** highlight: the active node, the primary action ("Get in touch"), focus rings on navy |
 | `--signal-red` | `#C2412D` | errors and refused nodes only |
@@ -104,7 +104,7 @@ Mockups are in `.superpowers/brainstorm/redesign/directions.html`.
   - The search box keeps the Catalog spec §4.2 behaviour, label, placeholder and keyboard shortcuts, restyled.
 - **Hero graph:**
   - An inline SVG of the ReAct topology (`ask`, `agent`, `tools`, with start and end), in `--line` strokes and Barlow Condensed labels.
-  - On load it traces `start → ask → agent → tools → agent → ask` once. The active node turns amber, and edges draw with `stroke-dashoffset`.
+  - On load it traces `start → ask → agent → tools → agent → end` once (§9.2). The active node turns amber, and edges draw with `stroke-dashoffset`.
   - It is decorative: `aria-hidden="true"`, with an `sr-only` caption "Diagram of the ReAct pattern's graph".
   - The SVG is hand-built from a fixed layout. It is not the live Cytoscape graph.
   - Below 700 px it sits under the copy at 80% scale.
@@ -114,7 +114,7 @@ Mockups are in `.superpowers/brainstorm/redesign/directions.html`.
   - **Contact:** an amber **"Get in touch"** button.
   - Cell labels ("Architect", "Record", "Contact") are small sentence-case Barlow Condensed in `--line`.
   - Below 700 px the cells stack.
-- **Catalog:** the five categories on one paper sheet. Columns are separated by hairline `--line`-tinted rules, not cards. Each column has its name (Barlow Condensed), its question (muted ink) and its pattern rows, with the existing status marks, hints, cross-link mark and search filtering. The legend sits under the sheet, on navy.
+- **Catalog:** the five categories on one paper sheet; five columns at ≥ 1100 px, 3 + 2 below 1100 px, one column below 700 px (builder's call: five columns at 900 px broke pattern names). Columns are separated by hairline `--line`-tinted rules, not cards. Each column has its name (Barlow Condensed), its question (muted ink) and its pattern rows, with the existing status marks, hints, cross-link mark and search filtering. The legend sits under the sheet, on navy.
 - **Footer:** one line on navy: "Built by Jairaj Chetty with LangGraph and Claude." and a "Get in touch" text link.
 
 ### 4.2 Pattern page (`#/<category>/<pattern>`)
