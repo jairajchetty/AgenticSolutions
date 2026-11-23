@@ -26,11 +26,12 @@ The dividing line: Session is one conversation, remembered through one thread's 
 - **Cycle**: `answer` links back to `ask`, so the graph loops.
 - **Conditional edge**: `add_conditional_edges` runs a router function that returns the name of the next node, or `END`.
 - **Memory inside a run**: the `add_messages` reducer appends every question and reply, so history builds up.
+- **Checkpointer + `thread_id`**: the web demo compiles the graph with a checkpointer; each `thread_id` is one session, and its messages are saved after every step.
 - **Typed router**: the return type `Literal["answer", "ask", "__end__"]` lists every possible destination, which is how the graph diagram is drawn.
 
 ## Trade-offs
 - Natural to use, but the history grows with every turn. Cost and latency rise, and long chats eventually hit the context limit.
-- Memory lasts only for one run. Closing the chat loses it unless you add a checkpointer.
+- The CLI run keeps history only in memory, so closing it loses the chat. The web demo persists it per thread through the checkpointer.
 - Anything you type reaches the model unchecked. See [[governance/guardrails]] for a fix, and [[governance/approval]] for a version that pauses for a person.
 
 ## Key code

@@ -47,6 +47,6 @@ return builder.compile()
 ```
 
 ## Try this
-- Suppose `propose` makes 3 candidates and `score` keeps 2. How many candidates exist after four laps, counting those pruned?
+- Suppose the first lap starts from the task alone, `propose` makes 3 candidates per kept candidate, and `score` keeps the best 2 each lap. How many candidates exist after four laps, counting those pruned? (Answer: 3 + 6 + 6 + 6 = 21.)
 - What would you use to score a candidate for a coding task, and why is that better than asking a model?
 - Compare with [[cognitive/reflection]], which improves one draft in place, and [[cognitive/planning]], which commits to a single plan.

@@ -23,6 +23,7 @@ from langgraph.graph import END, START, StateGraph
 class State(TypedDict):
     task: str
     draft: str
+    score: float
     feedback: str
     iteration: int
 

@@ -20,7 +20,7 @@ The trace shows `ask`, `guard`, then either `answer` or `refuse`, then back to `
 
 In the web demo the `ask` node waits with `interrupt()` (see [[governance/approval]]); in the CLI it uses `input()`.
 
-The dividing line: Guardrails screen the input before the model ever sees it. [[governance/review]] checks the output afterwards, with a separate agent or person who can send it back for another try.
+The dividing line: Guardrails are automatic screens that block unsafe content on the way in (as this demo does) or on the way out. [[governance/review]] judges whether a finished result is good enough and can send it back for rework.
 
 ## LangGraph concepts
 - **Two conditional edges**: one after `ask`, one after `guard`.

@@ -3,7 +3,7 @@
 ## What it is
 An event-driven agent runs because something happened, not because a person typed a message. An order arrives on a queue, a webhook fires, or a schedule ticks. Each event starts one run of the graph, and the run handles that event and finishes. The agent can also publish a result, which may itself be the next event for another system.
 
-The key point: **the graph is started by an external trigger, such as a queue consumer, a webhook or a cron job, calling `invoke`.** The trigger lives outside the graph. LangGraph does not listen for events by itself.
+The key point: **the graph is started by an external trigger, such as a queue consumer, a webhook or a cron job, calling `invoke`.** The trigger lives outside the graph. The `langgraph` library does not listen for events by itself.
 
 ## When to use it
 - Work arrives from other systems at unpredictable times, and nobody is waiting at a chat box.

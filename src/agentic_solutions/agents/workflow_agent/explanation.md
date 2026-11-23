@@ -57,5 +57,5 @@ return builder.compile()
 
 ## Try this
 - Which State field would `validate` fill so that the router can pick `handle_error`? Answer with its name from the skeleton.
-- Suppose a new step, `deduplicate`, must run after `validate` and before `transform`. Which single existing edge do you replace, and with which two edges?
+- Suppose a new step, `deduplicate`, must run after `validate` and before `transform`. `validate` reaches `transform` through a router branch, not an `add_edge`. Which router branch do you change, and which new edge do you add? (Answer: the router's `transform` branch now returns `deduplicate`, and you add the edge `deduplicate` -> `transform`.)
 - Compare with [[cognitive/planning]]: if the steps cannot be listed before the request arrives, which of the two patterns fits, Workflow or Planning?

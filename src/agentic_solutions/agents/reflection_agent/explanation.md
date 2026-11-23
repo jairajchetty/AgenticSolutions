@@ -25,7 +25,7 @@ The `critique` -> `revise` -> `critique` cycle is the reflection loop. The skele
 A live version would use:
 - **Conditional edges**: a router annotated `Literal["revise", "__end__"]` stops or continues the loop.
 - **Structured output**: `with_structured_output` makes the critique a typed object (score and feedback) that the router can read.
-- **State**: keeps the task, the latest draft, the feedback and an iteration counter. A history list would show every draft.
+- **State**: keeps the task, the latest draft, the critique's score and feedback, and an iteration counter. A history list would show every draft.
 - **Cycles**: LangGraph graphs may loop, so a counter in state must bound them.
 
 ## Trade-offs
@@ -51,6 +51,6 @@ return builder.compile()
 ```
 
 ## Try this
-- Which two fields of state must `critique` write so its router can decide? What would you check to stop after three rounds?
+- Which two fields of state must `critique` write so its router can decide? (Answer: `score` and `feedback`.) What would you check to stop after three rounds?
 - Name one task where a model grading itself would miss the error, and say who or what should check it instead.
 - Compare with [[governance/review]], where a separate checker sits in the same shape, and with [[cognitive/react]], which loops on tool results rather than on a critique.
