@@ -88,34 +88,90 @@ function linkMarkers(root, linkFor) {
   }
 }
 
+const PURPOSE_HEADINGS = ["What it is", "When to use it"];
+
+// splitPurpose(markdown): pull the "What it is" and "When to use it" sections
+// (matched by heading text, kept with their `##` headings, in that order) out
+// of the Guide. `rest` is everything else in original order, minus the leading
+// `# ` title (the purpose sheet shows the title itself). If either purpose
+// heading is missing, purpose is "" and rest is the whole Guide minus its title.
+// Pure: no DOM, so it runs under node.
+export function splitPurpose(markdown) {
+  const lines = String(markdown || "").replace(/\r\n/g, "\n").split("\n");
+  const chunks = [{ title: null, lines: [] }];  // preamble, then one per `##`
+  let fence = null;
+  let titleSeen = false;
+  for (const line of lines) {
+    const marker = line.match(/^\s*(```+|~~~+)/);
+    if (marker) {
+      if (!fence) fence = marker[1][0];
+      else if (marker[1][0] === fence) fence = null;
+    }
+    if (!fence && /^##\s+/.test(line)) {
+      chunks.push({ title: line.replace(/^##\s+/, "").trim(), lines: [line] });
+    } else if (!fence && !titleSeen && chunks.length === 1 && /^#\s+/.test(line)) {
+      titleSeen = true;  // dropped
+    } else {
+      chunks[chunks.length - 1].lines.push(line);
+    }
+  }
+  const join = (cs) => cs.flatMap((c) => c.lines).join("\n");
+  const picked = PURPOSE_HEADINGS.map((t) => chunks.find((c) => c.title === t));
+  if (picked.some((c) => !c)) return { purpose: "", rest: join(chunks) };
+  return {
+    purpose: picked.map((c) => c.lines.join("\n").trim()).join("\n\n"),
+    rest: join(chunks.filter((c) => !picked.includes(c))),
+  };
+}
+
+// One labelled block: <section class> with an <h3> and the sanitised, linked body.
+// The only innerHTML assignment in the app lives here.
+function buildBlock(className, id, title, bodyMarkdown, linkFor) {
+  const block = document.createElement("section");
+  block.className = className;
+  if (title) {
+    const h = document.createElement("h3");
+    h.id = id;
+    renderInlineCode(h, title);
+    block.setAttribute("aria-labelledby", h.id);
+    block.append(h);
+  }
+  const body = document.createElement("div");
+  body.className = "guide-text";
+  body.innerHTML = markdownToSafeHtml(bodyMarkdown);
+  linkMarkers(body, linkFor);
+  block.append(body);
+  return block;
+}
+
+// CDN unavailable: show the raw Markdown as text rather than nothing.
+function renderFallback(el, markdown) {
+  const pre = document.createElement("pre");
+  pre.className = "guide-fallback";
+  pre.textContent = markdown || "";
+  el.append(pre);
+}
+
 // renderGuide(el, markdown, {linkFor}): the sectioned Guide, with pattern links.
 export function renderGuide(el, markdown, { linkFor } = {}) {
   el.replaceChildren();
   const sections = splitSections(markdown || "");
-  if (!window.marked || !window.DOMPurify) {
-    // CDN unavailable: show the raw Markdown as text rather than nothing.
-    const pre = document.createElement("pre");
-    pre.className = "guide-fallback";
-    pre.textContent = markdown || "";
-    el.append(pre);
-    return;
-  }
+  if (!window.marked || !window.DOMPurify) return renderFallback(el, markdown);
   sections.forEach((section, i) => {
-    const block = document.createElement("section");
     const key = section.title ? slug(section.title) : "intro";
-    block.className = `guide-block guide-${key}`;
-    if (section.title) {
-      const h = document.createElement("h3");
-      h.id = `guide-h-${i}-${key}`;
-      renderInlineCode(h, section.title);
-      block.setAttribute("aria-labelledby", h.id);
-      block.append(h);
-    }
-    const body = document.createElement("div");
-    body.className = "guide-text";
-    body.innerHTML = markdownToSafeHtml(section.body);
-    linkMarkers(body, linkFor);
-    block.append(body);
-    el.append(block);
+    el.append(buildBlock(`guide-block guide-${key}`, `guide-h-${i}-${key}`,
+      section.title, section.body, linkFor));
+  });
+}
+
+// renderPurpose(el, purposeMarkdown, {linkFor}): the two purpose sections as
+// `.purpose-what` and `.purpose-when` blocks, same sanitise + link pipeline.
+export function renderPurpose(el, markdownPurpose, { linkFor } = {}) {
+  el.replaceChildren();
+  if (!window.marked || !window.DOMPurify) return renderFallback(el, markdownPurpose);
+  const byTitle = new Map(splitSections(markdownPurpose || "").map((s) => [s.title, s]));
+  [["What it is", "purpose-what"], ["When to use it", "purpose-when"]].forEach(([title, cls]) => {
+    const section = byTitle.get(title);
+    if (section) el.append(buildBlock(cls, `${cls}-h`, title, section.body, linkFor));
   });
 }
