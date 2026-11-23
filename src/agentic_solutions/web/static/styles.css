@@ -442,7 +442,7 @@ code, pre, kbd { font-family: var(--font-code); font-size: 0.92em; }
 .sheet-head h2 { margin: 0; font-size: var(--step-2); line-height: 1.2; }
 .sheet-sub { margin: 0; color: var(--muted-ink); }
 
-h3 {
+h3, .purpose-body h2 {
   margin: 0 0 8px;
   font-size: var(--step-1);
   line-height: 1.2;
@@ -516,7 +516,17 @@ h3 {
 .lg { font-weight: 700; }
 .lg-active { color: var(--amber); }
 .lg-done, .lg-paused { color: var(--line); }
-.lg-error { color: var(--paper); }
+/* Echoes an error node: a paper ✕ in a small signal-red box. */
+.lg-error {
+  display: inline-grid;
+  place-items: center;
+  width: 18px; height: 18px;
+  font-size: 0.75rem;
+  line-height: 1;
+  color: var(--paper);
+  background: color-mix(in srgb, var(--signal-red) 40%, var(--navy));
+  border: 1.5px solid var(--signal-red);
+}
 .lg-dash, .lg-solid { width: 22px; border-top: 1.5px dashed var(--line); }
 .lg-solid { border-top-style: solid; }
 .lg-count { font-family: var(--font-display); font-weight: 500; color: var(--paper); }
@@ -605,8 +615,8 @@ h3 {
   cursor: pointer;
 }
 .timeline-step:hover { background: var(--paper-sunk); }
-/* The step on show: amber marks "here", as on the graph. */
-.timeline-step[aria-pressed="true"] { background: var(--paper-sunk); border-left-color: var(--amber); }
+/* The step on show (a selection, not the running step): an ink bar. */
+.timeline-step[aria-pressed="true"] { background: var(--paper-sunk); border-left-color: var(--ink); }
 .step-num { min-width: 3ch; font-variant-numeric: tabular-nums; color: var(--muted-ink); }
 .step-node { font-family: var(--font-display); font-weight: 600; font-size: var(--step-1); line-height: 1.2; }
 .step-time { color: var(--muted-ink); font-variant-numeric: tabular-nums; }

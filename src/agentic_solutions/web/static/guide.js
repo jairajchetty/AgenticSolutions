@@ -115,13 +115,13 @@ export function splitPurpose(markdown) {
   };
 }
 
-// One labelled block: <section class> with an <h3> and the sanitised, linked body.
-// The only innerHTML assignment in the app lives here.
-function buildBlock(className, id, title, bodyMarkdown, linkFor) {
+// One labelled block: <section class> with a heading (h3 by default) and the
+// sanitised, linked body. The only innerHTML assignment in the app lives here.
+function buildBlock(className, id, title, bodyMarkdown, linkFor, { level = 3 } = {}) {
   const block = document.createElement("section");
   block.className = className;
   if (title) {
-    const h = document.createElement("h3");
+    const h = document.createElement(`h${level}`);
     h.id = id;
     renderInlineCode(h, title);
     block.setAttribute("aria-labelledby", h.id);
@@ -157,12 +157,13 @@ export function renderGuide(el, markdown, { linkFor } = {}) {
 
 // renderPurpose(el, purposeMarkdown, {linkFor}): the two purpose sections as
 // `.purpose-what` and `.purpose-when` blocks, same sanitise + link pipeline.
+// Their headings are h2: they sit directly under the page h1.
 export function renderPurpose(el, markdownPurpose, { linkFor } = {}) {
   el.replaceChildren();
   if (!window.marked || !window.DOMPurify) return renderFallback(el, markdownPurpose);
   const byTitle = new Map(splitSections(markdownPurpose || "").map((s) => [s.title, s]));
   [["What it is", "purpose-what"], ["When to use it", "purpose-when"]].forEach(([title, cls]) => {
     const section = byTitle.get(title);
-    if (section) el.append(buildBlock(cls, `${cls}-h`, title, section.body, linkFor));
+    if (section) el.append(buildBlock(cls, `${cls}-h`, title, section.body, linkFor, { level: 2 }));
   });
 }
