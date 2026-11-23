@@ -117,9 +117,11 @@ The taxonomy lives in `web/catalog.py`. An entry is "live" when its `demo` id is
 
 Each Guide-only pattern has a skeleton folder under `agents/` whose `graph.py` builds the pattern's real topology with empty nodes (`build_skeleton()`), which is what the diagram draws. To make one live:
 
-1. Fill the folder's graph with real node logic, keeping the node names (the Guide and diagram refer to them).
-2. Add an entry to `PATTERNS` in `web/registry.py` whose id equals the catalog entry's `demo` (for example `react`, `reflection` or `plan_execute`), pointing at that folder's `explanation.md`.
-3. Add an offline script for the new id in `web/offline/scripts.py` so the demo runs without an API key.
+1. Fill the folder's graph with real node logic, keeping the node names (the Guide and diagram refer to them). Like the live folders, give it a `build_graph(checkpointer=..., llm_factory=...)` and a module-level `graph = build_graph()`.
+2. In `web/registry.py`, add a `_build_<id>(c: BuildContext)` factory that calls `build_graph` with `c.checkpointer` and `c.llm_factory`, and add a `_spec(...)` row to `PATTERNS` whose id equals the catalog entry's `demo` (for example `react`, `reflection` or `plan_execute`). Its arguments are the title, the summary, the mode (`"chat"` or `"trigger"`), the factory, the folder (whose `explanation.md` becomes the Guide) and the sample prompts.
+3. Add an offline `Script` for the new id to `SCRIPTS` in `web/offline/scripts.py`, so the demo runs without an API key. Give it a rule for every backticked input in the Guide's "Try this" section: `tests/test_offline_scripts.py` sends each one to the script and fails if it falls through to the fallback.
+4. Remove the folder's row from `SKELETONS` in `tests/test_skeletons.py`: those tests assert a skeleton has no `graph` export, which the live graph now has.
+5. Rewrite the folder's `explanation.md`: drop the "this is a skeleton / placeholders" text, and replace its Key code with lines copied from the live `graph.py` (`tests/test_guides.py` keeps the fence at 25 lines or fewer).
 
 No edit to `catalog.py` is needed: the entry turns live and the page switches from Guide-only to the workbench.
 
