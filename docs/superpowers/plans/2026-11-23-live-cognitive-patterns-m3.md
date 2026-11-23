@@ -395,6 +395,8 @@ def test_glossary():
 ### Task 10: Frontend: Live switch, mode badge, chips, drafts, checklist
 
 > Use the `frontend-design:frontend-design` skill and keep the existing tokens.
+>
+> Build in the Blueprint design: `docs/superpowers/specs/2026-11-23-blueprint-redesign-design.md` tokens, sheets, amber rule.
 
 **Files:**
 - Modify: `web/static/app.js`, `console.js`, `api.js` (`createThread(patternId, {mode})`), `index.html`, `styles.css`.

@@ -92,6 +92,14 @@ A browser UI with a catalog of 21 agentic patterns. The four that have a live de
 python -m agentic_solutions.web   # then open http://localhost:8000
 ```
 
+### Design
+
+The interface uses the Blueprint design system (`docs/superpowers/specs/2026-11-23-blueprint-redesign-design.md`): navy drafting-grid pages, paper-coloured sheets, an amber accent for the active node, the current step and the one primary action, and a single theme with no dark-mode variant.
+
+- Colour tokens, type and spacing are CSS custom properties in the `:root` block of `web/static/styles.css`.
+- The About text (name, role and record) lives in `web/static/about.js`; it is the one file to edit to change them. The email address is kept in parts and assembled at runtime, so it never appears whole in any served file; "Get in touch" opens a `mailto:` link and also shows the address as selectable text.
+- Fonts (Barlow Condensed and Public Sans) load from Google Fonts, so the page needs network access for them and falls back to system fonts without it.
+
 ### Catalog and routes
 
 - `#/` is the catalog home: a search box ("remember users", "human sign-off", "HITL", "RAG" all find a pattern) above five category cards.
