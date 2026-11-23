@@ -29,11 +29,12 @@ export function renderInlineCode(el, text) {
 const slug = (text) =>
   text.toLowerCase().replace(/[`'’]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
-// Split markdown into {title, body} sections on `## ` lines outside code fences.
-// The `# ` page title is dropped (the page heading already shows it); text before the
-// first `##` becomes an untitled intro block.
-function splitSections(markdown) {
-  const sections = [{ title: null, lines: [] }];
+// The one line scanner. Cuts markdown into chunks at `## ` lines outside code
+// fences; each chunk is {title, heading, lines} (heading is the raw `## ` line,
+// null for the preamble before the first `##`). `# ` lines in the preamble are
+// the page title and are dropped.
+function chunkMarkdown(markdown) {
+  const chunks = [{ title: null, heading: null, lines: [] }];
   let fence = null;
   for (const line of markdown.replace(/\r\n/g, "\n").split("\n")) {
     const marker = line.match(/^\s*(```+|~~~+)/);
@@ -42,15 +43,22 @@ function splitSections(markdown) {
       else if (marker[1][0] === fence) fence = null;
     }
     if (!fence && /^##\s+/.test(line)) {
-      sections.push({ title: line.replace(/^##\s+/, "").trim(), lines: [] });
-    } else if (!fence && /^#\s+/.test(line) && sections.length === 1) {
+      chunks.push({ title: line.replace(/^##\s+/, "").trim(), heading: line, lines: [] });
+    } else if (!fence && /^#\s+/.test(line) && chunks.length === 1) {
       continue;
     } else {
-      sections[sections.length - 1].lines.push(line);
+      chunks[chunks.length - 1].lines.push(line);
     }
   }
-  return sections
-    .map((s) => ({ title: s.title, body: s.lines.join("\n").trim() }))
+  return chunks;
+}
+
+// Split markdown into {title, body} sections. The `# ` page title is dropped (the
+// page heading already shows it); text before the first `##` becomes an untitled
+// intro block.
+function splitSections(markdown) {
+  return chunkMarkdown(markdown)
+    .map((c) => ({ title: c.title, body: c.lines.join("\n").trim() }))
     .filter((s) => s.title || s.body);
 }
 
@@ -97,30 +105,13 @@ const PURPOSE_HEADINGS = ["What it is", "When to use it"];
 // heading is missing, purpose is "" and rest is the whole Guide minus its title.
 // Pure: no DOM, so it runs under node.
 export function splitPurpose(markdown) {
-  const lines = String(markdown || "").replace(/\r\n/g, "\n").split("\n");
-  const chunks = [{ title: null, lines: [] }];  // preamble, then one per `##`
-  let fence = null;
-  let titleSeen = false;
-  for (const line of lines) {
-    const marker = line.match(/^\s*(```+|~~~+)/);
-    if (marker) {
-      if (!fence) fence = marker[1][0];
-      else if (marker[1][0] === fence) fence = null;
-    }
-    if (!fence && /^##\s+/.test(line)) {
-      chunks.push({ title: line.replace(/^##\s+/, "").trim(), lines: [line] });
-    } else if (!fence && !titleSeen && chunks.length === 1 && /^#\s+/.test(line)) {
-      titleSeen = true;  // dropped
-    } else {
-      chunks[chunks.length - 1].lines.push(line);
-    }
-  }
-  const join = (cs) => cs.flatMap((c) => c.lines).join("\n");
+  const chunks = chunkMarkdown(String(markdown || ""));
+  const text = (cs) => cs.flatMap((c) => (c.heading === null ? c.lines : [c.heading, ...c.lines])).join("\n");
   const picked = PURPOSE_HEADINGS.map((t) => chunks.find((c) => c.title === t));
-  if (picked.some((c) => !c)) return { purpose: "", rest: join(chunks) };
+  if (picked.some((c) => !c)) return { purpose: "", rest: text(chunks) };
   return {
-    purpose: picked.map((c) => c.lines.join("\n").trim()).join("\n\n"),
-    rest: join(chunks.filter((c) => !picked.includes(c))),
+    purpose: picked.map((c) => text([c]).trim()).join("\n\n"),
+    rest: text(chunks.filter((c) => !picked.includes(c))),
   };
 }
 

@@ -48,3 +48,36 @@ test("no H1 and empty input are handled", () => {
   assert.deepEqual(splitPurpose(""), { purpose: "", rest: "" });
   assert.equal(splitPurpose(SECTIONS.how).rest, SECTIONS.how);
 });
+
+test("a ### subheading inside a purpose section stays in that section", () => {
+  const md = "# T\n\n## What it is\nA.\n\n### Detail\nMore.\n\n## When to use it\nB.\n\n## Other\nC.\n";
+  const { purpose, rest } = splitPurpose(md);
+  assert.ok(purpose.includes("### Detail") && purpose.includes("More."));
+  assert.ok(!rest.includes("Detail"));
+});
+
+test("CRLF input splits the same as LF", () => {
+  const md = sample(["what", "when", "how"]);
+  assert.deepEqual(splitPurpose(md.replace(/\n/g, "\r\n")), splitPurpose(md));
+});
+
+test("a heading at end of file with no body is kept", () => {
+  const { purpose, rest } = splitPurpose("# T\n\n" + SECTIONS.what + "\n" + SECTIONS.when + "\n## Try this");
+  assert.deepEqual(headings(purpose), ["What it is", "When to use it"]);
+  assert.deepEqual(headings(rest), ["Try this"]);
+  const { purpose: p2 } = splitPurpose("# T\n\n" + SECTIONS.how + "\n" + SECTIONS.what + "\n## When to use it");
+  assert.deepEqual(headings(p2), ["What it is", "When to use it"]);
+});
+
+test("an H1 that is not on line 1 is still dropped", () => {
+  const { purpose, rest } = splitPurpose("\n\n# Late Title\n\n" + SECTIONS.what + "\n" + SECTIONS.when + "\n" + SECTIONS.how);
+  assert.ok(!/^# /m.test(purpose + rest));
+  assert.deepEqual(headings(rest), ["How this graph works"]);
+});
+
+test("lossless: non-H1, non-blank lines of purpose + rest equal the input's", () => {
+  const md = sample(["how", "when", "code", "what", "try"]).replace("Steps.", "Steps.\n### Sub\n- item");
+  const keep = (t) => t.split("\n").filter((l) => l.trim() && !/^# /.test(l)).sort();
+  const { purpose, rest } = splitPurpose(md);
+  assert.deepEqual(keep(purpose + "\n" + rest), keep(md));
+});
