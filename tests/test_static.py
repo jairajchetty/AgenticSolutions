@@ -59,3 +59,39 @@ def test_no_personal_contact_strings_in_served_files():          # Blueprint spe
         assert b"@".join([b"jairajchetty", b"gmail.com"]) not in data, path
         assert phone.search(data) is None, path
         assert b"+27" not in data, path
+
+
+def test_noscript_contact_line_is_not_inside_a_hidden_element():  # Blueprint spec §5, §9.1
+    # Without JS nothing un-hides a [hidden] ancestor, so the fallback address
+    # must sit outside every element carrying the hidden attribute.
+    from html.parser import HTMLParser
+
+    void = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
+
+    class Finder(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.stack = []  # (tag, hidden) for each open element
+            self.found = []  # (text, inside_hidden) for each <noscript>
+
+        def handle_starttag(self, tag, attrs):
+            if tag in void:
+                return
+            self.stack.append((tag, any(name == "hidden" for name, _ in attrs)))
+            if tag == "noscript":
+                self.found.append(["", any(h for _, h in self.stack)])
+
+        def handle_endtag(self, tag):
+            while self.stack:
+                if self.stack.pop()[0] == tag:
+                    break
+
+        def handle_data(self, data):
+            if any(t == "noscript" for t, _ in self.stack):
+                self.found[-1][0] += data
+
+    finder = Finder()
+    finder.feed((STATIC / "index.html").read_text())
+    lines = [hidden for text, hidden in finder.found if "at gmail dot com" in text]
+    assert lines, "no <noscript> fallback address"
+    assert not any(lines), "the <noscript> address is inside a [hidden] element"

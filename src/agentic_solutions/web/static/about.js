@@ -24,8 +24,8 @@ export function contactHref() {
   return `mailto:${contactAddress()}?subject=${encodeURIComponent(SUBJECT)}`;
 }
 
-// One delegated listener on `root` for every [data-contact] element. Safe to
-// call twice. The first activation also shows the address as plain text, for
+// One delegated click listener on `root` for every [data-contact] element.
+// Each is an <a href>, so Enter on it fires a click too. Safe to call twice. The first activation also shows the address as plain text, for
 // visitors with no mail app.
 export function bindContact(root) {
   if (root.__contactBound) return;
@@ -43,7 +43,4 @@ export function bindContact(root) {
     window.location.href = contactHref();
   };
   root.addEventListener("click", activate);
-  root.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") activate(event);
-  });
 }

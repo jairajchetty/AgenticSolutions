@@ -20,10 +20,46 @@ test("ABOUT holds the exact spec copy", () => {
   assert.equal(ABOUT.builtWith, "Built this Studio with LangGraph and Claude.");
 });
 
-test("bindContact attaches one click and one keydown listener, once", () => {
+test("bindContact attaches one click listener, once", () => {
   const calls = [];
   const root = { addEventListener: (type, fn) => calls.push([type, fn]) };
   bindContact(root);
   bindContact(root);
-  assert.deepEqual(calls.map(([t]) => t).sort(), ["click", "keydown"]);
+  assert.deepEqual(calls.map(([t]) => t), ["click"]);
+});
+
+// A stub root whose click handler is captured, and a stub window.location.
+function stubbed() {
+  const handlers = {};
+  const root = { addEventListener: (type, fn) => { handlers[type] = fn; }, querySelector: () => null };
+  const location = { href: "http://localhost/#/" };
+  globalThis.window = { location };
+  bindContact(root);
+  return { click: handlers.click, location };
+}
+
+function clickOn(target) {
+  let prevented = false;
+  return { event: { target, preventDefault: () => { prevented = true; } }, prevented: () => prevented };
+}
+
+test("a click on a [data-contact] reveals the address and opens the mailto", () => {
+  const { click, location } = stubbed();
+  const reveal = { textContent: "", hidden: true };
+  const trigger = { parentElement: { querySelector: (sel) => (sel === "[data-contact-reveal]" ? reveal : null) } };
+  const target = { closest: (sel) => (sel === "[data-contact]" ? trigger : null) };
+  const c = clickOn(target);
+  click(c.event);
+  assert.equal(c.prevented(), true);
+  assert.equal(reveal.textContent, `or copy: ${contactAddress()}`);
+  assert.equal(reveal.hidden, false);
+  assert.equal(location.href, contactHref());
+});
+
+test("a click elsewhere does nothing", () => {
+  const { click, location } = stubbed();
+  const c = clickOn({ closest: () => null });
+  click(c.event);
+  assert.equal(c.prevented(), false);
+  assert.equal(location.href, "http://localhost/#/");
 });
