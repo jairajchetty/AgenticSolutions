@@ -32,3 +32,16 @@ def test_catalog_and_guide_build_links_with_create_element():   # Catalog spec Â
 def test_index_served(client):
     r = client.get("/")
     assert r.status_code == 200 and 'id="trace"' in r.text and 'id="console"' in r.text and 'id="guide"' in r.text
+
+
+def test_fonts_only_from_google():
+    html = (STATIC / "index.html").read_text()
+    hrefs = re.findall(r'<link[^>]*rel="stylesheet"[^>]*href="([^"]+)"', html)
+    hrefs += re.findall(r'<link[^>]*href="([^"]+)"[^>]*rel="stylesheet"', html)
+    for href in hrefs:
+        assert href.startswith("/static/") or href.startswith("https://fonts.googleapis.com/"), href
+    assert any(h.startswith("https://fonts.googleapis.com/") for h in hrefs)
+
+
+def test_no_dark_scheme_override():
+    assert "prefers-color-scheme" not in (STATIC / "styles.css").read_text()

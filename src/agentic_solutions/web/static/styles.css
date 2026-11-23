@@ -1,74 +1,58 @@
-/* Agentic Patterns Studio: a lab bench for watching agents run.
-   Cool aluminium bench, white instrument panels, one cobalt "signal" colour
-   for whatever is live. Node states also use amber (paused), red (error)
-   and green (done), always paired with an icon or label (spec §6). */
+/* Agentic Patterns Studio: Blueprint theme. One theme, no dark variant.
+   Navy drafting sheet, paper panels, blueprint-blue linework. Amber marks the
+   one active thing; red marks an error. */
 
 :root {
-  --bench: #e6eaec;
-  --panel: #fafbfb;
-  --panel-sunk: #f0f3f4;
-  --ink: #17212a;
-  --muted: #56636e;
-  --rule: #c5ced4;
-  --grid: #dde3e7;
-  --grid-major: #cdd5da;
-  --signal: #2557d6;
-  --signal-soft: #dfe7fb;
-  --on-signal: #ffffff;
-  --paused: #a96d12;
-  --error: #b3392a;
-  --done: #2c7550;
+  --navy: #0f2b46;
+  --line: #9cc7e8;
+  --paper: #f3f6f8;
+  --ink: #13202b;
+  --amber: #e2a33b;
+  --signal-red: #c2412d;
+  --muted-ink: #51606d;
 
-  --font-ui: "Inter Variable", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-ui: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-code: ui-monospace, "Cascadia Code", "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
 
-  --step--1: 0.8125rem;
-  --step-0: 0.9375rem;
-  --step-1: 1.0625rem;
-  --step-2: 1.3125rem;
+  --step--1: 1rem;
+  --step-0: 1rem;
+  --step-1: 1.25rem;
+  --step-2: 1.5625rem;
+  --step-3: 1.9375rem;
+  --step-4: 2.4375rem;
+  --step-5: 3.0625rem;
 
   --gap: 16px;
   --radius-panel: 8px;
   --radius-ctl: 5px;
+
+  /* Interim aliases: legacy names used by component rules until Tasks 4-5
+     restyle them. They only point at the palette above. */
+  --bench: var(--navy);
+  --panel: var(--paper);
+  --panel-sunk: color-mix(in srgb, var(--paper) 90%, var(--line));
+  --muted: var(--muted-ink);
+  --rule: color-mix(in srgb, var(--line) 60%, var(--paper));
+  --grid: color-mix(in srgb, var(--line) 9%, transparent);
+  --grid-major: color-mix(in srgb, var(--line) 18%, transparent);
+  --signal: var(--navy);
+  --signal-soft: color-mix(in srgb, var(--line) 35%, var(--paper));
+  --on-signal: var(--paper);
+  --paused: var(--muted-ink);
+  --error: var(--signal-red);
+  --done: var(--navy);
   color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bench: #12181d;
-    --panel: #1a2228;
-    --panel-sunk: #151c21;
-    --ink: #d9e1e6;
-    --muted: #8a99a4;
-    --rule: #2d3a43;
-    --grid: #1f282f;
-    --grid-major: #27323a;
-    --signal: #86a8ff;
-    --signal-soft: #22304f;
-    --on-signal: #0d1526;
-    --paused: #e2a646;
-    --error: #ec7f6d;
-    --done: #6fc79b;
-    color-scheme: dark;
-  }
+/* Interim: text that sits directly on the navy frame (Tasks 4-5 restyle these). */
+.view-title, .cat-search-label, .cat-search-hint, .cat-count, .cat-legend, .page-note {
+  color: var(--paper);
 }
-:root[data-theme="dark"] {
-  --bench: #12181d;
-  --panel: #1a2228;
-  --panel-sunk: #151c21;
-  --ink: #d9e1e6;
-  --muted: #8a99a4;
-  --rule: #2d3a43;
-  --grid: #1f282f;
-  --grid-major: #27323a;
-  --signal: #86a8ff;
-  --signal-soft: #22304f;
-  --on-signal: #0d1526;
-  --paused: #e2a646;
-  --error: #ec7f6d;
-  --done: #6fc79b;
-  color-scheme: dark;
-}
+.cat-search-hint, .cat-legend, .page-note { color: var(--line); }
+.cat-legend .mark { color: var(--line); }
+
+h1, h2, h3, .brand { font-family: var(--font-display); font-weight: 600; }
 
 *, *::before, *::after { box-sizing: border-box; }
 
