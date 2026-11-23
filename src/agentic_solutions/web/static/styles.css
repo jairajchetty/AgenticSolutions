@@ -45,13 +45,6 @@
   color-scheme: light;
 }
 
-/* Interim: text that sits directly on the navy frame (Tasks 4-5 restyle these). */
-.view-title, .cat-search-label, .cat-search-hint, .cat-count, .cat-legend, .page-note {
-  color: var(--paper);
-}
-.cat-search-hint, .cat-legend, .page-note { color: var(--line); }
-.cat-legend .mark { color: var(--line); }
-
 h1, h2, h3, .brand { font-family: var(--font-display); font-weight: 600; }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -70,7 +63,7 @@ body {
 code, pre, kbd { font-family: var(--font-code); font-size: 0.92em; }
 
 :focus-visible {
-  outline: 2px solid var(--signal);
+  outline: 2px solid var(--amber);
   outline-offset: 2px;
   border-radius: 3px;
 }
@@ -185,13 +178,14 @@ code, pre, kbd { font-family: var(--font-code); font-size: 0.92em; }
 [hidden] { display: none !important; }
 
 .view-title {
+  color: var(--paper);
   max-width: 1600px;
   margin: 0 auto;
   padding: var(--gap) var(--gap) 0;
   font-size: var(--step-1);
 }
 .view-title:focus { outline: none; }
-.view-title:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+.view-title:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
 
 .home { max-width: 1600px; margin: 0 auto; padding: 0 var(--gap) calc(var(--gap) * 2); }
 .home .view-title { padding-left: 0; padding-right: 0; }
@@ -202,7 +196,7 @@ code, pre, kbd { font-family: var(--font-code); font-size: 0.92em; }
 .page-note {
   margin: 2px 0 0;
   padding: 0 var(--gap);
-  color: var(--muted);
+  color: var(--line);
   font-size: var(--step--1);
 }
 
@@ -212,6 +206,7 @@ code, pre, kbd { font-family: var(--font-code); font-size: 0.92em; }
    the one bold rule on the page: a cobalt edge that lights up on focus. */
 .cat-search { margin: 12px 0 4px; }
 .cat-search-label {
+  color: var(--paper);
   display: block;
   margin-bottom: 6px;
   font-size: var(--step-1);
@@ -250,9 +245,9 @@ code, pre, kbd { font-family: var(--font-code); font-size: 0.92em; }
   border-bottom-width: 2px;
   border-radius: 4px;
 }
-.cat-search-hint { margin: 6px 0 0; font-size: 0.75rem; color: var(--muted); }
+.cat-search-hint { margin: 6px 0 0; font-size: 0.75rem; color: var(--line); }
 
-.cat-count { min-height: 1.5em; margin: 6px 0 0; font-size: var(--step--1); color: var(--signal); font-weight: 600; }
+.cat-count { min-height: 1.5em; margin: 6px 0 0; font-size: var(--step--1); color: var(--paper); font-weight: 600; }
 .cat-count:empty { visibility: hidden; }
 .cat-empty {
   margin: 4px 0 12px;
@@ -306,6 +301,7 @@ code, pre, kbd { font-family: var(--font-code); font-size: 0.92em; }
 .mark-live { color: var(--signal); }
 .mark-live .mark-glyph, .cat-legend .mark-live { font-size: 1.2em; }  /* ● sets smaller than ○ */
 .mark-guide { color: var(--muted); }
+.cat-legend .mark { color: var(--line); }
 
 .cat-legend {
   display: flex;
@@ -315,7 +311,7 @@ code, pre, kbd { font-family: var(--font-code); font-size: 0.92em; }
   padding: 0;
   list-style: none;
   font-size: 0.75rem;
-  color: var(--muted);
+  color: var(--line);
 }
 .cat-legend li { display: inline-flex; align-items: baseline; gap: 6px; }
 
