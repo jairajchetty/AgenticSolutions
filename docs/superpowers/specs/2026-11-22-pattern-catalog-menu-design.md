@@ -201,7 +201,7 @@ Topology per pattern (node names exactly as listed; `→` normal edge, `⇢` con
 |---|---|---|
 | `react_agent` | ReAct | START→ask; ask ⇢ agent \| ask \| END; agent ⇢ tools \| ask; tools→agent (Studio spec §4.7) |
 | `reflection_agent` | Reflection | START→generate→critique; critique ⇢ revise \| END; revise→critique (§4.8) |
-| `plan_execute_agent` | Planning | START→planner→executor; executor ⇢ tools \| executor \| synthesizer; tools→executor; synthesizer→END (§4.9) |
+| `plan_execute_agent` | Planning | START→planner; planner ⇢ executor \| synthesizer (declined plan, M3 spec §3.3); executor ⇢ tools \| executor \| synthesizer; tools→executor; synthesizer→END (§4.9) |
 | `search_agent` | Search | START→propose→score; score ⇢ propose \| answer; answer→END |
 | `supervisor_agent` | Supervisor | START→supervisor; supervisor ⇢ researcher \| writer \| END; researcher→supervisor; writer→supervisor |
 | `swarm_agent` | Swarm | START→triage; triage ⇢ billing \| technical \| END; billing ⇢ technical \| END; technical ⇢ billing \| END |
