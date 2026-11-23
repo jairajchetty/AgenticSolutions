@@ -51,63 +51,71 @@ function mix(a, b, weight) {
 
 function palette() {
   const t = {};
-  for (const name of ["navy", "line", "paper", "ink", "amber", "signal-red", "muted-ink", "font-code"]) {
+  for (const name of ["navy", "line", "paper", "ink", "amber", "signal-red", "muted-ink", "font-display"]) {
     t[name] = token(`--${name}`);
   }
   return t;
 }
 
-function stylesheet(t) {
-  const tint = (c) => mix(c, t.paper, 0.2);
-  const sunk = mix(t.paper, t.line, 0.9); // matches the graph panel background
+// Blueprint line art on the navy frame (Blueprint spec §4.2, §9.3): `--line`
+// strokes and labels, the active node amber, an error node `--signal-red`, a
+// paused node double-ruled. Fills are the navy itself, lightly tinted by state.
+// `still` (reduced motion) drops the colour transitions; states still change.
+function stylesheet(t, { still = false } = {}) {
+  const onNavy = (c, w) => mix(c, t.navy, w);
+  const ease = (ms) => (still ? "0ms" : ms);
   return [
     { selector: "node", style: {
-      "shape": "round-rectangle",
+      "shape": "rectangle",
       "width": "data(width)", "height": 34,
       "label": "data(display)",
-      "font-family": t["font-code"], "font-size": 13, "font-weight": 600,
+      "font-family": t["font-display"], "font-size": 17, "font-weight": 600,
       "text-valign": "center", "text-halign": "center",
-      "color": t.ink,
-      "background-color": t.paper,
-      "border-width": 1.5, "border-color": t["muted-ink"],
+      "color": t.paper,
+      "background-color": t.navy,
+      "border-width": 1.5, "border-color": t.line,
       "transition-property": "background-color, border-color, border-width",
-      "transition-duration": "180ms",
+      "transition-duration": ease("180ms"),
     } },
     { selector: "node.terminal", style: {
-      "shape": "ellipse", "width": 14, "height": 14, "padding": "0px",
+      "shape": "ellipse", "width": 12, "height": 12, "padding": "0px",
       "label": "data(display)",
-      "font-size": 11, "font-weight": 400, "color": t["muted-ink"],
+      "font-size": 15, "font-weight": 500, "color": t.line,
       "text-valign": "bottom", "text-margin-y": 5,
-      "background-color": t["muted-ink"], "border-width": 0,
+      "background-color": t.line, "border-width": 0,
     } },
     { selector: "node.terminal[kind = 'start']", style: { "text-valign": "top", "text-margin-y": -5 } },
-    { selector: "node.terminal.state-done", style: { "background-color": t.navy } },
-    { selector: "node.state-active", style: {
-      "background-color": mix(t.amber, t.paper, 0.5), "border-color": t.amber, "border-width": 2.5, "color": t.ink,
+    { selector: "node.terminal.state-done", style: {
+      "background-color": t.paper, "border-width": 2, "border-color": t.line, "color": t.paper,
     } },
-    { selector: "node.state-done", style: { "background-color": tint(t.navy), "border-color": t.navy } },
-    { selector: "node.state-error", style: { "background-color": tint(t["signal-red"]), "border-color": t["signal-red"], "border-width": 2.5 } },
+    { selector: "node.state-active", style: {
+      "background-color": onNavy(t.amber, 0.16), "border-color": t.amber, "border-width": 2.5, "color": t.amber,
+    } },
+    { selector: "node.state-done", style: { "background-color": onNavy(t.line, 0.16), "border-color": t.line } },
+    { selector: "node.state-error", style: {
+      "background-color": onNavy(t["signal-red"], 0.4), "border-color": t["signal-red"], "border-width": 2.5,
+    } },
     { selector: "node.state-paused", style: {
-      "background-color": tint(t["muted-ink"]), "border-color": t["muted-ink"], "border-style": "double", "border-width": 4,
+      "background-color": onNavy(t.line, 0.08), "border-color": t.line, "border-style": "double", "border-width": 5,
     } },
     { selector: "node.pulse", style: { "border-width": 5 } },
     { selector: "node.highlight", style: {
-      "underlay-color": t.navy, "underlay-opacity": 0.22, "underlay-padding": 7, "underlay-shape": "round-rectangle",
+      "underlay-color": t.line, "underlay-opacity": 0.28, "underlay-padding": 7, "underlay-shape": "round-rectangle",
     } },
     { selector: "edge", style: {
       "curve-style": "bezier",
-      "width": 1.5, "line-color": t["muted-ink"],
-      "target-arrow-shape": "triangle", "target-arrow-color": t["muted-ink"], "arrow-scale": 0.9,
+      "width": 1.5, "line-color": onNavy(t.line, 0.75),
+      "target-arrow-shape": "triangle", "target-arrow-color": onNavy(t.line, 0.75), "arrow-scale": 0.9,
       "label": "data(display)",
-      "font-family": t["font-code"], "font-size": 11, "color": t["muted-ink"],
-      "text-background-color": sunk, "text-background-opacity": 1, "text-background-padding": "2px",
+      "font-family": t["font-display"], "font-size": 15, "font-weight": 500, "color": t.line,
+      "text-background-color": t.navy, "text-background-opacity": 1, "text-background-padding": "3px",
       "transition-property": "line-color, target-arrow-color, width",
-      "transition-duration": "220ms",
+      "transition-duration": ease("220ms"),
     } },
     { selector: "edge.conditional", style: { "line-style": "dashed", "line-dash-pattern": [6, 4] } },
     { selector: "edge.loop", style: { "loop-direction": "90deg", "loop-sweep": "-50deg", "control-point-step-size": 60 } },
-    { selector: "edge.taken", style: { "line-color": mix(t.navy, t["muted-ink"], 0.55), "target-arrow-color": mix(t.navy, t["muted-ink"], 0.55), "color": t.ink } },
-    { selector: "edge.flash", style: { "line-color": t.amber, "target-arrow-color": t.amber, "width": 4, "color": t.ink } },
+    { selector: "edge.taken", style: { "line-color": t.line, "target-arrow-color": t.line, "width": 2, "color": t.paper } },
+    { selector: "edge.flash", style: { "line-color": t.amber, "target-arrow-color": t.amber, "width": 3.5, "color": t.amber } },
   ];
 }
 
@@ -119,8 +127,8 @@ function nodeDisplay(data, state) {
   return glyph ? `${glyph} ${data.label}` : data.label;
 }
 
-// Fixed width per node, wide enough for "⏸ label" in the 13px code font, so
-// a state change never resizes the node.
+// Fixed width per node, wide enough for "⏸ label" in the 17px condensed
+// display font, so a state change never resizes the node.
 const nodeWidth = (label) => Math.max(72, Math.ceil(label.length * 8.2 + 2 * 8.2 + 30));
 
 function edgeDisplay(data) {
@@ -171,9 +179,9 @@ export function createGraph(el, topology, { static: isStatic = false } = {}) {
   const cy = cytoscape({
     container: el,
     elements,
-    style: stylesheet(palette()),
+    style: stylesheet(palette(), { still: reduceMotion.matches }),
     layout: { name: "dagre", rankDir: "TB", nodeSep: 60, rankSep: 56, edgeSep: 20, padding: 24 },
-    maxZoom: 1.25,  // a two-node graph should not fill the panel
+    maxZoom: 1.5,  // a two-node graph should not fill the drawing
     userZoomingEnabled: false,
     userPanningEnabled: false,
     boxSelectionEnabled: false,

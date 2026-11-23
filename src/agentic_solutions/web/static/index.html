@@ -72,25 +72,29 @@
       <div class="home-body" id="home-body"></div>
     </section>
 
-    <!-- Pattern page (Catalog spec §4.3): the M1 workbench for a live demo, or
-         the Guide-only view for a pattern with no demo yet. -->
+    <!-- Pattern page (Blueprint spec §4.2): the purpose sheet first, then the
+         workbench (live demo) or the static diagram (Guide-only), then the
+         rest of the Guide. Paper sheets carry `.sheet`; the graph sits on navy. -->
     <div class="pattern-view" id="pattern-view" hidden>
-      <div class="page-head">
+      <section class="sheet purpose" id="purpose" aria-labelledby="page-title">
         <h1 class="view-title" id="page-title" tabindex="-1"></h1>
         <p class="page-note" id="page-note" hidden></p>
-      </div>
+        <!-- guide.js renderPurpose: .purpose-what and .purpose-when -->
+        <div class="purpose-body" id="purpose-body" hidden></div>
+      </section>
 
-      <!-- A pattern with no demo yet: banner, static diagram, Guide. No
+      <!-- A pattern with no demo yet: a note and the static diagram. No
            console and no timeline, so nothing here creates a thread or a run. -->
       <div class="guide-only" id="guide-only" hidden>
-        <p class="demo-banner" role="note">
-          <strong class="demo-banner-title">Live demo coming</strong>
-          <span>This pattern doesn't have a live demo yet. The diagram below is its graph; the explanation covers how it works.</span>
+        <p class="demo-line" role="note">
+          <span class="mark mark-guide" aria-hidden="true">○</span>
+          <strong class="demo-line-title">Live demo coming.</strong>
+          <span>This pattern doesn't have a live demo yet. The diagram below is its graph; the guide covers how it works.</span>
         </p>
-        <section class="panel diagram" aria-labelledby="diagram-title">
-          <header class="panel-head">
+        <section class="drawing diagram" aria-labelledby="diagram-title">
+          <header class="drawing-head">
             <h2 id="diagram-title">Graph</h2>
-            <p class="panel-sub">The pattern's LangGraph skeleton, not running</p>
+            <p class="drawing-sub">The pattern's LangGraph skeleton, not running</p>
           </header>
           <div class="trace-graph diagram-graph" id="guide-only-graph" role="img" aria-label="Diagram of the pattern's graph"></div>
           <ul class="graph-legend" aria-label="Legend">
@@ -98,19 +102,13 @@
             <li><span class="lg-dash" aria-hidden="true"></span>conditional edge (if)</li>
           </ul>
         </section>
-        <section class="panel guide" aria-labelledby="guide-only-title">
-          <header class="panel-head">
-            <h2 id="guide-only-title">Pattern guide</h2>
-          </header>
-          <div class="guide-body" id="guide-only-body"></div>
-        </section>
       </div>
 
       <div class="bench" id="bench" hidden>
-        <section class="panel trace" id="trace" aria-labelledby="trace-title">
-          <header class="panel-head">
+        <section class="drawing trace" id="trace" aria-labelledby="trace-title">
+          <header class="drawing-head">
             <h2 id="trace-title">Execution trace</h2>
-            <p class="panel-sub" id="trace-pattern"></p>
+            <p class="drawing-sub" id="trace-pattern"></p>
             <p class="trace-thread" id="trace-thread" hidden></p>
           </header>
           <div class="trace-graph" id="trace-graph" role="img" aria-label="Graph of the selected pattern"></div>
@@ -122,24 +120,25 @@
             <li><span class="lg-dash" aria-hidden="true"></span>conditional edge (if)</li>
             <li><span class="lg-count" aria-hidden="true">×2</span>times taken</li>
           </ul>
-          <div class="trace-lower">
-            <section class="trace-timeline" aria-labelledby="timeline-title">
-              <h3 id="timeline-title">Timeline</h3>
-              <ol class="timeline" id="trace-timeline" aria-live="polite">
-                <li class="empty-hint">Steps appear here as the graph runs.</li>
-              </ol>
-            </section>
-            <details class="trace-state" id="trace-state-box" open>
-              <summary>State</summary>
-              <div class="state-view" id="trace-state"></div>
-            </details>
-          </div>
         </section>
 
-        <section class="panel console" id="console" aria-labelledby="console-title">
-          <header class="panel-head">
+        <div class="sheet trace-lower">
+          <section class="trace-timeline" aria-labelledby="timeline-title">
+            <h3 id="timeline-title">Timeline</h3>
+            <ol class="timeline" id="trace-timeline" aria-live="polite">
+              <li class="empty-hint">Steps appear here as the graph runs.</li>
+            </ol>
+          </section>
+          <details class="trace-state" id="trace-state-box" open>
+            <summary>State</summary>
+            <div class="state-view" id="trace-state"></div>
+          </details>
+        </div>
+
+        <section class="sheet console" id="console" aria-labelledby="console-title">
+          <header class="sheet-head">
             <h2 id="console-title">Agent console</h2>
-            <p class="panel-sub" id="console-summary"></p>
+            <p class="sheet-sub" id="console-summary"></p>
           </header>
           <div class="console-messages" id="console-messages" aria-live="polite">
             <p class="empty-hint">Pick a sample or type a message to run the graph.</p>
@@ -155,16 +154,14 @@
             </div>
           </form>
         </section>
-
-        <section class="panel guide" id="guide" aria-labelledby="guide-title">
-          <header class="panel-head">
-            <h2 id="guide-title">Pattern guide</h2>
-          </header>
-          <div class="guide-body" id="guide-body">
-            <p class="empty-hint">Loading the guide…</p>
-          </div>
-        </section>
       </div>
+
+      <section class="sheet guide-rest" id="guide-rest" aria-labelledby="guide-title">
+        <header class="sheet-head">
+          <h2 id="guide-title">Pattern guide</h2>
+        </header>
+        <div class="guide-body" id="guide-body"></div>
+      </section>
     </div>
   </main>
 

@@ -31,7 +31,7 @@ def test_catalog_and_guide_build_links_with_create_element():   # Catalog spec Â
 
 def test_index_served(client):
     r = client.get("/")
-    assert r.status_code == 200 and 'id="trace"' in r.text and 'id="console"' in r.text and 'id="guide"' in r.text
+    assert r.status_code == 200 and 'id="trace"' in r.text and 'id="console"' in r.text and 'id="purpose"' in r.text and 'id="guide-rest"' in r.text
 
 
 def test_fonts_only_from_google():
