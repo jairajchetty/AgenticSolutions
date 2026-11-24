@@ -100,15 +100,28 @@ async def test_in_process_client_returns_store_dicts_and_lists(server):
 
 @pytest.mark.anyio
 async def test_in_process_client_is_safe_concurrently(server):
-    results = []
+    """Ten callers at once, each in its own tenant with its own quote: each gets its own result."""
+    results = {}
     async with InProcessErpClient(server) as erp:
+        sku = (await erp.call("search_catalogue", {"tenant": "setup", "query": "keyboard"}))[0]["sku"]
+
         async def one(i):
-            results.append(await erp.call("check_budget", {"tenant": f"t{i}", "cost_centre": "HQ-IT"}))
+            tenant = f"t{i}"
+            quote = await erp.call("get_price_quote", {"tenant": tenant, "sku": sku, "quantity": i + 1})
+            req = await erp.call("create_requisition", {
+                "tenant": tenant, "cost_centre": "HQ-IT", "lines": [{"quote_id": quote["quote_id"]}],
+                "justification": f"caller {i}"})
+            results[i] = (quote, await erp.call("get_requisition", {"tenant": tenant, "req_id": req["req_id"]}))
 
         async with anyio.create_task_group() as tg:
             for i in range(10):
                 tg.start_soon(one, i)
-    assert len(results) == 10 and all("remaining" in r for r in results)
+    assert sorted(results) == list(range(10))
+    for i, (quote, req) in results.items():
+        assert quote["quantity"] == i + 1 and quote["quote_id"] == "Q-0001"   # per-tenant sequence
+        assert req["req_id"] == "REQ-0001" and req["justification"] == f"caller {i}"
+        assert [(line["quote_id"], line["quantity"]) for line in req["lines"]] == [("Q-0001", i + 1)]
+        assert req["total_zar"] == quote["line_total_zar"]
 
 
 @pytest.mark.anyio
@@ -285,3 +298,36 @@ async def test_model_tool_without_thread_id_raises_and_calls_nothing():
         with pytest.raises(ValueError):
             await tool.ainvoke({"cost_centre": "CT-OPS"}, config=config)
     assert erp.calls == []
+
+
+# ------------------------------------------------------- python -m ...erp
+
+
+def test_http_server_needs_the_approval_secret(monkeypatch, tmp_path, capsys):
+    from agentic_solutions.mcp_servers.erp import __main__ as erp_main
+
+    monkeypatch.delenv("ERP_APPROVAL_SECRET", raising=False)
+    monkeypatch.setenv("ERP_DB", str(tmp_path / "erp.sqlite"))
+    monkeypatch.setattr(erp_main, "build_server", lambda *_a: pytest.fail("must not start"))
+    with pytest.raises(SystemExit) as caught:
+        erp_main.main([])
+    assert caught.value.code == 2
+    assert capsys.readouterr().err.strip().endswith(
+        "ERP_APPROVAL_SECRET must be set to serve over HTTP; the Studio must use the same value.")
+
+
+def test_stdio_server_runs_with_a_random_secret(monkeypatch, tmp_path):
+    from agentic_solutions.mcp_servers.erp import __main__ as erp_main
+
+    ran = []
+
+    class Fake:
+        def run(self, transport):
+            ran.append(transport)
+
+    monkeypatch.delenv("ERP_APPROVAL_SECRET", raising=False)
+    monkeypatch.setenv("ERP_DB", str(tmp_path / "erp.sqlite"))
+    monkeypatch.setattr(erp_main, "build_server",
+                        lambda store, settings: ran.append(len(settings.secret)) or Fake())
+    erp_main.main(["--stdio"])
+    assert ran == [32, "stdio"]

@@ -170,7 +170,7 @@ With `ERP_MCP_URL` unset, the Studio runs the ERP inside its own process, with a
 
 ### Running the ERP separately
 
-Start the server, then point the Studio at it. Both processes must use the same `ERP_APPROVAL_SECRET`, because the Studio signs each approval and the ERP verifies it.
+Start the server, then point the Studio at it. Both processes must use the same `ERP_APPROVAL_SECRET`, because the Studio signs each approval and the ERP verifies it. They must also use the same `ERP_AUTO_APPROVE_LIMIT_ZAR`. The Studio's policy approves orders up to its limit, and the ERP refuses a policy approval over its own limit.
 
 ```bash
 export ERP_APPROVAL_SECRET=<a long random string>
@@ -181,7 +181,7 @@ export ERP_MCP_URL=http://127.0.0.1:8765/mcp
 python -m agentic_solutions.web
 ```
 
-If `ERP_MCP_URL` is set without `ERP_APPROVAL_SECRET`, the Studio refuses to start.
+If `ERP_MCP_URL` is set without `ERP_APPROVAL_SECRET`, the Studio refuses to start. The ERP server also refuses to serve over HTTP without `ERP_APPROVAL_SECRET`.
 
 To browse the server's tools in the MCP Inspector, run it over stdio instead:
 

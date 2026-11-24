@@ -507,6 +507,7 @@ const DECISION_NOTES = {
   reject: "You rejected the order",
 };
 const NOTHING_WAITING = "Nothing is waiting for approval";  // the run API's 409 (§9.1)
+const OUT_OF_DATE = "This card is out of date. Showing the latest version.";  // another tab changed it
 const LOST_ORDER = "The Studio restarted and lost this order, so a new chat has started. Ask the agent again.";
 
 async function decide(b, body) {
@@ -530,8 +531,8 @@ async function decide(b, body) {
     } else if (err instanceof ApiError && err.status === 409 && err.detail === "conversation ended") {
       b.console.showNotice(ENDED_TEXT, { action: "new-chat" });
     } else if (err instanceof ApiError && err.status === 409) {
-      // Another tab may have decided already: show the thread as it now is.
-      if (err.detail === NOTHING_WAITING) await refreshBench(b, gen, tid);
+      // Another tab may have decided, or edited the order: show the thread as it now is.
+      if (err.detail === NOTHING_WAITING || err.detail === OUT_OF_DATE) await refreshBench(b, gen, tid);
       if (live(b, gen)) b.console.showNotice(err.message);
     } else if (err instanceof ApiError) {
       b.console.showNotice(`Could not send the decision: ${err.message}.`);

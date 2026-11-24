@@ -135,9 +135,19 @@ APPROVAL_SAMPLES = (
     "Order 40 monitors for JHB-FIN",
 )
 
+# An order must start the message ("Order 3 ...", "Please buy 3 ..."), so
+# "Don't order ...", "reorder ..." and questions about an order never place one.
 _ORDER = re.compile(
-    r"(?:order|buy)\s+(\d+)\s+(.+?)\s+(?:for|under)\s+.*?\b(CT-OPS|JHB-FIN|DBN-LOG|HQ-IT)\b",
+    r"\s*(?:please\s+)?(?:order|buy)\s+(\d+)\s+(.+?)\s+(?:for|under)\s+.*?\b(CT-OPS|JHB-FIN|DBN-LOG|HQ-IT)\b",
     re.IGNORECASE)
+_NEGATION = re.compile(r"\b(?:don'?t|do\s+not|never|not|cancel|stop)\b", re.IGNORECASE)
+
+
+def _find_order(text: str) -> re.Match | None:
+    """The order in this message, or None if it does not start with one or says not to."""
+    if _NEGATION.search(text.replace("\u2019", "'")):
+        return None
+    return _ORDER.match(text)
 
 
 def _singular(word: str) -> str:
@@ -178,7 +188,7 @@ def _explain_outcome(result: str) -> str:
 
 def _order_step(messages: list[BaseMessage]) -> str | AIMessage:
     human, turn = _this_turn(messages)
-    found = _ORDER.search(human)
+    found = _find_order(human)
     if not found:
         return _approval_fallback(messages)
     qty, item, cc = int(found.group(1)), found.group(2), found.group(3).upper()
@@ -221,7 +231,7 @@ def _approval_fallback(_messages: list[BaseMessage]) -> str:
 
 APPROVAL = Script(
     rules=(
-        Rule(lambda text: bool(_ORDER.search(text)), _order_step, kind="tools"),
+        Rule(lambda text: bool(_find_order(text)), _order_step, kind="tools"),
     ),
     fallback=_approval_fallback,
 )

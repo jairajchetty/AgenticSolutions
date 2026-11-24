@@ -4,7 +4,8 @@
     python -m agentic_solutions.mcp_servers.erp --stdio   # stdio, for MCP Inspector or desktop clients
 
 Settings come from the environment (ERP_DB, ERP_APPROVAL_SECRET,
-ERP_AUTO_APPROVE_LIMIT_ZAR, ERP_TENANT_TTL_HOURS, ERP_HOST, ERP_PORT).
+ERP_AUTO_APPROVE_LIMIT_ZAR, ERP_TENANT_TTL_HOURS, ERP_HOST, ERP_PORT). Over HTTP,
+ERP_APPROVAL_SECRET is required; over stdio it defaults to a random secret.
 """
 
 import argparse
@@ -16,6 +17,7 @@ from .server import build_server
 from .store import ErpStore
 
 log = logging.getLogger("agentic_solutions.mcp_servers.erp")
+NO_HTTP_SECRET = "ERP_APPROVAL_SECRET must be set to serve over HTTP; the Studio must use the same value."
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -26,11 +28,12 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
-    settings = ErpSettings.from_env()
+    # Over HTTP the Studio is another process, so it must sign approvals with
+    # the same secret: a random one here would refuse every order. Over stdio
+    # (MCP Inspector, desktop clients) a random per-start secret is fine.
     if not args.stdio and not os.environ.get("ERP_APPROVAL_SECRET"):
-        log.warning("ERP_APPROVAL_SECRET is not set, so this server uses a random secret. "
-                    "The Studio cannot sign approvals it will accept; set the same "
-                    "ERP_APPROVAL_SECRET for both.")
+        parser.exit(2, f"{parser.prog}: {NO_HTTP_SECRET}\n")
+    settings = ErpSettings.from_env()
     store = ErpStore(settings.db, secret=settings.secret, auto_limit_zar=settings.auto_limit_zar,
                      tenant_ttl_hours=settings.tenant_ttl_hours)
     try:

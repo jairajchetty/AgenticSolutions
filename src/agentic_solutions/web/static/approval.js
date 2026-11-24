@@ -22,7 +22,7 @@ function localTime(iso) {
 }
 
 // approvalView(payload) -> {rows, total, costCentre, budgetRemaining, overBudget,
-//   policyReason, expires, shortHash, requoted, reqId, version, summary}
+//   policyReason, expires, shortHash, requoted, reqId, version, summary, justification}
 export function approvalView(payload) {
   const p = payload || {};
   const lines = Array.isArray(p.lines) ? p.lines : [];
@@ -47,24 +47,39 @@ export function approvalView(payload) {
     reqId: String(p.req_id ?? ""),
     version: p.version ?? null,
     summary: String(p.summary ?? ""),
+    justification: String(p.justification ?? ""),
   };
 }
 
-// resumeBody(decision, {edits, reason}) -> {resume: {...}}
+// resumeBody(decision, {card, edits, reason}) -> {resume: {...}}
+// `card` is the approvalView of the card the decision was made on: its
+// version and short hash go with every decision, so the server refuses a
+// decision made on a card that is no longer the pending one.
 // `edits` are [{sku, quantity, original}] as read from the card's inputs;
 // only lines whose quantity changed are sent. A reject reason is trimmed,
 // capped at REASON_MAX and left out when blank.
-export function resumeBody(decision, { edits = [], reason = "" } = {}) {
+export function resumeBody(decision, { card = {}, edits = [], reason = "" } = {}) {
+  const resume = { decision, version: card.version ?? null, short_hash: card.shortHash ?? "" };
   if (decision === "edit") {
-    const changed = (edits || [])
+    resume.edits = (edits || [])
       .map((e) => ({ sku: e.sku, quantity: Number(e.quantity), original: Number(e.original) }))
       .filter((e) => e.quantity !== e.original)
       .map(({ sku, quantity }) => ({ sku, quantity }));
-    return { resume: { decision, edits: changed } };
-  }
-  if (decision === "reject") {
+  } else if (decision === "reject") {
     const text = String(reason ?? "").trim().slice(0, REASON_MAX);
-    return { resume: text ? { decision, reason: text } : { decision } };
+    if (text) resume.reason = text;
   }
-  return { resume: { decision } };
+  return { resume };
+}
+
+// The run API's error for an ERP outage (Approval spec §9.1). The run's thread
+// then closes, so the notice after it names the next step.
+export const ERP_UNAVAILABLE = "The ERP system is unavailable. Try again shortly.";
+export const ENDED_TEXT = "This conversation has ended. Start a New chat.";
+
+// errorNotice(message) -> the notice shown after a chat run ends in `error`.
+export function errorNotice(message) {
+  return message === ERP_UNAVAILABLE
+    ? "The ERP system is unavailable. Start a new chat to try again."
+    : ENDED_TEXT;
 }

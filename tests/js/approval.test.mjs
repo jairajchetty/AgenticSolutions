@@ -1,7 +1,7 @@
 // Unit tests for the approval card's pure helpers (Approval spec §5.3, §9.1).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { approvalView, formatZar, resumeBody } from "../../src/agentic_solutions/web/static/approval.js";
+import { approvalView, errorNotice, formatZar, resumeBody } from "../../src/agentic_solutions/web/static/approval.js";
 
 const EXPIRES = "2026-11-24T10:05:00+00:00";
 
@@ -12,7 +12,7 @@ function payload(overrides = {}) {
     version: 2,
     summary: "12 laptops for the Cape Town office",
     cost_centre: "CT-OPS",
-    justification: "",
+    justification: "New starters in the Cape Town office",
     lines: [
       { sku: "LAP-14B", name: "14-inch Business Laptop, 16 GB", quantity: 12, unit_price_zar: 11780,
         line_total_zar: 141360, quote_id: "Q-1", quote_expires_at: EXPIRES },
@@ -76,9 +76,29 @@ test("approvalView tolerates a payload with missing parts", () => {
   assert.equal(view.expires, "");
 });
 
-test("resumeBody: approve sends just the decision", () => {
-  assert.deepEqual(resumeBody("approve"), { resume: { decision: "approve" } });
-  assert.deepEqual(resumeBody("approve", { reason: "ignored", edits: [] }), { resume: { decision: "approve" } });
+const CARD = { version: 2, shortHash: "a1b2c3d4" };
+const ID = { version: 2, short_hash: "a1b2c3d4" };
+
+test("approvalView passes the agent's summary and the justification through", () => {
+  const view = approvalView(payload());
+  assert.equal(view.summary, "12 laptops for the Cape Town office");
+  assert.equal(view.justification, "New starters in the Cape Town office");
+  assert.equal(approvalView({}).justification, "");
+});
+
+test("resumeBody: every decision names the card it was made on", () => {
+  for (const decision of ["approve", "edit", "reject"]) {
+    const body = resumeBody(decision, { card: approvalView(payload()),
+      edits: [{ sku: "LAP-14B", quantity: "10", original: 12 }] });
+    assert.equal(body.resume.version, 2, decision);
+    assert.equal(body.resume.short_hash, "a1b2c3d4", decision);
+  }
+});
+
+test("resumeBody: approve sends the decision and the card's identity", () => {
+  assert.deepEqual(resumeBody("approve", { card: CARD }), { resume: { decision: "approve", ...ID } });
+  assert.deepEqual(resumeBody("approve", { card: CARD, reason: "ignored", edits: [] }),
+    { resume: { decision: "approve", ...ID } });
 });
 
 test("resumeBody: edit sends only the changed lines, as integers", () => {
@@ -86,18 +106,25 @@ test("resumeBody: edit sends only the changed lines, as integers", () => {
     { sku: "LAP-14B", quantity: "10", original: 12 },
     { sku: "BAG-01", quantity: "2", original: 2 },
   ];
-  assert.deepEqual(resumeBody("edit", { edits }), {
-    resume: { decision: "edit", edits: [{ sku: "LAP-14B", quantity: 10 }] },
+  assert.deepEqual(resumeBody("edit", { card: CARD, edits }), {
+    resume: { decision: "edit", ...ID, edits: [{ sku: "LAP-14B", quantity: 10 }] },
   });
-  assert.deepEqual(resumeBody("edit", { edits: [{ sku: "BAG-01", quantity: 2, original: 2 }] }),
-    { resume: { decision: "edit", edits: [] } });
+  assert.deepEqual(resumeBody("edit", { card: CARD, edits: [{ sku: "BAG-01", quantity: 2, original: 2 }] }),
+    { resume: { decision: "edit", ...ID, edits: [] } });
 });
 
 test("resumeBody: reject trims the reason, caps it at 500 and drops it when blank", () => {
-  assert.deepEqual(resumeBody("reject", { reason: "  Too many laptops  " }),
-    { resume: { decision: "reject", reason: "Too many laptops" } });
-  assert.deepEqual(resumeBody("reject", { reason: "   " }), { resume: { decision: "reject" } });
-  assert.deepEqual(resumeBody("reject"), { resume: { decision: "reject" } });
-  const long = resumeBody("reject", { reason: ` ${"x".repeat(600)} ` });
+  assert.deepEqual(resumeBody("reject", { card: CARD, reason: "  Too many laptops  " }),
+    { resume: { decision: "reject", ...ID, reason: "Too many laptops" } });
+  assert.deepEqual(resumeBody("reject", { card: CARD, reason: "   " }), { resume: { decision: "reject", ...ID } });
+  assert.deepEqual(resumeBody("reject", { card: CARD }), { resume: { decision: "reject", ...ID } });
+  const long = resumeBody("reject", { card: CARD, reason: ` ${"x".repeat(600)} ` });
   assert.equal(long.resume.reason.length, 500);
+});
+
+test("errorNotice gives the next step after a run fails", () => {
+  assert.equal(errorNotice("The ERP system is unavailable. Try again shortly."),
+    "The ERP system is unavailable. Start a new chat to try again.");
+  assert.equal(errorNotice("The run failed."), "This conversation has ended. Start a New chat.");
+  assert.equal(errorNotice(undefined), "This conversation has ended. Start a New chat.");
 });

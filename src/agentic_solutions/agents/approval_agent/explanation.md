@@ -78,6 +78,7 @@ Flow:
 - **Prebuilt tool node:** `tools` is LangGraph's `ToolNode`. It runs the model's tool calls and returns each result as a message.
 - **`Command(goto=...)` routing:** each node returns a `Command` that names the next node, so the route follows the decision.
 - **MCP client:** the ERP is a separate MCP server, in-process by default or over HTTP. The model's tools omit the `tenant` argument; the wrapper fills it from the thread id. The model never sees `submit_purchase_order`, `record_approval_event` or a token.
+- **Per-turn caps:** each message allows at most 8 tool rounds and 3 proposals. After that, the model is called with `tool_choice` set to none, and the code drops any tool call it still returns.
 - **Quote expiry:** quotes last 30 minutes. `policy` re-quotes expired lines before it decides or shows the card. An approve that arrives after a quote expired is re-quoted and sent back to `policy`. The ERP checks expiry again at submit.
 
 ### Key code

@@ -64,6 +64,8 @@ NOTHING_WAITING = "Nothing is waiting for approval"
 UNKNOWN_EDIT = "Unknown item in edits"
 EDIT_NEEDS_EDITS = "Send changed quantities to edit the order"
 EDITS_ONLY_WITH_EDIT = "Edits are only allowed with the edit decision"
+DUPLICATE_EDIT = "Each item can be edited once"
+OUT_OF_DATE = "This card is out of date. Showing the latest version."
 APPROVAL_NODE = "approval"
 
 
@@ -74,9 +76,16 @@ class Edit(BaseModel):
 
 
 class ResumeRequest(BaseModel):
-    """A decision on the pending approval card."""
+    """A decision on the pending approval card.
+
+    ``version`` and ``short_hash`` name the card the decision was made on, so
+    a decision from a tab showing an older card is refused, never applied to
+    whatever is pending now.
+    """
     model_config = ConfigDict(extra="forbid")
     decision: Literal["approve", "edit", "reject"]
+    version: int = Field(ge=1)
+    short_hash: str = Field(min_length=1, max_length=64)
     edits: list[Edit] | None = Field(None, max_length=20)
     reason: str | None = Field(None, max_length=500)
 
@@ -154,7 +163,8 @@ def _paused(state) -> tuple[str, object] | None:
 async def _checked_input(spec: PatternSpec, graph, config: dict, body) -> object:
     """The graph input for this request, or HTTPException (409/422) if it does not fit the pause.
 
-    Order: the kind of pause first (409), then the payload's content (422).
+    Order: the kind of pause first (409), then whether the decision was made
+    on the pending card (409), then the payload's content (422).
     """
     decision = body.resume
     if spec.mode != "chat":
@@ -171,16 +181,21 @@ async def _checked_input(spec: PatternSpec, graph, config: dict, body) -> object
         raise HTTPException(409, NOTHING_WAITING)
     if decision is None:
         return spec.make_input(body.text)
+    card = paused[1] if isinstance(paused[1], dict) else {}
+    if (decision.version, decision.short_hash) != (card.get("version"), card.get("short_hash")):
+        raise HTTPException(409, OUT_OF_DATE)
     if decision.decision == "edit" and not decision.edits:
         raise HTTPException(422, EDIT_NEEDS_EDITS)
     if decision.decision != "edit" and decision.edits is not None:
         raise HTTPException(422, EDITS_ONLY_WITH_EDIT)
     if decision.edits:
-        card = paused[1] if isinstance(paused[1], dict) else {}
         skus = {line.get("sku") for line in card.get("lines") or []}
         if any(e.sku not in skus for e in decision.edits):
             raise HTTPException(422, UNKNOWN_EDIT)
-    return Command(resume=decision.model_dump(exclude_none=True))
+        if len({e.sku for e in decision.edits}) != len(decision.edits):
+            raise HTTPException(422, DUPLICATE_EDIT)
+    # The graph gets the decision alone: the card check is done.
+    return Command(resume=decision.model_dump(exclude_none=True, exclude={"version", "short_hash"}))
 
 
 def _sse(event: dict) -> str:

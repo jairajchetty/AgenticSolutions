@@ -13,7 +13,10 @@ from conftest import TEST_ERP_SECRET
 from fakes import make_guard
 
 LAPTOPS = "Order 12 laptops for the Cape Town office under CT-OPS"
-APPROVE = {"resume": {"decision": "approve"}}
+# A card identity that matches nothing: for the 409s that come before the card is compared.
+STALE_ID = {"version": 1, "short_hash": "00000000"}
+APPROVE = {"resume": {"decision": "approve", **STALE_ID}}
+OUT_OF_DATE = "This card is out of date. Showing the latest version."
 FINISH_FIRST = "Finish the pending approval first"
 NOTHING_WAITING = "Nothing is waiting for approval"
 IN_PROGRESS = "a run is already in progress"
@@ -42,6 +45,17 @@ def pending_thread(client):
     return tid
 
 
+def card_id(client, tid):
+    """The version and short hash of the card the thread is paused on, as the card sends them."""
+    p = state(client, tid)["paused"]["payload"]
+    return {"version": p["version"], "short_hash": p["short_hash"]}
+
+
+def on_card(client, tid, decision="approve", **extra):
+    """A decision made on the card that is pending now."""
+    return {"resume": {"decision": decision, **card_id(client, tid), **extra}}
+
+
 def submitted(values):
     return [e for e in values.get("audit") or [] if e["event"] == "submitted"]
 
@@ -56,7 +70,7 @@ def test_full_approval_over_http_api(client, app):
     paused = state(client, tid)["paused"]
     assert paused["node"] == "approval" and paused["payload"]["kind"] == "approval_request"
 
-    ev = run(client, tid, APPROVE)
+    ev = run(client, tid, on_card(client, tid))
     assert ev[-1]["status"] == "paused"
     assert [e["node"] for e in ev if e["type"] == "interrupt"] == ["ask"]
     after = state(client, tid)
@@ -103,12 +117,20 @@ SCHEMA_CASES = {
                           "Edits are only allowed with the edit decision"),
     "unknown sku": ({"resume": {**EDIT, "edits": [{"sku": "NOPE-999", "quantity": 2}]}},
                     "Unknown item in edits"),
+    "duplicate sku": ({"resume": {**EDIT, "edits": [{"sku": "LAP-001", "quantity": 2},
+                                                     {"sku": "LAP-001", "quantity": 3}]}},
+                      "Each item can be edited once"),
+    "no version": ({"resume": {"decision": "approve", "short_hash": None}}, None),
+    "no short hash": ({"resume": {"decision": "approve", "version": None}}, None),
 }
 
 
 @pytest.mark.parametrize("body,detail", SCHEMA_CASES.values(), ids=SCHEMA_CASES.keys())
 def test_resume_schema_validation(client, body, detail):
     tid = pending_thread(client)
+    if "resume" in body:  # made on the pending card, unless the case leaves a field out
+        resume = {**card_id(client, tid), **body["resume"]}
+        body = {**body, "resume": {k: v for k, v in resume.items() if v is not None}}
     r = client.post(f"/api/threads/{tid}/runs", json=body)
     assert r.status_code == 422
     if detail is not None:
@@ -119,7 +141,7 @@ def test_resume_schema_validation(client, body, detail):
 
 def test_valid_edit_is_accepted(client):
     tid = pending_thread(client)
-    ev = run(client, tid, {"resume": {**EDIT, "edits": [{"sku": "LAP-001", "quantity": 10}]}})
+    ev = run(client, tid, on_card(client, tid, "edit", edits=[{"sku": "LAP-001", "quantity": 10}]))
     assert ev[-1]["status"] == "paused"
     paused = state(client, tid)["paused"]
     assert paused["node"] == "approval"                             # still over the limit: a fresh card
@@ -130,20 +152,21 @@ def test_double_resume_places_one_po(client, app):                  # Review Foc
     tid = pending_thread(client)
     store = app.state.store
     sid = store._threads[tid].session_id
+    approve = on_card(client, tid)
 
     # Second click while the first is still streaming: the first run holds the
     # session's slot (claimed exactly as run_thread does), so this one is
     # refused before it reads the state or reaches the graph.
     assert store.begin_run(sid)
-    r = client.post(f"/api/threads/{tid}/runs", json=APPROVE)
+    r = client.post(f"/api/threads/{tid}/runs", json=approve)
     assert r.status_code == 409 and r.json() == {"detail": IN_PROGRESS}
     store.end_run(sid)
 
-    ev = run(client, tid, APPROVE)                                  # the first click's run
+    ev = run(client, tid, approve)                                  # the first click's run
     assert ev[-1]["status"] == "paused"
 
     # Second click after the first finished: the thread now waits at `ask`.
-    r = client.post(f"/api/threads/{tid}/runs", json=APPROVE)
+    r = client.post(f"/api/threads/{tid}/runs", json=approve)
     assert r.status_code == 409 and r.json() == {"detail": NOTHING_WAITING}
 
     after = state(client, tid)
@@ -157,7 +180,7 @@ def test_other_session_thread_404(client, app):                    # Review Focu
     # A fresh cookie jar. Not a `with` block: that would run the app's lifespan
     # again and close the in-process ERP the first client is still using.
     other = TestClient(app)
-    assert other.post(f"/api/threads/{tid}/runs", json=APPROVE).status_code == 404
+    assert other.post(f"/api/threads/{tid}/runs", json=on_card(client, tid)).status_code == 404
     assert other.get(f"/api/threads/{tid}/state").status_code == 404
     assert state(client, tid)["paused"]["node"] == "approval"
     assert "submitted" not in erp_events(app, tid)
@@ -213,9 +236,12 @@ def test_pending_card_survives_state_reload(client):
 @pytest.mark.parametrize("body,status,detail", [
     ({"text": "hello"}, 409, FINISH_FIRST),
     ({"resume": {**EDIT, "edits": [{"sku": "NOPE-999", "quantity": 2}]}}, 422, "Unknown item in edits"),
-], ids=["text while pending", "unknown sku"])
+    ({"resume": {"decision": "approve", **STALE_ID}}, 409, OUT_OF_DATE),
+], ids=["text while pending", "unknown sku", "out-of-date card"])
 def test_refused_request_releases_the_slot_and_keeps_the_thread(client, app, body, status, detail):
     tid = pending_thread(client)
+    if "resume" in body and detail != OUT_OF_DATE:
+        body = {"resume": {**card_id(client, tid), **body["resume"]}}
     r = client.post(f"/api/threads/{tid}/runs", json=body)
     assert r.status_code == status and r.json() == {"detail": detail}
     store, sid = app.state.store, app.state.store._threads[tid].session_id
@@ -223,7 +249,7 @@ def test_refused_request_releases_the_slot_and_keeps_the_thread(client, app, bod
     store.end_run(sid)
     after = state(client, tid)
     assert after["closed"] is False and after["paused"]["node"] == "approval"
-    assert run(client, tid, APPROVE)[-1]["status"] == "paused"     # the card still works
+    assert run(client, tid, on_card(client, tid))[-1]["status"] == "paused"   # the card still works
     assert len(submitted(state(client, tid)["values"])) == 1
 
 
@@ -239,11 +265,44 @@ def test_text_while_a_run_holds_the_slot_never_reaches_the_card(client, app):   
 
 
 @pytest.mark.parametrize("resume", [
-    {"decision": "edit"},
-    {"decision": "approve", "edits": [{"sku": "LAP-001", "quantity": 2}]},
-    {"decision": "edit", "edits": [{"sku": "NOPE-999", "quantity": 2}]},
+    {"decision": "edit", **STALE_ID},
+    {"decision": "approve", **STALE_ID, "edits": [{"sku": "LAP-001", "quantity": 2}]},
+    {"decision": "edit", **STALE_ID, "edits": [{"sku": "NOPE-999", "quantity": 2}]},
 ], ids=["edit without edits", "edits with approve", "unknown sku"])
 def test_pause_kind_is_checked_before_the_payload(client, resume):
     tid = client.post("/api/patterns/approval/threads").json()["thread_id"]   # waiting at `ask`
     r = client.post(f"/api/threads/{tid}/runs", json={"resume": resume})
     assert r.status_code == 409 and r.json() == {"detail": NOTHING_WAITING}
+
+
+def test_decision_on_an_out_of_date_card_is_409(client, app):     # final review 1
+    """Two tabs on one thread: B edits the order, then A approves the card it still shows."""
+    tid = pending_thread(client)
+    tab_a = on_card(client, tid)                                    # A rendered version 1
+    ev = run(client, tid, on_card(client, tid, "edit", edits=[{"sku": "LAP-001", "quantity": 10}]))
+    assert ev[-1]["status"] == "paused"                             # B's edit: version 2 is pending
+    v2 = card_id(client, tid)
+    assert v2["version"] == 2
+
+    r = client.post(f"/api/threads/{tid}/runs", json=tab_a)
+    assert r.status_code == 409 and r.json() == {"detail": OUT_OF_DATE}
+    # Same version, other content: refused too.
+    r = client.post(f"/api/threads/{tid}/runs", json={"resume": {**tab_a["resume"], "version": 2}})
+    assert r.status_code == 409 and r.json() == {"detail": OUT_OF_DATE}
+
+    after = state(client, tid)
+    assert after["closed"] is False and after["paused"]["node"] == "approval"
+    assert card_id(client, tid) == v2
+    assert "submitted" not in erp_events(app, tid) and "approved" not in erp_events(app, tid)
+    # The latest card still works, and approves exactly version 2.
+    assert run(client, tid, on_card(client, tid))[-1]["status"] == "paused"
+    placed = submitted(state(client, tid)["values"])
+    assert len(placed) == 1 and placed[0]["version"] == 2
+
+
+def test_card_identity_is_not_passed_to_the_graph(client):
+    tid = pending_thread(client)
+    ev = run(client, tid, on_card(client, tid, "reject", reason="Too many"))
+    assert ev[-1]["status"] == "paused"
+    tool = [m for m in state(client, tid)["values"]["messages"] if m.get("role") == "tool"][-1]
+    assert tool["content"] == "The approver rejected this order. Reason: Too many."

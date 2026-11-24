@@ -566,47 +566,99 @@ async def test_propose_mixed_with_other_calls_is_refused(erp, store, clock, issu
         "Error: call propose_order on its own, after the other tools.")
 
 
-@pytest.mark.parametrize("sample", SAMPLES)
-async def test_guarantee_fuzz(erp, store, clock, issued, sample):
-    g = make_graph(erp, clock, issued)
-    placed = 0
-    for seed in range(30):
-        rnd = random.Random(seed)
-        tenant = f"fuzz-{seed}"
-        c = cfg(thread=tenant)
-        state = await say(g, sample, c)
-        for _ in range(4):
-            if state.next != ("approval",):
-                break
-            if rnd.random() < 0.2:
-                clock.t += 31 * 60  # let the quotes expire while the card is open
-            roll = rnd.random()
-            if roll < 0.4:
-                state = await decide(g, c, decision="approve")
-            elif roll < 0.8:
-                edits = [{"sku": line["sku"], "quantity": rnd.randint(1, 60)}
-                         for line in payload(state)["lines"]]
-                state = await decide(g, c, decision="edit", edits=edits)
-            else:
-                state = await decide(g, c, decision="reject", reason="fuzz")
+FUZZ_PATHS = ("approve", "edit then re-approve", "edit then auto", "reject", "approve after expiry")
 
-        rows = store._conn.execute(
-            "SELECT req_id, version, content_hash FROM requisitions WHERE tenant = ?", (tenant,))
-        for req_id, version, content_hash in rows.fetchall():
-            trail = store.get_audit_trail(tenant, req_id)
-            for i, e in enumerate(trail):
-                if e["event"] != "submitted":
+
+async def test_guarantee_fuzz(erp, store, clock, issued):
+    """Random decisions on the three samples. The oracle is what the TEST sent, never the
+    code's own records: every placed order must be a version and content hash the test
+    approved on a card it saw (with fresh quotes), or an order at or under the limit for a
+    version that never needed a card."""
+    g = make_graph(erp, clock, issued)
+    paths = dict.fromkeys(FUZZ_PATHS, 0)
+    placed = {sample: 0 for sample in SAMPLES}
+    for sample in SAMPLES:
+        for seed in range(30):
+            rnd = random.Random(seed)
+            tenant = f"fuzz-{SAMPLES.index(sample)}-{seed}"
+            c = cfg(thread=tenant)
+            carded: set[tuple[str, int]] = set()          # (req_id, version) a card was shown for
+            approved: set[tuple[str, int, str]] = set()   # (req_id, version, full hash) approved fresh
+            last = None
+            state = await say(g, sample, c)
+            for _ in range(4):
+                if state.next != ("approval",):
+                    break
+                card = payload(state)
+                req = store.get_requisition(tenant, card["req_id"])
+                assert (req["version"], req["content_hash"][:8]) == (card["version"], card["short_hash"])
+                carded.add((card["req_id"], card["version"]))
+                stale = False
+                if rnd.random() < 0.2:
+                    clock.t += 31 * 60  # let the quotes expire while the card is open
+                    stale = True
+                roll = rnd.random()
+                if roll < 0.4:
+                    if stale:
+                        paths["approve after expiry"] += 1
+                    else:
+                        approved.add((card["req_id"], card["version"], req["content_hash"]))
+                        paths["edit then re-approve" if last == "edit" else "approve"] += 1
+                    state = await decide(g, c, decision="approve")
+                    last = "approve"
+                elif roll < 0.8:
+                    edits = [{"sku": line["sku"], "quantity": rnd.choice(
+                        (rnd.randint(1, 3), rnd.randint(1, 60)))} for line in card["lines"]]
+                    state = await decide(g, c, decision="edit", edits=edits)
+                    if state.next == ("ask",):
+                        paths["edit then auto"] += 1
+                    last = "edit"
+                else:
+                    paths["reject"] += 1
+                    state = await decide(g, c, decision="reject", reason="fuzz")
+                    last = "reject"
+
+            ids = [r[0] for r in store._conn.execute(
+                "SELECT req_id FROM requisitions WHERE tenant = ?", (tenant,)).fetchall()]
+            for req_id in ids:
+                req = store.get_requisition(tenant, req_id)
+                done = [e for e in store.get_audit_trail(tenant, req_id) if e["event"] == "submitted"]
+                assert len(done) <= 1, (sample, seed, done)
+                if not done:
+                    assert req["status"] == "draft"
                     continue
-                assert e["version"] == version
-                prior = [p for p in trail[:i] if p["version"] == e["version"]
-                         and p["event"] in ("approved", "auto_approved")]
-                assert prior, (sample, seed, trail)
-                tokens = [t for t in issued if t["tenant"] == tenant and t["req_id"] == req_id
-                          and t["version"] == version]
-                assert tokens and tokens[-1]["content_hash"] == content_hash
-                assert tokens[-1]["approver"] in {p["actor"] for p in prior}
-                placed += 1
-    # The sequences reach both outcomes (keyboards never need a person).
-    assert placed >= 1
-    if sample != KEYBOARDS:
-        assert placed < 30
+                assert req["status"] == "ordered" and done[0]["version"] == req["version"]
+                key = (req_id, req["version"], req["content_hash"])
+                auto = req["total_zar"] <= LIMIT and (req_id, req["version"]) not in carded
+                assert key in approved or auto, (sample, seed, key, approved)
+                placed[sample] += 1
+    # Every kind of sequence happened, and the samples reach both outcomes.
+    assert all(paths.values()), paths
+    assert placed[KEYBOARDS] == 30
+    assert 1 <= placed[LAPTOPS] < 30 and placed[MONITORS] < 30
+
+
+@pytest.mark.parametrize("sample", [KEYBOARDS, LAPTOPS])
+async def test_resume_rerun_of_submit_po_places_exactly_one_po(erp, store, clock, issued, sample):
+    """Spec §7: replay `submit_po` from the checkpoint saved just before it ran."""
+    g, c = make_graph(erp, clock, issued), cfg()
+    state = await say(g, sample, c)
+    if sample == LAPTOPS:
+        state = await decide(g, c, decision="approve")
+    assert state.next == ("ask",)
+    po = store.get_requisition("t1", "REQ-0001")["po_number"]
+    req = store.get_requisition("t1", "REQ-0001")
+    committed = store.check_budget("t1", req["cost_centre"])["committed"]
+    before = [s async for s in g.aget_state_history(c) if s.next == ("submit_po",)]
+    assert len(before) == 1
+
+    await g.ainvoke(None, before[0].config)             # run submit_po again from that checkpoint
+
+    assert len(issued) == 2                              # a fresh token, the same idempotency key
+    assert events(store).count("submitted") == 1
+    orders = store._conn.execute(
+        "SELECT po_number FROM requisitions WHERE tenant = 't1' AND po_number IS NOT NULL").fetchall()
+    assert [r[0] for r in orders] == [po]
+    assert store.check_budget("t1", req["cost_centre"])["committed"] == committed  # not committed twice
+    replayed = await g.aget_state(c)
+    assert replayed.next == ("ask",) and po in last_ai(replayed).content

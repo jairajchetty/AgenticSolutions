@@ -180,3 +180,28 @@ def test_approval_follow_up_after_a_reject_is_text():
                     name="propose_order"),
     ])
     assert not reply.tool_calls and "Too many" in reply.content and m.matched_rule is not None
+
+
+@pytest.mark.parametrize("text", [
+    "Don't order 3 keyboards for CT-OPS",
+    "Do not order 3 keyboards for CT-OPS",
+    "Never buy 3 keyboards for CT-OPS",
+    "reorder 3 keyboards for CT-OPS",
+    "Please don't order 3 keyboards for CT-OPS",
+    "Why did you order 3 keyboards for CT-OPS?",
+    "Order 3 keyboards for CT-OPS? No, don't.",
+])
+def test_offline_order_needs_a_plain_order_at_the_start(text):
+    reply = model("approval").invoke([HumanMessage(text)])
+    assert not reply.tool_calls
+    assert "Order 3 keyboards for CT-OPS" in reply.content          # the help text, with the samples
+
+
+@pytest.mark.parametrize("text", [
+    "Order 3 keyboards for CT-OPS",
+    "  buy 3 keyboards for CT-OPS",
+    "Please order 3 keyboards for CT-OPS",
+])
+def test_offline_order_at_the_start_is_drafted(text):
+    reply = model("approval").invoke([HumanMessage(text)])
+    assert [c["name"] for c in reply.tool_calls] == ["search_catalogue"]

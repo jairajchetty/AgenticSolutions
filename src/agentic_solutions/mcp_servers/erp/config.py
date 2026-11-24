@@ -10,8 +10,8 @@ from dataclasses import dataclass
 class ErpSettings:
     db: str = "./data/erp.sqlite"
     # Random per start unless ERP_APPROVAL_SECRET is set. A separate server
-    # process and the Studio must share it, so whoever starts them over HTTP
-    # has to set it (plan ruling 3).
+    # process and the Studio must share it, so `python -m ...erp` refuses to
+    # serve over HTTP without it (plan ruling 3).
     secret: bytes = b""
     auto_limit_zar: float = 5000.0
     tenant_ttl_hours: float = 168.0

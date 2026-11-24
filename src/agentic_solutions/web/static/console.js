@@ -12,9 +12,8 @@
 // place of the prompt: the proposed order, then Approve, Edit quantities or
 // Reject. A decision goes to `onDecide({resume})`; until one is sent the text
 // input is disabled. The card is built with DOM APIs only.
-import { approvalView, resumeBody, REASON_MAX } from "./approval.js";
+import { approvalView, errorNotice, resumeBody, ENDED_TEXT, REASON_MAX } from "./approval.js";
 
-const ENDED_TEXT = "This conversation has ended. Start a New chat.";
 const DECIDE_FIRST = "Decide on the order first";
 const OVER_BUDGET = "This total is over the remaining budget; the ERP will refuse it.";
 const NO_CHANGES = "Change at least one quantity, or close Edit quantities to approve as quoted.";
@@ -41,6 +40,7 @@ export function createConsole(el, { mode, samples = [], onSend, onDecide, onNewC
   let prompt = null;   // the pause prompt (or approval card) at the end of the list
   let approval = null; // {box, title, controls} while an approval card is pending
   let refocus = false; // a decision was sent from the card: put focus somewhere sensible next
+  let lastError = null; // the latest `error` event's message, for the notice after the run
   const placeholder = input.placeholder;
 
   function scroll() {
@@ -141,7 +141,12 @@ export function createConsole(el, { mode, samples = [], onSend, onDecide, onNewC
       .filter(Boolean).join(" · ");
     if (ref) head.append(element("p", "approval-ref", ref));
     box.append(head);
-    if (view.summary) box.append(element("p", "approval-summary", view.summary));
+    // Why this order: the model's own words, labelled as such, and the
+    // requisition's justification (part of what the approval is bound to).
+    const why = element("dl", "approval-facts approval-why");
+    if (view.summary) fact(why, "Agent's summary", view.summary);
+    if (view.justification) fact(why, "Justification", view.justification);
+    if (why.children.length) box.append(why);
     if (view.requoted) box.append(element("p", "approval-note", "Prices were re-quoted"));
 
     // The lines table scrolls inside the card, never the page.
@@ -281,7 +286,7 @@ export function createConsole(el, { mode, samples = [], onSend, onDecide, onNewC
       onDecide?.(body);
     }
 
-    approve.onclick = () => decide(resumeBody("approve"));
+    approve.onclick = () => decide(resumeBody("approve", { card: view }));
     edit.onclick = () => {
       const on = editPanel.hidden;
       say("");
@@ -303,7 +308,7 @@ export function createConsole(el, { mode, samples = [], onSend, onDecide, onNewC
         bad.field.focus();
         return;
       }
-      const body = resumeBody("edit", { edits: qtyInputs.map(({ field }) => (
+      const body = resumeBody("edit", { card: view, edits: qtyInputs.map(({ field }) => (
         { sku: field.dataset.sku, quantity: field.value, original: field.dataset.original })) });
       if (!body.resume.edits.length) {
         say(NO_CHANGES);
@@ -318,7 +323,7 @@ export function createConsole(el, { mode, samples = [], onSend, onDecide, onNewC
         if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); submitEdit.click(); }
       };
     }
-    rejectOrder.onclick = () => decide(resumeBody("reject", { reason: reason.value }));
+    rejectOrder.onclick = () => decide(resumeBody("reject", { card: view, reason: reason.value }));
 
     box.append(actions, editPanel, rejectPanel, problem);
 
@@ -413,6 +418,7 @@ export function createConsole(el, { mode, samples = [], onSend, onDecide, onNewC
       case "run_started":
         stream = null;
         card = null;
+        lastError = null;
         break;
       case "token":
         streamText(evt.node, evt.text);
@@ -430,6 +436,7 @@ export function createConsole(el, { mode, samples = [], onSend, onDecide, onNewC
         showPause(evt.payload);
         break;
       case "error":
+        lastError = evt.message;
         bubble("error", evt.message, "✕ Error").setAttribute("role", "alert");
         break;
       case "run_finished":
@@ -439,6 +446,9 @@ export function createConsole(el, { mode, samples = [], onSend, onDecide, onNewC
           card.box.classList.add("done");
         } else if (!trigger && evt.status === "completed") {
           showNotice(ENDED_TEXT, { action: "new-chat" });
+        } else if (!trigger && evt.status === "error") {
+          // The server closes a chat thread whose run failed: say what to do next.
+          showNotice(errorNotice(lastError), { action: "new-chat" });
         }
         break;
       default:
