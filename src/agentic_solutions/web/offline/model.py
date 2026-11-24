@@ -16,7 +16,8 @@ import random
 import re
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, Iterator, Optional
+import json
+from typing import Any, Callable, Iterator, Literal, Optional, Sequence
 
 from langchain_core.callbacks import CallbackManagerForLLMRun
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -29,18 +30,21 @@ from langchain_core.outputs import ChatGeneration, ChatGenerationChunk, ChatResu
 class Rule:
     """A str ``match`` is a case-insensitive substring of the human message.
 
-    ``reply`` is fixed text, or a function of the whole message list for a
-    reply that depends on the conversation (e.g. recalling an earlier turn).
+    ``reply`` is fixed text, an ``AIMessage`` (which may carry ``tool_calls``),
+    or a function of the whole message list returning either. ``kind``
+    restricts the rule to unbound ("text") or tool-bound ("tools") models;
+    ``None`` matches both.
     """
 
     match: str | Callable[[str], bool]
-    reply: str | Callable[[list[BaseMessage]], str]
+    reply: Any  # str | AIMessage | Callable[[list[BaseMessage]], str | AIMessage]
+    kind: Optional[Literal["text", "tools"]] = None
 
 
 @dataclass(frozen=True)
 class Script:
     rules: tuple[Rule, ...]
-    fallback: str
+    fallback: Any  # same shapes as Rule.reply
 
 
 def _words(text: str) -> int:
@@ -56,12 +60,32 @@ class ScriptedChatModel(BaseChatModel):
     latency: tuple[float, float] = (0.3, 0.9)  # seconds before the first token
     tokens_per_second: float = 40.0  # 0 = no pacing
     matched_rule: Optional[int] = None  # index of last rule used, None = fallback
+    bound: bool = False  # True once bind_tools has been called
+    bound_tool_names: tuple[str, ...] = ()
+    tool_choice: Any = None
 
     @property
     def _llm_type(self) -> str:
         return "scripted-offline"
 
-    def _pick(self, messages: list[BaseMessage]) -> tuple[str, str]:
+    def bind_tools(self, tools: Sequence[Any], *, tool_choice: Any = None, **kwargs: Any) -> "ScriptedChatModel":
+        """Return an independent copy that calls as kind "tools"."""
+        names = []
+        for t in tools:
+            if isinstance(t, dict):
+                names.append(t.get("name") or t.get("function", {}).get("name", ""))
+            else:
+                names.append(getattr(t, "name", None) or getattr(t, "__name__", str(t)))
+        return self.model_copy(
+            update={"bound": True, "bound_tool_names": tuple(names), "tool_choice": tool_choice}
+        )
+
+    def _resolve(self, reply: Any, messages: list[BaseMessage]) -> AIMessage:
+        if callable(reply):
+            reply = reply(messages)
+        return reply if isinstance(reply, AIMessage) else AIMessage(content=_text(reply))
+
+    def _pick(self, messages: list[BaseMessage]) -> tuple[AIMessage, str]:
         """Return (reply, latest human text) and record the matched rule."""
         human = ""
         for m in reversed(messages):
@@ -69,14 +93,35 @@ class ScriptedChatModel(BaseChatModel):
                 human = _text(m.content)
                 break
         lowered = human.lower()
+        kind = "tools" if self.bound else "text"
+        chosen: Any = None
+        self.matched_rule = None
         for i, rule in enumerate(self.script.rules):
+            if rule.kind is not None and rule.kind != kind:
+                continue
             hit = rule.match(human) if callable(rule.match) else rule.match.lower() in lowered
             if hit:
                 self.matched_rule = i
-                reply = rule.reply(messages) if callable(rule.reply) else rule.reply
-                return reply, human
-        self.matched_rule = None
-        return self.script.fallback, human
+                chosen = rule.reply
+                break
+        if self.matched_rule is None:
+            chosen = self.script.fallback
+        msg = self._resolve(chosen, messages)
+        if msg.tool_calls:
+            if self.tool_choice == "none" or (
+                isinstance(self.tool_choice, dict) and self.tool_choice.get("type") == "none"
+            ):
+                text = _text(msg.content)
+                if not text:
+                    text = _text(self._resolve(self.script.fallback, messages).content)
+                msg = AIMessage(content=text)
+            else:
+                calls = [
+                    {**c, "id": c.get("id") or f"call_{n}", "type": "tool_call"}
+                    for n, c in enumerate(msg.tool_calls)
+                ]
+                msg = AIMessage(content=msg.content, tool_calls=calls)
+        return msg, human
 
     def _usage(self, prompt: str, reply: str) -> UsageMetadata:
         i, o = _words(prompt), _words(reply)
@@ -93,9 +138,14 @@ class ScriptedChatModel(BaseChatModel):
         run_manager: Optional[CallbackManagerForLLMRun] = None,
         **kwargs: Any,
     ) -> ChatResult:
-        reply, human = self._pick(messages)
+        picked, human = self._pick(messages)
         self._delay()
-        msg = AIMessage(content=reply, usage_metadata=self._usage(human, reply))
+        text = _text(picked.content)
+        msg = AIMessage(
+            content=picked.content,
+            tool_calls=picked.tool_calls,
+            usage_metadata=self._usage(human, text),
+        )
         return ChatResult(generations=[ChatGeneration(message=msg)])
 
     def _stream(
@@ -105,8 +155,22 @@ class ScriptedChatModel(BaseChatModel):
         run_manager: Optional[CallbackManagerForLLMRun] = None,
         **kwargs: Any,
     ) -> Iterator[ChatGenerationChunk]:
-        reply, human = self._pick(messages)
+        picked, human = self._pick(messages)
         self._delay()
+        reply = _text(picked.content)
+        if picked.tool_calls:
+            chunk = AIMessageChunk(
+                content=picked.content,
+                tool_call_chunks=[
+                    {"name": c["name"], "args": json.dumps(c["args"]), "id": c["id"], "index": i}
+                    for i, c in enumerate(picked.tool_calls)
+                ],
+                usage_metadata=self._usage(human, reply),
+            )
+            if run_manager:
+                run_manager.on_llm_new_token(reply, chunk=ChatGenerationChunk(message=chunk))
+            yield ChatGenerationChunk(message=chunk)
+            return
         pieces = re.findall(r"\S+\s*", reply)  # words keep trailing whitespace
         for n, piece in enumerate(pieces):
             if self.tokens_per_second > 0:
