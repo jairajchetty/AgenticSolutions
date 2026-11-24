@@ -1,7 +1,7 @@
 # Event Driven
 
 ## What it is
-An agent started by something that happened, not by a person typing a message: a message lands on a queue, a webhook fires, a record changes, a file arrives, or a schedule ticks. Each event starts one run, which handles that event and finishes; the result may itself be published as an event for another system. The trigger lives outside the agent. A queue consumer, webhook handler or scheduler receives the event and calls the agent with it as input. With no one waiting at a chat box, the concerns shift from conversation to delivery: events can arrive twice, late, out of order or in bursts, and failures must be noticed by monitoring rather than by a user.
+An agent started by something that happened, not by a person typing a message: a message lands on a queue, a webhook fires, a record changes, a file arrives, or a schedule ticks. Typically each event starts one run, which handles that event and finishes; alternatively a long-lived agent waits and is woken by each event that concerns it. Either way, the result may itself be published as an event for another system. The trigger lives outside the agent. A queue consumer, webhook handler or scheduler receives the event and calls the agent with it as input. With no one waiting at a chat box, the concerns shift from conversation to delivery: events can arrive twice, late, out of order or in bursts, and failures must be noticed by monitoring rather than by a user.
 
 ## When to use it
 - Work arrives from other systems at unpredictable times, and nobody is waiting for the reply.
@@ -31,7 +31,7 @@ Flow:
 - **Failure path:** retry with backoff, then park the event in a dead-letter queue for inspection, and alert someone who will read it.
 - **Rate and cost:** bursts multiply model calls. Limit concurrency at the consumer, not inside the agent, and batch where the work allows.
 - **Unknown events:** dropping silently hides a changed schema upstream. Log or park them.
-- **One run per event or a long-lived run:** a fresh run per event is simple; correlating related events by a key lets a later event resume an earlier run's state.
+- **One run per event or a long-lived agent:** a fresh run per event is simple and stateless; a long-lived agent, or related events correlated by a key, lets a later event resume an earlier run's state, at the cost of storing and expiring that state.
 
 ## Trade-offs
 - Decouples the agent from its callers and lets it run without anyone present.
@@ -42,7 +42,7 @@ Flow:
 ## Related patterns
 - [[execution/workflow]] is often what each event runs, with fixed steps per event type.
 - [[execution/routing]] also dispatches by kind; here the kind usually comes from a typed field on the event rather than from classifying free text.
-- [[execution/autonomous]] runs for a long time toward a goal; an event-driven run handles one event and finishes.
+- [[execution/autonomous]] pursues a goal it was given and decides its own next steps; Event Driven is about what starts or wakes a run: an outside event, not a person. The two combine when events wake a long-running autonomous agent.
 - [[governance/audit]] matters more here, because the record is often the only way to see what happened.
 - [[collaboration/single-agent]], the live baseline, is started by a person asking a question.
 

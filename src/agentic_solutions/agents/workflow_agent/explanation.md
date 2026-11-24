@@ -1,7 +1,7 @@
 # Workflow
 
 ## What it is
-A sequence of steps whose order is defined in code: the program, not the model, decides what runs next. Models may do the work inside a step, such as extracting fields from text or summarising a record, and one step's output feeds the next, which is often called prompt chaining. The path can branch on checks written in code, such as "is this record valid?", and independent steps can run in parallel and join again, but every possible path is written down before the request arrives. That makes a workflow predictable, testable and cheap to reason about, at the price of handling only the paths its author wrote.
+A sequence of steps defined in code: the program defines every path the run can take. Models may do the work inside a step, such as extracting fields from text or summarising a record, and one step's output feeds the next, which is often called prompt chaining. The path can branch at checks, such as "is this record valid?", made by code or by a model choosing among the branches on offer, and independent steps can run in parallel and join again, but every possible path is written down before the request arrives. That makes a workflow predictable, testable and cheap to reason about, at the price of handling only the paths its author wrote.
 
 ## When to use it
 - You can list the steps before the request arrives, as in an extract, validate, transform, load job.
@@ -12,7 +12,7 @@ A sequence of steps whose order is defined in code: the program, not the model, 
 ## How it works
 Roles:
 - **Steps**: units of work, each plain code or a model call, with a defined input and output.
-- **Gates**: checks between steps, written in code, that decide which branch runs next.
+- **Gates**: checks between steps that pick which of the branches written in advance runs next.
 - **Error path**: where data that fails a gate goes, for reporting or quarantine.
 - **Shared state**: the data each step reads and writes as the run moves on.
 
@@ -29,7 +29,7 @@ Flow:
 - **Kind of gate:** code checks, such as schema validation or thresholds, are cheap and deterministic; a model judging fuzzy criteria is more flexible but makes the path less predictable.
 - **Failure handling:** retry transient failures with backoff, send bad data to an error step, and decide whether partial results are kept or rolled back.
 - **Resumability:** saving state after each step lets a failed run resume from the last good step. Steps with side effects must then be safe to repeat.
-- **Where model judgement is allowed:** inside steps. Once a model chooses the next step, the system is no longer a workflow, and it loses the predictability that justified one.
+- **Where model judgement is allowed:** inside steps, and at gates choosing among branches written in advance. Once the model invents the steps or their order, the system is Planning or a free-running agent, and it loses the predictability that justified a workflow.
 
 ## Trade-offs
 - Predictable, testable and cheap to run, because only the steps that need a model call one.
