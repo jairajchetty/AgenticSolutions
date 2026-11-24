@@ -17,6 +17,7 @@ import re
 import time
 from dataclasses import dataclass
 import json
+from uuid import uuid4
 from typing import Any, Callable, Iterator, Literal, Optional, Sequence
 
 from langchain_core.callbacks import CallbackManagerForLLMRun
@@ -117,8 +118,8 @@ class ScriptedChatModel(BaseChatModel):
                 msg = AIMessage(content=text)
             else:
                 calls = [
-                    {**c, "id": c.get("id") or f"call_{n}", "type": "tool_call"}
-                    for n, c in enumerate(msg.tool_calls)
+                    {**c, "id": f"call_{uuid4().hex[:12]}", "type": "tool_call"}
+                    for c in msg.tool_calls
                 ]
                 msg = AIMessage(content=msg.content, tool_calls=calls)
         return msg, human
