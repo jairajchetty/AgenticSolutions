@@ -59,3 +59,22 @@ def test_issue_requires_all_claims():
         partial = {k: v for k, v in CLAIMS.items() if k != key}
         with pytest.raises(ValueError, match=key):
             issue(partial, SECRET)
+
+
+def test_non_canonical_signature_is_rejected():
+    tok = issue(CLAIMS, SECRET, now=1000.0)
+    payload, sig = tok.split(".")
+    for bad_sig in (sig + "=", sig[:10] + "!" + sig[10:], sig[:10] + "\n" + sig[10:]):
+        with pytest.raises(TokenError, match="bad signature|malformed token"):
+            verify(f"{payload}.{bad_sig}", SECRET, now=1001.0)
+
+
+def test_claim_key_order_does_not_change_token():
+    reordered = dict(reversed(list(CLAIMS.items())))
+    assert issue(CLAIMS, SECRET, now=5.0) == issue(reordered, SECRET, now=5.0)
+
+
+def test_now_equal_to_exp_is_expired():
+    tok = issue(CLAIMS, SECRET, ttl_s=10, now=1000.0)
+    with pytest.raises(TokenError, match="token expired"):
+        verify(tok, SECRET, now=1010.0)

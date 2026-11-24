@@ -59,9 +59,7 @@ def verify(token: str, secret: bytes, *, now: float | None = None) -> dict:
     payload, sig = token.split(".")
     if not payload or not sig or not token.isascii():
         raise TokenError("malformed token")
-    sig_bytes = _unb64(sig)
-    expected = hmac.new(secret, payload.encode("ascii"), hashlib.sha256).digest()
-    if not hmac.compare_digest(sig_bytes, expected):
+    if not hmac.compare_digest(sig.encode("ascii"), _sign(payload, secret).encode("ascii")):
         raise TokenError("bad signature")
     try:
         claims = json.loads(_unb64(payload))
