@@ -477,3 +477,97 @@ def test_state_survives_reopen(db, clock, store):
         assert nxt["req_id"] != req["req_id"]
     finally:
         again.close()
+
+
+# ---------------------------------------------------------------- replay, races, studio events
+
+
+def test_replay_same_key_after_token_expiry_returns_same_po(store, clock):
+    t = "tenant-a"
+    req = draft(store, t, "laptops", 12, "CT-OPS")
+    tok = token_for(req, t, clock)
+    po = submit(store, t, req, tok)
+    trail = store.get_audit_trail(t, req["req_id"])
+    clock.advance(901)  # token expired (and the quotes are still fine)
+    assert submit(store, t, req, tok) == po
+    clock.advance(1800)  # quotes expired too
+    assert submit(store, t, req, tok) == po
+    assert store.get_audit_trail(t, req["req_id"]) == trail
+
+
+def test_replay_same_key_after_budget_spent_returns_same_po(store, clock):
+    t = "tenant-a"
+    req = draft(store, t, "laptops", 12, "CT-OPS")
+    tok = token_for(req, t, clock)
+    po = submit(store, t, req, tok)
+    other = draft(store, t, "laptops", 6, "CT-OPS")
+    submit(store, t, other, token_for(other, t, clock))
+    assert store.check_budget(t, "CT-OPS")["remaining"] < req["total_zar"]
+    budget = store.check_budget(t, "CT-OPS")
+    trail = store.get_audit_trail(t, req["req_id"])
+    assert submit(store, t, req, tok) == po
+    assert store.check_budget(t, "CT-OPS") == budget
+    assert store.get_audit_trail(t, req["req_id"]) == trail
+
+
+def test_different_key_after_ordering_refused_even_with_bad_token(store, clock):
+    t = "tenant-a"
+    req = draft(store, t, "laptops", 12, "CT-OPS")
+    submit(store, t, req, token_for(req, t, clock))
+    for tok in ("not-a-token", token_for(req, t, clock, secret=b"other")):
+        with pytest.raises(ErpError) as e:
+            submit(store, t, req, tok, key="another-key")
+        assert e.value.code == "refused" and str(e.value) == "This request was already ordered."
+        assert store.get_audit_trail(t, req["req_id"])[-1]["detail"] == "This request was already ordered."
+
+
+@pytest.mark.parametrize("shared", [True, False], ids=["one store", "two stores on one file"])
+def test_concurrent_submits_place_one_po(db, clock, shared):
+    import threading
+
+    stores = [ErpStore(db, secret=SECRET, auto_limit_zar=LIMIT, tenant_ttl_hours=168, clock=clock)]
+    stores.append(stores[0] if shared else
+                  ErpStore(db, secret=SECRET, auto_limit_zar=LIMIT, tenant_ttl_hours=168, clock=clock))
+    t = "tenant-a"
+    before = stores[0].check_budget(t, "CT-OPS")
+    req = draft(stores[0], t, "laptops", 12, "CT-OPS")
+    tok = token_for(req, t, clock)
+    barrier = threading.Barrier(2)
+    results = []
+
+    def go(i):
+        barrier.wait()
+        try:
+            results.append(submit(stores[i], t, req, tok, key=f"key-{i}"))
+        except ErpError as err:
+            results.append(err)
+
+    threads = [threading.Thread(target=go, args=(i,)) for i in range(2)]
+    for th in threads:
+        th.start()
+    for th in threads:
+        th.join(10)
+    pos = [r for r in results if isinstance(r, dict)]
+    errs = [r for r in results if isinstance(r, ErpError)]
+    assert len(pos) == 1 and len(errs) == 1
+    assert str(errs[0]) == "This request was already ordered."
+    after = stores[0].check_budget(t, "CT-OPS")
+    assert after["committed"] == before["committed"] + req["total_zar"]
+    assert events(stores[0], t, req["req_id"]).count("submitted") == 1
+    for s in {id(s): s for s in stores}.values():
+        s.close()
+
+
+def test_record_approval_event_rejects_unknown_version_and_ordered(store, clock):
+    t = "tenant-a"
+    req = draft(store, t, "laptops", 12, "CT-OPS")
+    for bad in (0, 2, True, "1"):
+        with pytest.raises(ErpError) as e:
+            store.record_approval_event(t, req["req_id"], bad, "approved", "visitor:0123456789ab")
+        assert e.value.code == "invalid", bad
+    submit(store, t, req, token_for(req, t, clock))
+    trail = store.get_audit_trail(t, req["req_id"])
+    with pytest.raises(ErpError) as e:
+        store.record_approval_event(t, req["req_id"], 1, "rejected", "visitor:0123456789ab")
+    assert e.value.code == "invalid"
+    assert store.get_audit_trail(t, req["req_id"]) == trail

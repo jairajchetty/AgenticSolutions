@@ -161,11 +161,11 @@ class ErpStore:
         self._cost_centres = {c["cost_centre"]: c for c in fixtures["cost_centres"]}
         if path != ":memory:" and not path.startswith("file:"):
             Path(path).parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(path, check_same_thread=False)
+        # Autocommit mode: _run opens every transaction itself with BEGIN IMMEDIATE.
+        self._conn = sqlite3.connect(path, check_same_thread=False, isolation_level=None)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA busy_timeout = 5000")
         self._conn.executescript(SCHEMA)
-        self._conn.commit()
 
     def close(self) -> None:
         with self._lock:
@@ -178,6 +178,11 @@ class ErpStore:
     def _run(self, tenant, fn):
         """Run fn(db) for one tenant in one transaction, under the lock.
 
+        The thread lock serialises callers sharing this store. BEGIN IMMEDIATE
+        takes SQLite's write lock up front, so two stores (or processes) on the
+        same file also serialise whole calls: a submit's checks and its budget
+        commit can never interleave with another submit's.
+
         A refusal is committed (its audit row must persist) and re-raised;
         anything else that fails rolls back.
         """
@@ -187,19 +192,17 @@ class ErpStore:
             if self._conn is None:
                 raise RuntimeError("the ERP store is closed")
             db = self._conn
+            db.execute("BEGIN IMMEDIATE")
             try:
                 self._purge_and_touch(db, tenant)
                 result = fn(db)
-                db.commit()
+                db.execute("COMMIT")
                 return result
             except ErpError as err:
-                if err.code == "refused":
-                    db.commit()
-                else:
-                    db.rollback()
+                db.execute("COMMIT" if err.code == "refused" else "ROLLBACK")
                 raise
             except BaseException:
-                db.rollback()
+                db.execute("ROLLBACK")
                 raise
 
     def _purge_and_touch(self, db, tenant):
@@ -469,11 +472,14 @@ class ErpStore:
         """Studio-only: audit a decision the server cannot otherwise see (plan ruling 4)."""
 
         def record(db):
-            self._req_row(db, tenant, req_id)
+            row = self._req_row(db, tenant, req_id)
             if event not in STUDIO_EVENTS:
                 raise ErpError("invalid", f"Event must be one of: {', '.join(STUDIO_EVENTS)}.")
-            if isinstance(version, bool) or not isinstance(version, int) or version < 1:
-                raise ErpError("invalid", "Version must be a positive whole number.")
+            if (isinstance(version, bool) or not isinstance(version, int)
+                    or not 1 <= version <= row["version"]):
+                raise ErpError("invalid", f"Requisition {req_id} has no version {version!r}.")
+            if row["status"] != "draft":
+                raise ErpError("invalid", ALREADY_ORDERED)
             if not isinstance(actor, str) or not actor.strip():
                 raise ErpError("invalid", "An actor is required.")
             detail = "" if reason is None else str(reason)[:MAX_TEXT]
@@ -495,6 +501,13 @@ class ErpStore:
 
             if not isinstance(idempotency_key, str) or not idempotency_key.strip():
                 raise ErpError("invalid", "An idempotency key is required.")
+
+            # 0. Already ordered: the same key replays the PO as it was placed
+            # (no token re-check, no commit, no audit row); any other key is refused.
+            if row["status"] == "ordered":
+                if row["idempotency_key"] == idempotency_key:
+                    return self._po_dict(db, tenant, row)
+                refuse(ALREADY_ORDERED)
 
             # 1. Signature and expiry, on the store's clock.
             try:
@@ -521,18 +534,12 @@ class ErpStore:
             if approver == "policy" and row["total"] > self._limit:
                 refuse(f"Policy cannot approve orders over {format_zar(self._limit)}.")
 
-            # 5. Already ordered: the same key replays the PO, another key is refused.
-            if row["status"] == "ordered":
-                if row["idempotency_key"] == idempotency_key:
-                    return self._po_dict(db, tenant, row)
-                refuse(ALREADY_ORDERED)
-
-            # 6. Every quote still valid.
+            # 5. Every quote still valid.
             now = self._clock()
             if any(now >= line["quote_expires_at_ts"] for line in json.loads(row["lines"])):
                 refuse(QUOTE_EXPIRED)
 
-            # 7. Budget at submit time.
+            # 6. Budget at submit time.
             budget = self._budget(db, tenant, row["cost_centre"])
             if row["total"] > budget["remaining"]:
                 refuse(f"Over budget: {format_zar(row['total'])} needed,"
