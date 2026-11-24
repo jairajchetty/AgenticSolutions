@@ -5,9 +5,7 @@ export const ABOUT = {
   name: "Jairaj Chetty",
   role: "Solution architect, enterprise integration and agentic AI",
   record:
-    "20+ years of integration architecture across Africa and the Middle East. " +
-    "120+ integrations for MTN's group-wide Oracle Fusion ERP. " +
-    "Reference architectures for Eskom and Equity Bank. " +
+    "20+ years of integration, solution and enterprise architecture across Africa and the Middle East. " +
     "TOGAF 10, Oracle Generative AI and AI Vector Search certified. " +
     "Built this Studio with LangGraph and Claude.",
   builtWith: "Built this Studio with LangGraph and Claude.",

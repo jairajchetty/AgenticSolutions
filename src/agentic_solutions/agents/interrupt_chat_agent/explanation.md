@@ -74,7 +74,7 @@ This demo currently shows only the pause mechanism: the run pauses for your inpu
 ### Key code
 ```python
 def ask(state: State) -> dict:
-        text = interrupt(QUESTION_PROMPT)
+    text = interrupt(QUESTION_PROMPT)
     return {"messages": [("user", text)]}
 
 builder = StateGraph(State)
