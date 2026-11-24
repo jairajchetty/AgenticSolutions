@@ -434,13 +434,15 @@ async function newChatThread(b, gen) {
   return thread_id;
 }
 
-async function runOnce(b, gen, threadId, text) {
+// One run: `body` is {text} or {resume}; `onStart` runs at the first event,
+// once the server has accepted the run (the user bubble, or the decision note).
+async function runOnce(b, gen, threadId, body, onStart) {
   let started = false;
-  for await (const evt of streamRun(threadId, text, { signal: b.abort.signal })) {
+  for await (const evt of streamRun(threadId, body, { signal: b.abort.signal })) {
     if (!live(b, gen)) return;  // the conversation was replaced mid-stream
     if (!started) {
       started = true;
-      b.console.addUser(text);
+      onStart();
     }
     dispatch(b, evt);
   }
@@ -450,6 +452,7 @@ async function runOnce(b, gen, threadId, text) {
 async function send(b, text) {
   const chat = b.pattern.mode === "chat";
   const gen = chatGen;
+  const run = (tid) => runOnce(b, gen, tid, { text }, () => b.console.addUser(text));
   b.console.setBusy(true);
   try {
     let tid = state.threadId;
@@ -465,7 +468,7 @@ async function send(b, text) {
     if (!tid) tid = await newChatThread(b, gen);
     if (!tid) return;
     try {
-      await runOnce(b, gen, tid, text);
+      await run(tid);
     } catch (err) {
       if (!(err instanceof ApiError && err.status === 404) || !live(b, gen)) throw err;
       // The server forgot this thread (it restarted): start over once, quietly.
@@ -477,7 +480,7 @@ async function send(b, text) {
       }
       if (!tid) return;
       b.console.showNotice(STARTED_NEW);
-      await runOnce(b, gen, tid, text);
+      await run(tid);
     }
   } catch (err) {
     if (!live(b, gen) || err.name === "AbortError") return;
@@ -492,6 +495,60 @@ async function send(b, text) {
   } finally {
     if (live(b, gen)) b.console.setBusy(false);
   }
+}
+
+// A decision on the approval card (Approval spec §5.3): the same busy, abort
+// and 404 handling as `send`, with a short note in place of a user bubble.
+// The note (and the card's removal) waits for the server to accept the run,
+// so a 409 or 422 leaves the card in place with the server's message.
+const DECISION_NOTES = {
+  approve: "You approved the order",
+  edit: "You changed quantities",
+  reject: "You rejected the order",
+};
+const NOTHING_WAITING = "Nothing is waiting for approval";  // the run API's 409 (§9.1)
+const LOST_ORDER = "The Studio restarted and lost this order, so a new chat has started. Ask the agent again.";
+
+async function decide(b, body) {
+  const gen = chatGen;
+  const tid = state.threadId;
+  if (!tid) return;
+  const note = DECISION_NOTES[body?.resume?.decision] ?? "You decided on the order";
+  b.console.setBusy(true);
+  try {
+    await runOnce(b, gen, tid, body, () => b.console.addDecision(note));
+  } catch (err) {
+    if (!live(b, gen) || err.name === "AbortError") return;
+    if (err instanceof ApiError && err.status === 404) {
+      // The server forgot this thread (it restarted). The decision belonged to
+      // a proposal that no longer exists, so it is not replayed.
+      try {
+        if (await newChatThread(b, gen)) b.console.showNotice(LOST_ORDER);
+      } catch (again) {
+        if (live(b, gen)) b.console.showNotice(`Could not start a chat: ${again.message}.`);
+      }
+    } else if (err instanceof ApiError && err.status === 409 && err.detail === "conversation ended") {
+      b.console.showNotice(ENDED_TEXT, { action: "new-chat" });
+    } else if (err instanceof ApiError && err.status === 409) {
+      // Another tab may have decided already: show the thread as it now is.
+      if (err.detail === NOTHING_WAITING) await refreshBench(b, gen, tid);
+      if (live(b, gen)) b.console.showNotice(err.message);
+    } else if (err instanceof ApiError) {
+      b.console.showNotice(`Could not send the decision: ${err.message}.`);
+    } else {
+      b.console.showNotice("Lost the connection to the Studio server. Check that it is running, then try again.");
+    }
+  } finally {
+    if (live(b, gen)) b.console.setBusy(false);
+  }
+}
+
+// Re-read a thread's checkpoint into every panel; a failure leaves them as they are.
+async function refreshBench(b, gen, threadId) {
+  try {
+    const saved = await getState(threadId);
+    if (live(b, gen) && state.threadId === threadId) restoreBench(b, saved);
+  } catch { /* the notice still says what happened */ }
 }
 
 // Create and prime a chat thread with the console busy, so a sample clicked
@@ -549,6 +606,7 @@ async function openBench(pattern) {
     mode: pattern.mode,
     samples: pattern.samples,
     onSend: (text) => send(b, text),
+    onDecide: (body) => decide(b, body),
     onNewChat: () => startNewChat(b),
   });
 

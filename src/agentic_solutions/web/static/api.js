@@ -56,10 +56,11 @@ function parseFrame(frame) {
   return data ? JSON.parse(data) : null;
 }
 
-// Start a run and yield each trace event as it arrives.
-export async function* streamRun(threadId, text, { signal } = {}) {
+// Start a run and yield each trace event as it arrives. `body` is a message,
+// {text}, or a decision on the approval card, {resume} (Approval spec §9.1).
+export async function* streamRun(threadId, body, { signal } = {}) {
   const res = await fetch(`/api/threads/${encodeURIComponent(threadId)}/runs`, {
-    ...postJson({ text }),
+    ...postJson(body),
     credentials: "same-origin",
     signal,
   });
