@@ -1,26 +1,17 @@
-"""Shared helpers for the dual-mode Guide tests.
+"""Shared helpers for the Guide tests.
 
-A Guide is either in the new generic format (seven sections, the last one
-Studio-specific) or the old format (UNMIGRATED). Tasks migrate folders in
-batches by removing them from UNMIGRATED.
+Every Guide has seven sections: six generic ones, then "How this Studio implements it".
 """
 import re
 from pathlib import Path
 
 AGENTS = Path(__file__).resolve().parents[1] / "src" / "agentic_solutions" / "agents"
 
-NEW_SECTIONS = ["What it is", "When to use it", "How it works", "Design considerations",
-                "Trade-offs", "Related patterns", "How this Studio implements it"]
+SECTIONS = ["What it is", "When to use it", "How it works", "Design considerations",
+            "Trade-offs", "Related patterns", "How this Studio implements it"]
 STUDIO_SUBSECTIONS = ["Mapping", "Framework concepts", "Key code", "Try this"]
-OLD_SECTIONS = ["What it is", "When to use it", "How this graph works", "LangGraph concepts",
-                "Trade-offs", "Key code", "Try this"]
 
 ALL_FOLDERS = sorted(p.parent.name for p in AGENTS.glob("*/explanation.md"))
-
-# Folders still in the old format. Shrinks to empty as batches migrate.
-UNMIGRATED: set[str] = set()
-MIGRATED = sorted(set(ALL_FOLDERS) - UNMIGRATED)
-OLD = sorted(UNMIGRATED)
 
 # Guides spec section 9.3 (case-insensitive).
 DENY_WORDS = ["LangGraph", "LangChain", "MCP", "Model Context Protocol", "StateGraph", "ToolNode",
@@ -63,7 +54,5 @@ def studio_section(md: str) -> str:
     return dict(sections(md)).get("How this Studio implements it", "")
 
 
-def try_this_text(md: str, folder: str) -> str:
-    if folder in UNMIGRATED:
-        return dict(sections(md))["Try this"]
+def try_this_text(md: str) -> str:
     return dict(subsections(studio_section(md)))["Try this"]

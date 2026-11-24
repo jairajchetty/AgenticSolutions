@@ -29,7 +29,7 @@ def try_this_inputs(spec):
     """Backticked spans in the Guide's "Try this" section that are user inputs,
     i.e. not node names or state keys."""
     md = spec.explanation_path.read_text(encoding="utf-8")
-    section = try_this_text(md, spec.explanation_path.parent.name)
+    section = try_this_text(md)
     graph = spec.build(BuildContext(offline_factory(spec.id, 0), InMemorySaver(), make_guard()))
     names = set(graph.get_graph().nodes) | STATE_KEYS
     return [s for s in re.findall(r"`([^`]+)`", section) if s not in names]

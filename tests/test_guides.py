@@ -1,17 +1,15 @@
 import importlib
 import re
-from pathlib import Path
 
 import pytest
 
 from agentic_solutions.web import catalog
 from guide_format import (
-    DENY_SUBSTRINGS, DENY_WORDS, MIGRATED, NEW_SECTIONS, OLD, STUDIO_SUBSECTIONS, UNMIGRATED,
-    ALL_FOLDERS, generic_text, sections, studio_section, subsections,
+    AGENTS, ALL_FOLDERS, DENY_SUBSTRINGS, DENY_WORDS, SECTIONS, STUDIO_SUBSECTIONS,
+    generic_text, sections, studio_section, subsections,
 )
 from test_skeletons import SKELETONS
 
-AGENTS = Path(__file__).resolve().parents[1] / "src" / "agentic_solutions" / "agents"
 GUIDES = sorted(AGENTS.glob("*/explanation.md"))
 # Folders whose H1 must equal the taxonomy name: every catalog entry that has a folder.
 H1_CHECK = {p.folder for c in catalog.CATALOG for p in c.patterns if p.folder}
@@ -36,34 +34,18 @@ def first_fence_lines(text):
     return len(m.group(1).splitlines())
 
 
-def test_unmigrated_is_shrinking_toward_empty():
-    # Task 6 replaces this with `assert not UNMIGRATED`.
-    assert UNMIGRATED <= set(ALL_FOLDERS)
+def test_every_guide_folder_is_collected():
+    assert ALL_FOLDERS == ids(GUIDES)
 
 
-# --- old format ---------------------------------------------------------------------------
-
-@pytest.mark.parametrize("folder", OLD)
-def test_old_key_code_fence_at_most_25_lines(folder):
-    section = guide(folder).split("## Key code", 1)[1]
-    assert first_fence_lines(section) <= 25
-
-
-@pytest.mark.parametrize("folder", OLD)
-def test_old_length_50_to_110_lines(folder):
-    assert 50 <= len(guide(folder).splitlines()) <= 110
-
-
-# --- new format ---------------------------------------------------------------------------
-
-@pytest.mark.parametrize("folder", MIGRATED)
+@pytest.mark.parametrize("folder", ALL_FOLDERS)
 def test_new_format_sections_in_order(folder):
     secs = sections(guide(folder))
-    assert [t for t, _ in secs] == NEW_SECTIONS
+    assert [t for t, _ in secs] == SECTIONS
     assert [t for t, _ in subsections(secs[6][1])] == STUDIO_SUBSECTIONS
 
 
-@pytest.mark.parametrize("folder", MIGRATED)
+@pytest.mark.parametrize("folder", ALL_FOLDERS)
 def test_generic_sections_have_no_framework_vocabulary(folder):
     text = generic_text(guide(folder))
     assert "`" not in text
@@ -73,13 +55,13 @@ def test_generic_sections_have_no_framework_vocabulary(folder):
         assert sub.lower() not in text.lower(), sub
 
 
-@pytest.mark.parametrize("folder", MIGRATED)
+@pytest.mark.parametrize("folder", ALL_FOLDERS)
 def test_when_to_use_has_a_not_when_bullet(folder):
     body = dict(sections(guide(folder)))["When to use it"]
     assert re.search(r"^\s*[-*]\s+(\*\*)?not when\b", body, re.I | re.M)
 
 
-@pytest.mark.parametrize("folder", MIGRATED)
+@pytest.mark.parametrize("folder", ALL_FOLDERS)
 def test_design_considerations_bullets_start_bold(folder):
     body = dict(sections(guide(folder)))["Design considerations"]
     bullets = re.findall(r"^[-*] (.*)$", body, re.M)
@@ -87,7 +69,7 @@ def test_design_considerations_bullets_start_bold(folder):
     assert all(b.startswith("**") for b in bullets), bullets
 
 
-@pytest.mark.parametrize("folder", MIGRATED)
+@pytest.mark.parametrize("folder", ALL_FOLDERS)
 def test_mapping_names_every_node(folder):
     mapping = dict(subsections(studio_section(guide(folder))))["Mapping"]
     nodes = {n["id"] for n in node_topology(folder)["nodes"]} - {"__start__", "__end__"}
@@ -113,23 +95,21 @@ def node_topology(folder):
     raise AssertionError(f"no graph for {folder}")
 
 
-@pytest.mark.parametrize("folder", MIGRATED)
+@pytest.mark.parametrize("folder", ALL_FOLDERS)
 def test_key_code_at_most_25_lines(folder):
     sub = dict(subsections(studio_section(guide(folder))))["Key code"]
     assert first_fence_lines(sub) <= 25
 
 
-@pytest.mark.parametrize("folder", MIGRATED)
+@pytest.mark.parametrize("folder", ALL_FOLDERS)
 def test_skeleton_word_only_in_studio_section(folder):
     assert "skeleton" not in generic_text(guide(folder)).lower()
 
 
-@pytest.mark.parametrize("folder", MIGRATED)
+@pytest.mark.parametrize("folder", ALL_FOLDERS)
 def test_new_length_50_to_130_lines(folder):
     assert 50 <= len(guide(folder).splitlines()) <= 130
 
-
-# --- both formats -------------------------------------------------------------------------
 
 @pytest.mark.parametrize("path", GUIDES, ids=ids(GUIDES))
 def test_langgraph_names_import(path):
@@ -160,8 +140,7 @@ def test_guide_only_h1_is_taxonomy_name():
     assert seen == H1_CHECK
 
 
-# folder -> routes that must appear as [[route]] markers inside "## How this graph works"
-# (old format) or "## Related patterns" (new format).
+# folder -> routes that must appear as [[route]] markers inside "## Related patterns".
 DIVIDING: dict[str, set[str]] = {
     "qa_agent": {"collaboration/supervisor", "collaboration/swarm", "collaboration/hierarchy"},
     "chat_agent": {"memory/episodic"},
@@ -186,8 +165,5 @@ DIVIDING: dict[str, set[str]] = {
 
 @pytest.mark.parametrize("folder", sorted(DIVIDING))
 def test_dividing_line_in_the_right_section(folder):
-    if folder in UNMIGRATED:
-        text = guide(folder).split("## How this graph works", 1)[1].split("\n## ", 1)[0]
-    else:
-        text = dict(sections(guide(folder)))["Related patterns"]
+    text = dict(sections(guide(folder)))["Related patterns"]
     assert set(re.findall(r"\[\[([^\]]+)\]\]", text)) >= DIVIDING[folder]
