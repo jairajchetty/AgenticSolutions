@@ -859,6 +859,38 @@ h3, .purpose-body h2 {
   overflow-wrap: anywhere;
 }
 
+/* The Studio implementation section: a closed paper sheet under the Guide.
+   The +/- marker (not colour) shows open vs closed; the focus ring is ink. */
+.guide-impl { grid-column: 1 / -1; }
+.guide-impl > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 20px;
+  cursor: pointer;
+  list-style: none;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--step-1);
+  line-height: 1.2;
+  color: var(--ink);
+}
+.guide-impl > summary::-webkit-details-marker { display: none; }
+.guide-impl > summary::before {
+  content: "+";
+  flex: none;
+  width: 1.25em;
+  text-align: center;
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+  line-height: 1.2;
+}
+.guide-impl[open] > summary::before { content: "\2212"; }
+.guide-impl > summary:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+.guide-impl[open] > summary { border-bottom: 1px solid var(--rule); }
+.guide-impl > .guide-block { box-shadow: 0 1px 0 var(--rule); }
+.guide-impl > .guide-block:last-child { box-shadow: none; }
+
 /* ---------- Narrow screens ---------- */
 
 @media (max-width: 899px) {

@@ -81,3 +81,47 @@ test("lossless: non-H1, non-blank lines of purpose + rest equal the input's", ()
   const { purpose, rest } = splitPurpose(md);
   assert.deepEqual(keep(purpose + "\n" + rest), keep(md));
 });
+
+// ---- splitStudio: the collapsed "How this Studio implements it" section ----
+import { splitStudio } from "../../src/agentic_solutions/web/static/guide.js";
+
+const STUDIO_TITLE = "How this Studio implements it";
+const STUDIO = `## ${STUDIO_TITLE}\nIntro line.\n\n### Graph\nG body.\n\n### Tools\n- a\n- b\n\n### State\nS body.\n\n### Run it\nR body.\n`;
+const BODY = "## What it is\nA graph.\n\n## Trade-offs\nCost.\n";
+
+test("splitStudio returns the four subsections in order", () => {
+  const { body, studio } = splitStudio(BODY + "\n" + STUDIO);
+  assert.equal(studio.title, STUDIO_TITLE);
+  assert.deepEqual(studio.subsections.map((s) => s.title), ["Graph", "Tools", "State", "Run it"]);
+  assert.equal(studio.subsections[0].markdown, "G body.");
+  assert.equal(studio.subsections[1].markdown, "- a\n- b");
+  assert.deepEqual(headings(body), ["What it is", "Trade-offs"]);
+  assert.ok(!body.includes("Studio implements"));
+});
+
+test("splitStudio with no section 7 gives null studio and the body unchanged", () => {
+  const { body, studio } = splitStudio(BODY);
+  assert.equal(studio, null);
+  assert.equal(body.trim(), BODY.trim());
+});
+
+test("splitStudio ignores the heading inside a code fence", () => {
+  const md = BODY + "\n```md\n## How this Studio implements it\n### Graph\n```\n";
+  const { body, studio } = splitStudio(md);
+  assert.equal(studio, null);
+  assert.ok(body.includes("### Graph"));
+});
+
+test("splitStudio ignores ### inside a fence within the section", () => {
+  const md = "## " + STUDIO_TITLE + "\n### Graph\n```\n### not a heading\n```\n### Tools\nT\n";
+  const { studio } = splitStudio(md);
+  assert.deepEqual(studio.subsections.map((s) => s.title), ["Graph", "Tools"]);
+  assert.ok(studio.subsections[0].markdown.includes("### not a heading"));
+});
+
+test("splitStudio handles CRLF", () => {
+  const { body, studio } = splitStudio((BODY + "\n" + STUDIO).replace(/\n/g, "\r\n"));
+  assert.deepEqual(studio.subsections.map((s) => s.title), ["Graph", "Tools", "State", "Run it"]);
+  assert.equal(studio.subsections[3].markdown, "R body.");
+  assert.ok(!body.includes("\r"));
+});

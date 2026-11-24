@@ -33,7 +33,8 @@ const slug = (text) =>
 // fences; each chunk is {title, heading, lines} (heading is the raw `## ` line,
 // null for the preamble before the first `##`). `# ` lines in the preamble are
 // the page title and are dropped.
-function chunkMarkdown(markdown) {
+function chunkMarkdown(markdown, level = 2) {
+  const cut = new RegExp(`^#{${level}}\\s+`);
   const chunks = [{ title: null, heading: null, lines: [] }];
   let fence = null;
   for (const line of markdown.replace(/\r\n/g, "\n").split("\n")) {
@@ -42,8 +43,8 @@ function chunkMarkdown(markdown) {
       if (!fence) fence = marker[1][0];
       else if (marker[1][0] === fence) fence = null;
     }
-    if (!fence && /^##\s+/.test(line)) {
-      chunks.push({ title: line.replace(/^##\s+/, "").trim(), heading: line, lines: [] });
+    if (!fence && cut.test(line)) {
+      chunks.push({ title: line.replace(cut, "").trim(), heading: line, lines: [] });
     } else if (!fence && /^#\s+/.test(line) && chunks.length === 1) {
       continue;
     } else {
@@ -115,6 +116,48 @@ export function splitPurpose(markdown) {
   };
 }
 
+const STUDIO_TITLE = "How this Studio implements it";
+const STUDIO_OPEN_KEY = "studio.guide.impl.open";
+
+// splitStudio(markdownRest): pull the `## How this Studio implements it`
+// section (exact title, fence-aware) out of the Guide. `body` is everything
+// else in original order; `studio` is {title, subsections: [{title, markdown}]}
+// (one per `###`), or null when the Guide has no such section. Pure: no DOM.
+export function splitStudio(markdown) {
+  const chunks = chunkMarkdown(String(markdown || ""));
+  const found = chunks.find((c) => c.title === STUDIO_TITLE);
+  const text = (cs) => cs.flatMap((c) => (c.heading === null ? c.lines : [c.heading, ...c.lines])).join("\n");
+  if (!found) return { body: text(chunks), studio: null };
+  const subsections = chunkMarkdown(found.lines.join("\n"), 3)
+    .filter((c) => c.title)
+    .map((c) => ({ title: c.title, markdown: c.lines.join("\n").trim() }));
+  return { body: text(chunks.filter((c) => c !== found)), studio: { title: STUDIO_TITLE, subsections } };
+}
+
+function storedOpen() {
+  try { return sessionStorage.getItem(STUDIO_OPEN_KEY) === "1"; } catch { return false; }
+}
+
+// The Studio section: a closed-by-default <details class="guide-impl sheet">.
+// Built with DOM APIs; each subsection goes through buildBlock (sanitised).
+function buildStudioDisclosure(studio, linkFor) {
+  const details = document.createElement("details");
+  details.className = "guide-impl sheet";
+  details.open = storedOpen();
+  const summary = document.createElement("summary");
+  summary.textContent = studio.title;
+  details.append(summary);
+  studio.subsections.forEach((sub, i) => {
+    const key = slug(sub.title);
+    details.append(buildBlock(`guide-block guide-impl-${key}`, `guide-impl-h-${i}-${key}`,
+      sub.title, sub.markdown, linkFor));
+  });
+  details.addEventListener("toggle", () => {
+    try { sessionStorage.setItem(STUDIO_OPEN_KEY, details.open ? "1" : "0"); } catch { /* no storage */ }
+  });
+  return details;
+}
+
 // One labelled block: <section class> with a heading (h3 by default) and the
 // sanitised, linked body. The only innerHTML assignment in the app lives here.
 function buildBlock(className, id, title, bodyMarkdown, linkFor, { level = 3 } = {}) {
@@ -146,13 +189,15 @@ function renderFallback(el, markdown) {
 // renderGuide(el, markdown, {linkFor}): the sectioned Guide, with pattern links.
 export function renderGuide(el, markdown, { linkFor } = {}) {
   el.replaceChildren();
-  const sections = splitSections(markdown || "");
   if (!window.marked || !window.DOMPurify) return renderFallback(el, markdown);
+  const { body, studio } = splitStudio(markdown || "");
+  const sections = splitSections(body);
   sections.forEach((section, i) => {
     const key = section.title ? slug(section.title) : "intro";
     el.append(buildBlock(`guide-block guide-${key}`, `guide-h-${i}-${key}`,
       section.title, section.body, linkFor));
   });
+  if (studio) el.append(buildStudioDisclosure(studio, linkFor));
 }
 
 // renderPurpose(el, purposeMarkdown, {linkFor}): the two purpose sections as
