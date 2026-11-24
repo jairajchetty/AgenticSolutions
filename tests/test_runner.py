@@ -92,3 +92,39 @@ async def test_only_ai_messages_become_tokens():
     tokens = [e["text"] for e in ev if e["type"] == "token"]
     assert "human-text" not in tokens and "tool-text" not in tokens
     assert tokens == ["ai-blocks"]
+
+
+def _graph_raising(exc):
+    from typing import TypedDict
+    from langgraph.graph import START, END, StateGraph
+
+    class S(TypedDict, total=False):
+        x: int
+
+    def node(state):
+        raise exc
+
+    b = StateGraph(S)
+    b.add_node("n", node)
+    b.add_edge(START, "n")
+    b.add_edge("n", END)
+    return b.compile(checkpointer=InMemorySaver())
+
+
+@pytest.mark.anyio
+async def test_user_facing_error_message_reaches_the_stream():
+    from agentic_solutions.common.errors import UserFacingError
+    g = _graph_raising(UserFacingError("The ERP system is unavailable. Try again shortly."))
+    ev = [e async for e in run_events(g, {}, {"configurable": {"thread_id": "u"}},
+                                      thread_id="u", mode="offline", resumed=False)]
+    assert ev[-2] == {"type": "error", "message": "The ERP system is unavailable. Try again shortly."}
+    assert ev[-1]["type"] == "run_finished" and ev[-1]["status"] == "error"
+
+
+@pytest.mark.anyio
+async def test_other_errors_stay_generic():
+    g = _graph_raising(ValueError("secret-detail"))
+    ev = [e async for e in run_events(g, {}, {"configurable": {"thread_id": "v"}},
+                                      thread_id="v", mode="offline", resumed=False)]
+    assert ev[-2] == {"type": "error", "message": "The run failed."}
+    assert "secret-detail" not in str(ev)

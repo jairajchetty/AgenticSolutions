@@ -93,6 +93,8 @@ def _build_guardrail(c: BuildContext):
 def _build_approval(c: BuildContext):
     if c.erp is None:
         raise RuntimeError("the approval demo needs an ERP client")
+    if c.issue_token is None:
+        raise RuntimeError("the approval demo needs a token issuer")
     return approval_graph.build_graph(
         erp=c.erp, issue_token=c.issue_token, auto_limit_zar=c.auto_limit_zar,
         checkpointer=c.checkpointer, llm_factory=c.llm_factory)

@@ -7,7 +7,8 @@
 * ``messages``              -> ``(message, metadata)``; an AI chunk is one LLM token
 
 The runner never raises: a failure or timeout becomes a safe ``error`` event
-followed by ``run_finished{status: "error"}``. Details go to the server log only.
+followed by ``run_finished{status: "error"}``. Details go to the server log only,
+except for a ``UserFacingError``, whose message is written to be shown as is.
 """
 import asyncio
 import logging
@@ -17,6 +18,7 @@ from typing import Any, AsyncIterator, Callable, Literal
 
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, ToolMessage
 
+from agentic_solutions.common.errors import UserFacingError
 from agentic_solutions.common.messages import text_of
 from agentic_solutions.web.serialize import to_jsonable
 
@@ -129,6 +131,10 @@ async def run_events(
     except TimeoutError:
         log.exception("run timed out (thread %s)", thread_id)
         yield {"type": "error", "message": "The run timed out."}
+        yield {"type": "run_finished", "status": "error", "output": None, "usage": usage}
+    except UserFacingError as err:  # written to be shown: plain, specific, no internals
+        log.warning("run stopped (thread %s): %s", thread_id, err, exc_info=True)  # cause stays here
+        yield {"type": "error", "message": str(err)}
         yield {"type": "run_finished", "status": "error", "output": None, "usage": usage}
     except Exception:
         log.exception("run failed (thread %s)", thread_id)

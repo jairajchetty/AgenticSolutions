@@ -125,3 +125,9 @@ def test_approval_build_needs_an_erp():
 def test_build_context_erp_defaults():
     c = BuildContext(offline_factory("qa", 0), InMemorySaver(), None)
     assert (c.erp, c.issue_token, c.auto_limit_zar) == (None, None, 5000)
+
+
+def test_approval_build_needs_a_token_issuer():
+    with pytest.raises(RuntimeError, match="^the approval demo needs a token issuer$"):
+        PATTERNS["approval"].build(BuildContext(offline_factory("approval", 0), InMemorySaver(), None,
+                                                erp=UnreachableErp()))
