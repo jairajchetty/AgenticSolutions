@@ -1,7 +1,7 @@
 # Episodic
 
 ## What it is
-Long-term memory of past interactions. The agent keeps records of what happened with a particular user, such as a preference they stated, a problem it solved or an approach that failed, in a store that lives outside any single conversation. When that user returns, the agent recalls the episodes relevant to the new request and uses them as context, so it can pick up where earlier conversations left off. The same idea applies to an agent's own experience: records of past runs that worked can be recalled as examples for similar tasks. Two traits set it apart: memories are partitioned by identity, and recall is selective, bringing back the few episodes that matter rather than whole transcripts.
+Memory of past conversations with a particular person. The agent keeps notes on what happened, such as a preference you mentioned or a problem it solved for you, in a store that outlives any one conversation. When you come back, it recalls the few notes that matter for your new request, so it can pick up where you left off instead of starting from scratch.
 
 ## When to use it
 - A returning user should not have to repeat their preferences, history or context.

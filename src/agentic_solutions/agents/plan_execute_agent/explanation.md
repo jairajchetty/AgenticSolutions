@@ -1,7 +1,7 @@
 # Planning
 
 ## What it is
-The model breaks a goal into steps before acting, then carries the steps out. A planning phase produces the plan; an execution phase works through it, each step with the goal and earlier results as context; a final phase composes the answer from the results. The plan is written at run time for this particular request, and it can be shown, checked or edited before any work starts.
+The agent writes a plan before doing any work, then carries it out step by step. Because the plan is made for this particular request, a person can see it, check it or change it before anything happens. Once the steps are done, the agent puts the results together into one answer.
 
 ## When to use it
 - The task needs several distinct steps, and which steps depends on the request.

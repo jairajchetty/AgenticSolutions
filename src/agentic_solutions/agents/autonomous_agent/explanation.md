@@ -1,7 +1,7 @@
 # Autonomous
 
 ## What it is
-An agent given a goal rather than a single question, which works on its own over a long run until it judges the goal met. It plans, acts, observes the results, records progress and checks itself against the goal, round after round, deciding for itself what to do next and when it is done. The run may span many rounds, hours or restarts, and a person is involved only at chosen points, if at all. This Guide uses the narrow meaning: not every agent that calls tools is autonomous, only one that pursues an open goal this way. Because it acts without step-by-step supervision, its limits, such as budgets, permissions and points where a person is consulted, are part of the design rather than an afterthought.
+You give the agent a goal, not a single question, and it keeps working on its own until it decides the goal is met. Round after round it plans, acts, checks its progress and chooses the next step, sometimes over hours. Because nobody watches every step, its limits are set up front: how much it may spend, what it may touch, and when it must check with a person.
 
 ## When to use it
 - The goal is open-ended, such as "work through this backlog" or "keep this dataset clean", and no fixed list of steps fits.

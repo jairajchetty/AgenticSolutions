@@ -1,7 +1,7 @@
 # Knowledge Graph
 
 ## What it is
-Memory held as entities and the typed relations between them, often written as triples of subject, relation and object, such as "Ada works at Acme" and "Acme makes Widget". To answer, the agent identifies the entities in the question, matches them to entries in the graph, follows their relations, across several hops where needed, and answers from the facts it reached. The graph can be built ahead of time from structured data or documents, grown as the agent learns new facts, or both. Its distinct strength is following connections explicitly: "who works at the company that makes Widget" is two hops along named relations, and the path itself explains the answer.
+Memory stored as a map of things and how they connect, such as "Ada works at Acme" and "Acme makes Widget". To answer a question, the agent finds the things it mentions on the map and follows the connections, one step at a time. That lets it answer questions that need several links joined up, such as "who works at the company that makes Widget?", and the path it followed explains the answer.
 
 ## When to use it
 - Questions are about how things connect, such as people, teams, products, systems and dependencies.

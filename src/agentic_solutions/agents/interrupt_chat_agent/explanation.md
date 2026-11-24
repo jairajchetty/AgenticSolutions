@@ -1,7 +1,7 @@
 # Approval
 
 ## What it is
-A person signs off before an agent's consequential action takes effect. The agent may only propose such an action with exact parameters; when policy requires a person, the run pauses durably with the proposal, an approver approves, edits or rejects it, and only a separate executor can carry out exactly what was approved. Enforcement does not rest on the agent's good behaviour: the agent never holds the commit capability, and the system of record refuses anything unapproved.
+The agent can suggest an important action, such as placing an order or making a payment, but it cannot carry it out on its own. When the action is big enough to need a sign-off, the work stops and a person sees exactly what the agent wants to do. They approve it, change it or turn it down, and only what they approved goes ahead. The system that does the work checks for that approval itself, so even a confused or tricked agent cannot skip it.
 
 ## When to use it
 - Actions that spend money, change records, contact people or are hard to undo: purchases, payments, emails, deletions.

@@ -1,7 +1,7 @@
 # Workflow
 
 ## What it is
-A sequence of steps defined in code: the program defines every path the run can take. Models may do the work inside a step, such as extracting fields from text or summarising a record, and one step's output feeds the next, which is often called prompt chaining. The path can branch at checks, such as "is this record valid?", made by code or by a model choosing among the branches on offer, and independent steps can run in parallel and join again, but every possible path is written down before the request arrives. That makes a workflow predictable, testable and cheap to reason about, at the price of handling only the paths its author wrote.
+A fixed procedure, like a recipe, written in advance by a developer. Models may do the work inside individual steps, such as pulling details out of an email or summarising a record, and each step's output feeds the next. The path can branch or run steps side by side, but every possible path is decided before the request arrives, which makes a workflow predictable and easy to test but limited to the cases its author foresaw.
 
 ## When to use it
 - You can list the steps before the request arrives, as in an extract, validate, transform, load job.

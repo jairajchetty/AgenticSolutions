@@ -1,7 +1,7 @@
 # Event Driven
 
 ## What it is
-An agent started by something that happened, not by a person typing a message: a message lands on a queue, a webhook fires, a record changes, a file arrives, or a schedule ticks. Typically each event starts one run, which handles that event and finishes; alternatively a long-lived agent waits and is woken by each event that concerns it. Either way, the result may itself be published as an event for another system. The trigger lives outside the agent. A queue consumer, webhook handler or scheduler receives the event and calls the agent with it as input. With no one waiting at a chat box, the concerns shift from conversation to delivery: events can arrive twice, late, out of order or in bursts, and failures must be noticed by monitoring rather than by a user.
+An agent that springs into action when something happens, rather than when someone types a message. A new email arrives, an order is placed, a file lands in a folder or a timer goes off, and the agent starts with that event as its input. With nobody waiting for a reply, the hard parts change: the same event can arrive twice or late, and failures must be caught by monitoring rather than by a user noticing.
 
 ## When to use it
 - Work arrives from other systems at unpredictable times, and nobody is waiting for the reply.

@@ -1,7 +1,7 @@
 # Hierarchy
 
 ## What it is
-Supervisors of supervisors. A top-level coordinator delegates to team leads, and each lead is itself a supervisor over its own workers. Work flows down through the levels and results flow back up. It is the Supervisor pattern applied recursively, with each team typically packaged as a self-contained unit that can be built and tested on its own.
+A chain of command for agents. A top-level coordinator hands work to team leads, and each lead manages its own team of specialist agents. Work flows down the levels and results flow back up, so a large job can be split across teams that are each built and tested on their own.
 
 ## When to use it
 - One coordinator would have too many workers or tools to choose between reliably.

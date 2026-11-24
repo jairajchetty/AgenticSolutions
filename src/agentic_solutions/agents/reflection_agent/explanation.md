@@ -1,7 +1,7 @@
 # Reflection
 
 ## What it is
-A generate, critique, revise loop run by one agent on its own output. The agent writes a draft, judges it against the task, and rewrites it using that feedback, repeating until the critique passes or a round limit is reached. It belongs to the family of ideas behind Reflexion and Self-Refine, and is often called an evaluator-optimizer loop. The critic is part of the same agent, so it shares the agent's knowledge and, to a degree, its blind spots.
+The agent checks and improves its own work before handing it over. It writes a draft, critiques it against the task, and rewrites it using its own feedback, repeating until the draft passes or a round limit is reached. Because the same agent both writes and judges, it can miss the same things twice.
 
 ## When to use it
 - The output has a quality bar that can be stated: tone, correctness, format, completeness.

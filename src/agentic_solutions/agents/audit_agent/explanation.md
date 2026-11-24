@@ -1,7 +1,7 @@
 # Audit
 
 ## What it is
-Durable, queryable records of what an agent system did: the inputs it received, each action and tool call it made, the decisions taken and who took them, the outputs, and when each happened. The records outlive the run that produced them, so people can come back later and ask what happened, in one run or across thousands: which runs touched a given customer, why an action was taken, where a class of failures began. It is the ledger of the system, kept for accountability, compliance, incident review and evaluation, not a display for watching a run as it happens. What makes a record useful for audit is that it is structured, tied to the run and actor that produced it, protected from later change, and retained for as long as policy requires.
+A permanent record of what an agent did: what it was asked, which tools it used, what it decided, who approved what, and when. Unlike watching a run live, the record stays after the run ends, so people can come back weeks later and ask "why did it do that?" or "which runs touched this customer?". To be trusted, the records must be complete, linked to the run that made them, and protected from being changed afterwards.
 
 ## When to use it
 - You need to answer questions after the fact, such as which runs touched a given customer or what the agent did last Tuesday.

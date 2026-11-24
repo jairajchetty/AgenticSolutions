@@ -1,7 +1,7 @@
 # Routing
 
 ## What it is
-Classify each incoming request and hand it to the one handler best suited to it. A handler can be a prompt, a model, a tool chain or a whole agent. The classifier does not solve the request; it decides who does, once, and the chosen handler then owns the request to the end. The same mechanism serves two purposes: specialisation, where each kind of request gets instructions and tools tuned to it, and cost control, where easy requests go to a cheaper model and hard ones to a stronger model.
+A front desk for requests. Each incoming request is sorted by type and sent to the one handler best suited to it, such as a refunds desk or a technical help desk, which then deals with it to the end. Routing gives each kind of request the right expertise, and saves money by sending easy requests to a cheaper model.
 
 ## When to use it
 - Requests fall into a few clear kinds, such as billing, technical and everything else, and each kind needs different instructions or tools.

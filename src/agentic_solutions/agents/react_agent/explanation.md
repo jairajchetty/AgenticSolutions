@@ -1,7 +1,7 @@
 # ReAct
 
 ## What it is
-A loop in which the model alternates between reasoning and acting (Yao et al., "ReAct: Synergizing Reasoning and Acting"). Each step leaves a visible trace: a short thought about what is needed, an action (a tool call), and the observation that comes back, which feeds the next thought. The loop ends when the model replies in plain text instead of requesting another call, or when a round limit is reached. Each round's decision rests on what the previous tools actually returned, not on a plan fixed in advance.
+The agent thinks, acts, looks at the result, and repeats. At each step it writes a short thought about what it needs, uses a tool such as a search or a calculator, and reads what comes back before deciding the next step. It stops when it has enough to answer, or when it reaches a step limit. The name is short for "reasoning and acting" (Yao et al.).
 
 ## When to use it
 - The path to the answer depends on what the tools return, so the steps cannot be listed in advance.

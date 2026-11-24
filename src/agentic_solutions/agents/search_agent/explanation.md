@@ -1,7 +1,7 @@
 # Search
 
 ## What it is
-Reasoning treated as exploring a space of possibilities. Instead of committing to one line of thought, the model proposes several candidate next steps, an evaluator rates them, weak candidates are dropped, and promising ones are expanded further, until a candidate is good enough or the budget is spent. Tree of Thoughts and LATS (Language Agent Tree Search) are well-known forms; they differ in how candidates are rated and how the next one to expand is chosen.
+Instead of following one line of thought, the agent explores several. It comes up with a few possible next steps, rates them, drops the weak ones and develops the promising ones further, much as a chess player looks a few moves ahead. It stops when one option is good enough or its budget runs out; Tree of Thoughts and LATS are well-known examples.
 
 ## When to use it
 - Problems where a wrong early step is costly and hard to undo: puzzles, constrained planning, code that must pass tests.
