@@ -16,17 +16,19 @@ The graph
                                                  |                     |
                                                  +-(> limit)-> approval ⏸  (refused) -> agent
                          approval -approve-> submit_po
-                                  -edit / prices re-quoted-> policy
+                                  -edit / approve on expired quotes-> policy
                                   -reject-> agent
 
 Rules that keep the guarantee
 -----------------------------
 * `propose_order` is answered by exactly one ToolMessage, written by whichever
   node ends the proposal (policy, approval or submit_po).
-* On resume, `approval` re-runs from its first line. Before `interrupt()` it
-  only reads, except for a re-quote, which writes and then ends the pass
-  without pausing. `approval_requested` is recorded once per version, checked
-  against the ERP's audit trail, so a resume never records it twice.
+* On resume, `approval` re-runs from its first line, so before `interrupt()`
+  it only reads, plus `approval_requested`, recorded once per version (checked
+  against the ERP's audit trail, so a resume never records it twice).
+* Expired quotes are re-quoted in `policy`, before the policy decides or the
+  card is shown, and again in `approval` after an approve. A reject or edit is
+  always honoured, even if the quotes expired while the card was open.
 * The token is issued inside `submit_po`, at call time, so it never reaches
   the checkpoint. Its idempotency key `req_id:version` makes a re-run return
   the same PO instead of ordering twice.
@@ -74,6 +76,7 @@ EXPIRED = "This request has expired. Ask the agent to draft it again."
 UNAVAILABLE = "The ERP system is unavailable. Try again shortly."
 NO_APPROVER = "No approver identity for this run."
 BAD_DECISION = "The decision must be approve, edit or reject."
+STEP_LIMIT = "I've reached the step limit for this request."
 BAD_EDITS = "Edits must name SKUs on this order, each with a quantity from 1 to 999."
 
 
@@ -181,9 +184,9 @@ def build_graph(
         now = clock()
         return any(now >= line["quote_expires_at_ts"] for line in req["lines"])
 
-    async def rebuild(tenant: str, pending: dict, quantities: dict[str, int], *, all_lines: bool):
-        """Re-quote changed (or every) line, write a new version, and send it back to policy."""
-        req, now, lines, requoted = pending["req"], clock(), [], False
+    async def requote(tenant: str, req: dict, quantities: dict[str, int], *, all_lines: bool) -> bool:
+        """Re-quote changed (or every) line and write a new version. True if prices were re-quoted."""
+        now, lines, requoted = clock(), [], False
         for line in req["lines"]:
             quantity = quantities.get(line["sku"], line["quantity"])
             stale = now >= line["quote_expires_at_ts"]
@@ -194,6 +197,11 @@ def build_graph(
             else:
                 lines.append({"quote_id": line["quote_id"]})
         await call("update_requisition", tenant, req_id=req["req_id"], lines=lines)
+        return requoted
+
+    async def rebuild(tenant: str, pending: dict, quantities: dict[str, int], *, all_lines: bool):
+        """Write a new version and send it back to policy for a fresh decision."""
+        requoted = await requote(tenant, pending["req"], quantities, all_lines=all_lines)
         return Command(goto="policy", update={"pending": {**pending, "requoted": requoted}})
 
     async def explain_tool_error(tenant: str, pending: dict, err: ErpToolError) -> Command:
@@ -220,12 +228,15 @@ def build_graph(
         rounds = state.get("tool_rounds", 0)
         proposals = state.get("proposals", 0)
         llm = (llm_factory or get_llm)()
-        if rounds >= MAX_TOOL_ROUNDS - 1 or proposals >= MAX_PROPOSALS:
-            llm = llm.bind_tools(tools, tool_choice=NO_TOOLS)
-        else:
-            llm = llm.bind_tools(tools)
+        # Up to MAX_TOOL_ROUNDS tools passes; the call after the last one must answer in text.
+        capped = rounds >= MAX_TOOL_ROUNDS or proposals >= MAX_PROPOSALS
+        llm = llm.bind_tools(tools, tool_choice=NO_TOOLS) if capped else llm.bind_tools(tools)
         reply = await llm.ainvoke([SystemMessage(SYSTEM_PROMPT), *state["messages"]], config)
         calls = reply.tool_calls
+        if capped and calls:
+            # Defence in depth: a model that ignores tool_choice still cannot pass the caps.
+            reply = AIMessage(reply.text.strip() or STEP_LIMIT)
+            calls = []
         if not calls:
             return Command(goto="ask", update={"messages": [reply]})
         if len(calls) == 1 and calls[0]["name"] == "propose_order":
@@ -245,6 +256,15 @@ def build_graph(
         if req["status"] != "draft":
             return Command(goto="agent", update=_answer(
                 pending, f"{req['req_id']} was already ordered as {req.get('po_number')}."))
+        try:
+            # Card time (and auto-approval time): expired quotes are re-quoted
+            # here, so the version a person or the policy decides on is fresh.
+            if expired(req):
+                await requote(tenant, req, {}, all_lines=True)
+                req = await call("get_requisition", tenant, req_id=pending["req_id"])
+                pending = {**pending, "requoted": True}
+        except ErpToolError as err:
+            return await explain_tool_error(tenant, pending, err)
         pending = {**pending, "req": req}
         try:
             if not order_policy.needs_person(req["total_zar"], auto_limit_zar):
@@ -263,10 +283,9 @@ def build_graph(
         tenant, pending = _tenant(config), state["pending"]
         req = pending["req"]
         try:
-            # Everything up to interrupt() re-runs on resume: reads only, or a
-            # re-quote that writes and then ends this pass without pausing.
-            if expired(req):
-                return await rebuild(tenant, pending, {}, all_lines=True)
+            # Everything up to interrupt() re-runs on resume, so it only reads
+            # (plus approval_requested, once per version). Quotes were checked
+            # in policy; a decision sent after they expire is still honoured.
             trail = await call("get_audit_trail", tenant, req_id=req["req_id"])
             if not any(e["event"] == "approval_requested" and e["version"] == req["version"]
                        for e in trail):

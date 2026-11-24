@@ -57,6 +57,13 @@ class RecordingModel(ScriptedChatModel):
         return bound
 
 
+class StubbornModel(RecordingModel):
+    """Ignores tool_choice, like a misbehaving provider would."""
+
+    def bind_tools(self, tools, **kwargs):
+        return super().bind_tools(tools, **kwargs).model_copy(update={"tool_choice": None})
+
+
 def call(name, **args):
     return AIMessage(content="", tool_calls=[{"name": name, "args": args, "id": "x"}])
 
@@ -100,10 +107,11 @@ def walk(messages, *, repropose=False):
     return f"Done: {last.content}"
 
 
-def model_factory(reply=walk):
+def model_factory(reply=walk, model_cls=None):
     script = Script(rules=(Rule(lambda _t: True, reply, kind="tools"),),
                     fallback="I can only answer in text now.")
-    return lambda: RecordingModel(script=script, latency=(0, 0), tokens_per_second=0)
+    cls = model_cls or RecordingModel
+    return lambda: cls(script=script, latency=(0, 0), tokens_per_second=0)
 
 
 # ----------------------------------------------------------------- fixtures
@@ -139,13 +147,14 @@ def issued():
     return []
 
 
-def make_graph(erp, clock, issued, reply=walk):
+def make_graph(erp, clock, issued, reply=walk, model_cls=None):
     def issue_token(claims):
         issued.append(dict(claims))
         return issue(claims, SECRET, now=clock())
 
     return build_graph(erp=erp, issue_token=issue_token, auto_limit_zar=LIMIT,
-                       checkpointer=InMemorySaver(), llm_factory=model_factory(reply), clock=clock)
+                       checkpointer=InMemorySaver(), llm_factory=model_factory(reply, model_cls),
+                       clock=clock)
 
 
 def cfg(thread="t1", approver=APPROVER):
@@ -377,6 +386,44 @@ async def test_bound_tools_exclude_submit_and_record(erp, store, clock, issued):
     assert all(set(n) == names for n, _ in BINDS)
 
 
+async def test_reject_after_quotes_expire_is_honoured(erp, store, clock, issued):
+    g, c = make_graph(erp, clock, issued), cfg()
+    await say(g, LAPTOPS, c)
+    clock.t += 31 * 60  # the quotes expire while the card is open
+    state = await decide(g, c, decision="reject", reason="Not this quarter")
+    assert state.next == ("ask",)
+    assert events(store) == ["created", "approval_requested", "rejected"]
+    assert tool_messages(state)[-1].content == (
+        "The approver rejected this order. Reason: Not this quarter.")
+    assert issued == []
+
+
+async def test_edit_after_quotes_expire_is_honoured(erp, store, clock, issued):
+    g, c = make_graph(erp, clock, issued), cfg()
+    await say(g, LAPTOPS, c)
+    clock.t += 31 * 60
+    state = await decide(g, c, decision="edit", edits=[{"sku": "LAP-001", "quantity": 10}])
+    assert state.next == ("approval",)
+    p = payload(state)
+    assert p["version"] == 2 and p["lines"][0]["quantity"] == 10
+    assert events(store) == ["created", "approval_requested", "updated", "approval_requested"]
+
+
+async def test_expired_quotes_are_requoted_before_auto_approval(erp, store, clock, issued):
+    def slow(messages):
+        # Draft the order, then let the quotes expire before proposing it.
+        reply = walk(messages)
+        if isinstance(reply, AIMessage) and reply.tool_calls[0]["name"] == "propose_order":
+            clock.t += 31 * 60
+        return reply
+
+    g, c = make_graph(erp, clock, issued, reply=slow), cfg()
+    state = await say(g, KEYBOARDS, c)
+    assert state.next == ("ask",)
+    assert events(store) == ["created", "updated", "auto_approved", "submitted"]
+    assert issued[-1]["version"] == 2
+
+
 async def test_tool_round_cap_ends_turn_with_text(erp, store, clock, issued):
     g = make_graph(erp, clock, issued, reply=lambda _m: call("check_budget", cost_centre="HQ-IT"))
     c = cfg()
@@ -385,10 +432,10 @@ async def test_tool_round_cap_ends_turn_with_text(erp, store, clock, issued):
     final = state.values["messages"][-1]
     assert isinstance(final, AIMessage) and not final.tool_calls
     assert final.content == "I can only answer in text now."
-    # The 8th model call is bound with tool_choice none, so 7 tool rounds ran.
-    assert len(BINDS) == MAX_TOOL_ROUNDS
-    assert [choice for _, choice in BINDS] == [None] * 7 + [{"type": "none"}]
-    assert len(tool_messages(state)) == MAX_TOOL_ROUNDS - 1
+    # 8 tools passes ran; the 9th model call is bound with tool_choice none.
+    assert len(BINDS) == MAX_TOOL_ROUNDS + 1
+    assert [choice for _, choice in BINDS] == [None] * 8 + [{"type": "none"}]
+    assert len(tool_messages(state)) == MAX_TOOL_ROUNDS
     # The next turn starts with a fresh allowance.
     BINDS.clear()
     await say(g, "And now?", c)
@@ -410,23 +457,74 @@ async def test_proposal_cap(erp, store, clock, issued):
     assert state.values["messages"][-1].content == "I can only answer in text now."
 
 
+async def test_caps_hold_when_the_model_ignores_tool_choice(erp, store, clock, issued):
+    g = make_graph(erp, clock, issued, model_cls=StubbornModel,
+                   reply=lambda _m: call("check_budget", cost_centre="HQ-IT"))
+    state = await say(g, "How much budget is left?", cfg())
+    assert state.next == ("ask",)
+    final = state.values["messages"][-1]
+    assert isinstance(final, AIMessage) and not final.tool_calls
+    assert final.content == "I've reached the step limit for this request."
+    assert len(tool_messages(state)) == MAX_TOOL_ROUNDS
+
+    BINDS.clear()
+    g = make_graph(erp, clock, issued, model_cls=StubbornModel,
+                   reply=lambda m: walk(m, repropose=True))
+    c = cfg(thread="t2")
+    state = await say(g, LAPTOPS, c)
+    pauses = 0
+    while state.next == ("approval",):
+        pauses += 1
+        state = await decide(g, c, decision="reject", reason="no")
+    assert pauses == MAX_PROPOSALS
+    assert state.next == ("ask",)
+    assert state.values["messages"][-1].content == "I've reached the step limit for this request."
+
+
+class Flaky:
+    """Delegates to the real ERP until one of `fail_on` is called while `down`."""
+
+    def __init__(self, erp, fail_on=None):
+        self.erp, self.fail_on, self.down = erp, fail_on, False
+
+    async def call(self, tool, args):
+        if self.down and (self.fail_on is None or tool in self.fail_on):
+            raise ErpUnavailable("The ERP system is unavailable.")
+        return await self.erp.call(tool, args)
+
+
+DOWN = "The ERP system is unavailable. Try again shortly."
+
+
 async def test_erp_down_raises_user_facing_error(erp, store, clock, issued):
-    class Flaky:
-        down = False
-
-        async def call(self, tool, args):
-            if self.down:
-                raise ErpUnavailable("The ERP system is unavailable.")
-            return await erp.call(tool, args)
-
-    flaky = Flaky()
+    flaky = Flaky(erp)
     g, c = make_graph(flaky, clock, issued), cfg()
     state = await say(g, LAPTOPS, c)
     assert state.next == ("approval",)
     flaky.down = True
-    with pytest.raises(UserFacingError, match="The ERP system is unavailable. Try again shortly."):
+    with pytest.raises(UserFacingError, match=DOWN):
         await decide(g, c, decision="approve")
     assert issued == []
+
+
+async def test_erp_down_in_policy_raises_user_facing_error(erp, store, clock, issued):
+    flaky = Flaky(erp, fail_on={"get_requisition"})
+    flaky.down = True
+    g, c = make_graph(flaky, clock, issued), cfg()
+    with pytest.raises(UserFacingError, match=DOWN):
+        await say(g, KEYBOARDS, c)
+    assert (await g.aget_state(c)).next == ("policy",)
+    assert issued == []
+
+
+async def test_erp_down_in_submit_po_raises_user_facing_error(erp, store, clock, issued):
+    flaky = Flaky(erp, fail_on={"submit_purchase_order"})
+    flaky.down = True
+    g, c = make_graph(flaky, clock, issued), cfg()
+    with pytest.raises(UserFacingError, match=DOWN):
+        await say(g, KEYBOARDS, c)
+    assert (await g.aget_state(c)).next == ("submit_po",)
+    assert events(store) == ["created", "auto_approved"]
 
 
 async def test_missing_approver_is_an_error_not_a_default(erp, store, clock, issued):

@@ -95,7 +95,13 @@ async def chat(erp, issue_token, limit: float) -> None:
         state = await graph.aget_state(config)
         if not state.next:
             break
-        pause = state.tasks[0].interrupts[0].value
+        interrupts = [i for task in state.tasks for i in task.interrupts]
+        if not interrupts:
+            # A node failed (e.g. the ERP went down in policy or submit_po), so
+            # nothing is waiting for input. The error was printed above.
+            print("\nThe run stopped. Start the agent again to retry.")
+            break
+        pause = interrupts[0].value
         if isinstance(pause, dict) and pause.get("kind") == "approval_request":
             show_card(pause)
             graph_input = Command(resume=await ask_decision(pause))
