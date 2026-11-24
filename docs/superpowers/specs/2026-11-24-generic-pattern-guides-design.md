@@ -91,7 +91,7 @@ Section 7 has no denylist.
 
 All 20 existing Guides are rewritten into the format. The generic body is written fresh, not converted mechanically: role and flow language instead of node walkthroughs. Facts must stay accurate. Each Studio section's Mapping must name every node the diagram shows.
 
-The new Approval Guide (separate spec, `2026-11-24-approval-pattern-mcp-design.md`) is written in this format from the start. Milestone 3's three rewritten Guides (ReAct, Reflection, Planning) also follow this format. The M3 plan gets a pointer.
+The new Approval Guide (separate spec, `2026-11-24-approval-pattern-mcp-design.md`) is written in this format from the start. If Milestone 3 (deferred for now) is resumed later, its three rewritten Guides (ReAct, Reflection, Planning) follow this format.
 
 ## 8. Out of scope / left to the builder
 
@@ -103,7 +103,7 @@ The new Approval Guide (separate spec, `2026-11-24-approval-pattern-mcp-design.m
 
 ## 9. Builder-check decisions (builder's calls)
 
-1. **Which Guides.** This work comes before M3, so it migrates every Guide present at the time: all 20 catalog folders, including the three skeleton Guides (react, reflection, plan_execute), which M3 later rewrites again as live.
+1. **Which Guides.** M3 is deferred, so this work migrates every Guide present at the time: all 20 catalog folders, including the three skeleton Guides (react, reflection, plan_execute), which stay Guide-only skeletons.
    - The current Approval Guide (`interrupt_chat_agent`) gets the **generic Approval body** from the Approval spec §3 now.
    - Its Studio section says honestly that this demo currently shows only the pause mechanism and that the full approval demo comes later. The Approval spec then moves the Guide to `approval_agent`.
 2. **Migration slicing.** Guides migrate in category batches. `tests/test_guides.py` carries a temporary `UNMIGRATED` set, and old-format Guides are checked by the old rules. The final task asserts `UNMIGRATED` is empty and deletes the old-format rules, so the suite stays green at every commit.

@@ -6,10 +6,9 @@
   - The Studio spec: §3 architecture, §5 events, §8 offline mode, §9 sessions, §9b host.
   - The Catalog spec: §3 taxonomy, entry `governance/approval`.
   - The Blueprint redesign spec: UI.
-  - The M3 spec: tool calling in the scripted model, tools, and the local Live switch.
   - The Generic Guides spec: the format for the new Guide.
 - **Branch:** `feature/approval-mcp`.
-- **Order:** this spec is built **after Milestone 3**. It reuses M3's scripted tool calling, its `ToolNode` handling and the Live switch.
+- **Order (revised 2026-11-24):** Milestone 3 is **deferred** (the person's decision). This spec is built **after the Generic Guides spec and without M3**. It includes the one M3 capability it needs: tool calling in the scripted offline model (§9.6). The local Live switch is out of scope here.
 
 ## 1. Intent
 
@@ -214,7 +213,9 @@ START → ask ─(route)→ agent ─(tool calls?)→ tools → agent
     - "Order 3 keyboards for CT-OPS": auto-approved.
     - "Order 40 monitors for JHB-FIN": over budget, so the submit is refused and explained.
   - The generic fallback drafts a small auto-approved order.
-- **Live:** with M3's local Live switch, Claude drives the same tools. The MCP server and approvals behave identically.
+- **Live:** the web Live switch is deferred with M3, so the web demo runs offline (scripted model, real MCP server).
+  - The CLI (`python -m agentic_solutions.agents.approval_agent`) uses real Claude through `get_llm()`, like the other agents' CLIs. It drives the same MCP server, and approvals happen at the terminal.
+  - When web Live mode is built later, nothing in this design changes: only the model factory does.
 
 ## 6. Configuration
 
@@ -242,7 +243,7 @@ START → ask ─(route)→ agent ─(tool calls?)→ tools → agent
   - **Reject:** returns to the agent with the reason.
   - **Resume re-run of `submit_po`:** exactly one PO.
   - The model's bound tools never include `submit_purchase_order`.
-  - The cap on agent↔tools rounds is the same as ReAct's.
+  - The cap on agent↔tools rounds is 8 per user turn (§9.6).
 - **API:**
   - Resume schema validation.
   - 409 when the thread is not paused at approval.
@@ -295,7 +296,13 @@ START → ask ─(route)→ agent ─(tool calls?)→ tools → agent
      - `requested_by` is `"agent"`.
      - `reason` is `"approved"` or `"under limit"`.
    - **Separation of duties is a stated demo limitation.** The visitor both asks the agent and approves, and the Guide's Studio section says so. In a real deployment the approver comes from an identity provider and must differ from the requester. The server enforces `approver != requested_by`, which holds trivially here.
-6. **Ordering with M3.** M3 is built and merged before this plan starts, and this plan targets M3's code as built. Any extra scripted-model capability needed for multi-call scripts goes into this plan. The model-facing MCP wrappers are standard tool objects, so M3's scripted `bind_tools` works with them.
+6. **No M3 dependency (revised).** M3 is deferred, so this plan **includes** the scripted-model work it needs:
+   - `bind_tools(tools, tool_choice=...)`, honouring `"none"`.
+   - Rule replies that are an `AIMessage` with `tool_calls`.
+   - Callable rules that see the whole history, for multi-call scripts: tool calls, then `propose_order`, then the decision-dependent follow-up.
+   - Kind-restricted rules (text or tools).
+
+   Design these as M3's plan Task 2 describes (`docs/superpowers/plans/2026-11-23-live-cognitive-patterns-m3.md`) so M3 can reuse them later. `with_structured_output` isn't needed here and stays out. The agent↔tools round cap is defined in this spec: **8 per user turn**, with the final call using `tool_choice="none"`.
 7. **`human_in_loop` removal.**
    - Existing tests that use `human_in_loop` as the generic interrupt-chat pattern move to `chat_loop`, which has the same mechanics.
    - `/api/patterns` now lists `approval` and drops `human_in_loop`. The JS search fixture regenerates.
