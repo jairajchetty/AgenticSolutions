@@ -113,7 +113,7 @@ CATALOG: tuple[Category, ...] = (
             _p('governance', 'guardrails', 'Guardrails', 'Screen inputs and outputs for unsafe content',
                ('input filter', 'prompt injection', 'safety screen'), 'guardrail', 'secure_chat_agent'),
             _p('governance', 'approval', 'Approval', 'Pause for a human to sign off',
-               ('human-in-the-loop', 'HITL', 'interrupt', 'sign-off'), 'human_in_loop', 'interrupt_chat_agent'),
+               ('human-in-the-loop', 'HITL', 'interrupt', 'sign-off'), 'approval', 'approval_agent'),
             _p('governance', 'audit', 'Audit', 'Keep persistent, queryable records of every run',
                ('logging', 'traceability', 'run history', 'compliance'), None, 'audit_agent'),
             _p('governance', 'review', 'Review', 'Have a separate agent or a person check the result',

@@ -21,8 +21,9 @@ or makes a thread.
 import asyncio
 import json
 import logging
+import secrets
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from importlib import import_module
 from pathlib import Path
 from uuid import uuid4
@@ -34,6 +35,11 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.middleware.sessions import SessionMiddleware
 
+from agentic_solutions.agents.approval_agent.erp import ErpClient, HttpErpClient, InProcessErpClient
+from agentic_solutions.common import approval_tokens
+from agentic_solutions.mcp_servers.erp.config import ErpSettings
+from agentic_solutions.mcp_servers.erp.server import build_server
+from agentic_solutions.mcp_servers.erp.store import ErpStore
 from agentic_solutions.web import catalog
 from agentic_solutions.web.config import Settings
 from agentic_solutions.web.registry import AGENTS_DIR, PATTERNS, BuildContext, PatternSpec, offline_factory
@@ -47,6 +53,7 @@ log = logging.getLogger(__name__)
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 MODE = "offline"  # M1 has no Live mode yet
 NOT_FOUND = "not found"  # same text for unknown and unowned, so ownership isn't leaked
+NO_ERP_SECRET = "ERP_APPROVAL_SECRET must be set when ERP_MCP_URL is set"
 
 
 async def _open_sqlite_saver(path: str):
@@ -72,6 +79,34 @@ def _build_guard():
 
     torch.set_num_threads(2)  # concurrent guard calls must not oversubscribe the CPUs
     return ThreatGuard()
+
+
+async def _open_erp(settings: Settings, stack: AsyncExitStack, app: FastAPI,
+                    erp: ErpClient | None) -> tuple[ErpClient, bytes]:
+    """The approval demo's ERP client and approval secret (plan ruling 3).
+
+    With no URL, the ERP server runs in-process over MCP's in-memory transport,
+    on its own SQLite store, for the app's lifetime; the secret is random per
+    start unless one is set. With a URL, the server is another process, so the
+    two must share ERP_APPROVAL_SECRET and startup fails without it.
+    """
+    secret = settings.erp_approval_secret.encode("utf-8") if settings.erp_approval_secret else None
+    if erp is not None:  # a caller-supplied client (tests)
+        return erp, secret or secrets.token_bytes(32)
+    if settings.erp_mcp_url:
+        if secret is None:
+            raise RuntimeError(NO_ERP_SECRET)
+        return HttpErpClient(settings.erp_mcp_url), secret
+    secret = secret or secrets.token_bytes(32)
+    erp_settings = ErpSettings(db=settings.erp_db, secret=secret,
+                               auto_limit_zar=settings.erp_auto_approve_limit_zar,
+                               tenant_ttl_hours=settings.erp_tenant_ttl_hours)
+    store = ErpStore(erp_settings.db, secret=secret, auto_limit_zar=erp_settings.auto_limit_zar,
+                     tenant_ttl_hours=erp_settings.tenant_ttl_hours)
+    stack.callback(store.close)  # runs after the client below has closed (LIFO)
+    app.state.erp_store = store
+    client = await stack.enter_async_context(InProcessErpClient(build_server(store, erp_settings)))
+    return client, secret
 
 
 def _config(thread_id: str) -> dict:
@@ -154,9 +189,10 @@ def _catalog_listing(registry: dict[str, PatternSpec]) -> dict:
 
 
 def create_app(settings: Settings | None = None, *, checkpointer=None, guard=None,
-               registry: dict[str, PatternSpec] | None = None) -> FastAPI:
+               registry: dict[str, PatternSpec] | None = None, erp: ErpClient | None = None) -> FastAPI:
     """Build the app. ``registry`` (default ``PATTERNS``) is the set of runnable
-    demos; tests pass a larger one to see a catalog entry turn live."""
+    demos; tests pass a larger one to see a catalog entry turn live. ``erp``
+    (default: from settings, see ``_open_erp``) is the approval demo's ERP client."""
     settings = settings or Settings.from_env()
     registry = PATTERNS if registry is None else registry
     store = ThreadStore()
@@ -169,26 +205,27 @@ def create_app(settings: Settings | None = None, *, checkpointer=None, guard=Non
         # Sync graph nodes run in the loop's default executor: make it large (spec §9a).
         executor = ThreadPoolExecutor(max_workers=settings.worker_threads)
         asyncio.get_running_loop().set_default_executor(executor)
-        conn = None
-        saver = checkpointer
-        if saver is None:
-            saver, conn = await _open_sqlite_saver(settings.checkpoint_db)
-        threat_guard = guard if guard is not None else _build_guard()
-        graphs = {
-            pid: spec.build(BuildContext(
-                offline_factory(pid, settings.offline_latency_scale), saver, threat_guard))
-            for pid, spec in registry.items()
-        }
-        app.state.graphs = graphs
-        app.state.topologies = {pid: graph_topology(g) for pid, g in graphs.items()}
-        app.state.catalog_pages = _catalog_pages(registry, app.state.topologies)
-        app.state.catalog_listing = _catalog_listing(registry)
-        try:
+        async with AsyncExitStack() as stack:  # unwinds in reverse, on a failed start too
+            stack.callback(executor.shutdown, wait=False)
+            saver = checkpointer
+            if saver is None:
+                saver, conn = await _open_sqlite_saver(settings.checkpoint_db)
+                stack.push_async_callback(conn.close)
+            erp_client, erp_secret = await _open_erp(settings, stack, app, erp)
+            threat_guard = guard if guard is not None else _build_guard()
+            graphs = {
+                pid: spec.build(BuildContext(
+                    offline_factory(pid, settings.offline_latency_scale), saver, threat_guard,
+                    erp=erp_client,
+                    issue_token=lambda claims: approval_tokens.issue(claims, erp_secret),
+                    auto_limit_zar=settings.erp_auto_approve_limit_zar))
+                for pid, spec in registry.items()
+            }
+            app.state.graphs = graphs
+            app.state.topologies = {pid: graph_topology(g) for pid, g in graphs.items()}
+            app.state.catalog_pages = _catalog_pages(registry, app.state.topologies)
+            app.state.catalog_listing = _catalog_listing(registry)
             yield
-        finally:
-            if conn is not None:
-                await conn.close()
-            executor.shutdown(wait=False)
 
     app = FastAPI(title="Agentic Patterns Studio", lifespan=lifespan)
     app.state.store = store

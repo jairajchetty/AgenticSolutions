@@ -24,10 +24,10 @@ async def test_trigger_run_event_sequence():
 @pytest.mark.anyio
 async def test_chat_prime_pauses_then_resume_marks_resumed_node():
     cfg = {"configurable": {"thread_id": "b"}}
-    g, ev = await collect("human_in_loop", lambda s: s.start_input(), False, cfg)
+    g, ev = await collect("chat_loop", lambda s: s.start_input(), False, cfg)
     assert ev[-1]["status"] == "paused" and any(e["type"] == "interrupt" for e in ev)
-    spec = PATTERNS["human_in_loop"]
-    _, ev2 = await collect("human_in_loop", lambda s: s.make_input(s.samples[0]), True, cfg, graph=g)
+    spec = PATTERNS["chat_loop"]
+    _, ev2 = await collect("chat_loop", lambda s: s.make_input(s.samples[0]), True, cfg, graph=g)
     first = next(e for e in ev2 if e["type"] == "node_started")
     assert first["node"] == "ask" and first["resumed"] is True
     assert [(e["source"], e["target"]) for e in ev2 if e["type"] == "edge"] == [("ask", "answer"), ("answer", "ask")]

@@ -4,7 +4,8 @@ from agentic_solutions.web.registry import PATTERNS, BuildContext, offline_facto
 from agentic_solutions.web.offline.model import ScriptedChatModel
 from agentic_solutions.web.offline.scripts import SCRIPTS
 from agentic_solutions.web.topology import graph_topology
-from fakes import make_guard
+from fakes import UnreachableErp, make_guard, no_token
+import pytest
 from guide_format import SECTIONS
 from pathlib import Path
 import re
@@ -22,15 +23,27 @@ EXPECTED_EDGES = {
     "chat_loop": {("__start__", "ask"), ("answer", "ask"), ("ask", "__end__"), ("ask", "answer"), ("ask", "ask")},
     "guardrail": {("__start__", "ask"), ("ask", "__end__"), ("ask", "ask"), ("ask", "guard"),
                   ("guard", "answer"), ("guard", "refuse"), ("answer", "ask"), ("refuse", "ask")},
-    "human_in_loop": {("__start__", "ask"), ("answer", "ask"), ("ask", "__end__"), ("ask", "answer"), ("ask", "ask")},
+    "approval": {
+        ("__start__", "ask"),
+        ("ask", "agent"), ("ask", "ask"), ("ask", "__end__"),
+        ("agent", "tools"), ("agent", "policy"), ("agent", "ask"),
+        ("tools", "agent"),
+        ("policy", "submit_po"), ("policy", "approval"), ("policy", "agent"),
+        ("approval", "submit_po"), ("approval", "policy"), ("approval", "agent"),
+        ("submit_po", "ask"), ("submit_po", "agent"),
+    },
 }
 
+APPROVAL_SAMPLES = ("Order 12 laptops for the Cape Town office under CT-OPS",
+                    "Order 3 keyboards for CT-OPS", "Order 40 monitors for JHB-FIN")
+
 def ctx(pid):
-    return BuildContext(llm_factory=offline_factory(pid, latency_scale=0), checkpointer=InMemorySaver(), guard=make_guard())
+    return BuildContext(llm_factory=offline_factory(pid, latency_scale=0), checkpointer=InMemorySaver(),
+                        guard=make_guard(), erp=UnreachableErp(), issue_token=no_token)
 
 def test_catalog_order_and_modes():
     assert [(p.id, p.mode) for p in PATTERNS.values()] == [
-        ("qa", "trigger"), ("chat_loop", "chat"), ("guardrail", "chat"), ("human_in_loop", "chat")]
+        ("qa", "trigger"), ("chat_loop", "chat"), ("guardrail", "chat"), ("approval", "chat")]
 
 def test_topology_matches_expected_edges_for_every_pattern():
     for pid, spec in PATTERNS.items():
@@ -44,6 +57,8 @@ def test_every_sample_hits_a_specific_rule():
             if pid == "guardrail" and "ignore previous instructions" in sample.lower():
                 continue  # refused by the guard; the LLM is never called
             m = ScriptedChatModel(script=script, latency=(0, 0), tokens_per_second=0)
+            if pid == "approval":
+                m = m.bind_tools([])  # the approval agent always calls a tool-bound model
             m.invoke([("user", sample)])
             assert m.matched_rule is not None, (pid, sample)
 
@@ -86,5 +101,27 @@ def test_titles_match_spec():
         "Single LLM call",
         "Loop with conditional routing and memory",
         "Input guardrail (embedding threat screen)",
-        "Human-in-the-loop: `interrupt()` + checkpointer",
+        "Approval: propose, approve, then act",
     ]
+
+
+def test_approval_registered_and_human_in_loop_gone():
+    assert "human_in_loop" not in PATTERNS and "human_in_loop" not in SCRIPTS
+    spec = PATTERNS["approval"]
+    assert spec.title == "Approval: propose, approve, then act"
+    assert spec.summary == ("The agent drafts a purchase order; a policy or you approve the exact "
+                            "order before the ERP accepts it.")
+    assert spec.mode == "chat"
+    assert spec.explanation_path == AGENTS.resolve() / "approval_agent" / "explanation.md"
+    assert spec.samples == APPROVAL_SAMPLES
+    assert "approval" in SCRIPTS
+
+
+def test_approval_build_needs_an_erp():
+    with pytest.raises(RuntimeError, match="^the approval demo needs an ERP client$"):
+        PATTERNS["approval"].build(BuildContext(offline_factory("approval", 0), InMemorySaver(), None))
+
+
+def test_build_context_erp_defaults():
+    c = BuildContext(offline_factory("qa", 0), InMemorySaver(), None)
+    assert (c.erp, c.issue_token, c.auto_limit_zar) == (None, None, 5000)
