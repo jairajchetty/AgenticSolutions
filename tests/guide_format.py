@@ -18,11 +18,7 @@ OLD_SECTIONS = ["What it is", "When to use it", "How this graph works", "LangGra
 ALL_FOLDERS = sorted(p.parent.name for p in AGENTS.glob("*/explanation.md"))
 
 # Folders still in the old format. Shrinks to empty as batches migrate.
-UNMIGRATED: set[str] = {
-    "audit_agent", "autonomous_agent", "episodic_memory_agent", "event_driven_agent",
-    "knowledge_graph_agent", "review_agent", "routing_agent",
-    "semantic_memory_agent", "workflow_agent",
-}
+UNMIGRATED: set[str] = set()
 MIGRATED = sorted(set(ALL_FOLDERS) - UNMIGRATED)
 OLD = sorted(UNMIGRATED)
 
