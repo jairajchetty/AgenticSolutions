@@ -5,6 +5,7 @@ from agentic_solutions.web.offline.model import ScriptedChatModel
 from agentic_solutions.web.offline.scripts import SCRIPTS
 from agentic_solutions.web.topology import graph_topology
 from fakes import make_guard
+from guide_format import NEW_SECTIONS, UNMIGRATED
 from pathlib import Path
 import re
 
@@ -16,7 +17,8 @@ def test_every_explanation_has_required_sections():
     files = sorted(AGENTS.glob("*/explanation.md"))
     assert len(files) >= 4
     for f in files:
-        assert re.findall(r"^## (.+)$", f.read_text(), re.M) == REQUIRED, f
+        expected = REQUIRED if f.parent.name in UNMIGRATED else NEW_SECTIONS
+        assert re.findall(r"^## (.+)$", f.read_text(), re.M) == expected, f
 
 EXPECTED_EDGES = {
     "qa": {("__start__", "answer"), ("answer", "__end__")},
