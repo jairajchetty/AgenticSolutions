@@ -835,6 +835,18 @@ h3, .purpose-body h2 {
 .approval-table tbody tr + tr > * { border-top: 1px solid var(--rule); }
 .approval-table tfoot > tr > * { font-weight: 700; border-top: 1.5px solid var(--ink); }
 .approval-table .num { text-align: right; white-space: nowrap; }
+/* While quantities are edited, the quoted prices and totals are stale: muted,
+   struck through, and labelled until the re-quote arrives. */
+.is-editing .approval-quoted { color: var(--muted-ink); text-decoration: line-through; }
+.approval-table tfoot > tr.approval-stale > * {
+  padding-top: 0;
+  font-weight: 400;
+  font-style: italic;
+  color: var(--muted-ink);
+  border-top: 0;
+}
+.approval-stale { color: var(--muted-ink); font-style: italic; }
+.approval-stale[hidden] { display: none; }
 .approval-item { font-weight: 400; }
 .approval-name { display: block; }
 .approval-sku { display: block; font-family: var(--font-code); font-size: 0.8125rem; color: var(--muted-ink); }

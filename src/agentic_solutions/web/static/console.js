@@ -17,7 +17,8 @@ import { approvalView, resumeBody, REASON_MAX } from "./approval.js";
 const ENDED_TEXT = "This conversation has ended. Start a New chat.";
 const DECIDE_FIRST = "Decide on the order first";
 const OVER_BUDGET = "This total is over the remaining budget; the ERP will refuse it.";
-const NO_CHANGES = "Change at least one quantity, or choose Approve.";
+const NO_CHANGES = "Change at least one quantity, or close Edit quantities to approve as quoted.";
+const REQUOTED_LATER = "Re-quoted after you submit changes";
 const QTY_MIN = 1;
 const QTY_MAX = 999;
 
@@ -152,7 +153,7 @@ export function createConsole(el, { mode, samples = [], onSend, onDecide, onNewC
     table.append(element("caption", "visually-hidden", "Proposed order"));
     const thead = element("thead");
     const hr = element("tr");
-    for (const [text, cls] of [["Item", ""], ["Qty", "num"], ["Unit", "num"], ["Line total", "num"]]) {
+    for (const [text, cls] of [["Item", ""], ["Qty", "num"], ["Unit price", "num"], ["Line total", "num"]]) {
       const th = element("th", cls, text);
       th.scope = "col";
       hr.append(th);
@@ -176,7 +177,10 @@ export function createConsole(el, { mode, samples = [], onSend, onDecide, onNewC
       qtyInputs.push({ field, shown });
       controls.push(field);
       qty.append(shown, field);
-      tr.append(item, qty, element("td", "num", row.unit), element("td", "num", row.lineTotal));
+      // Prices and totals are quoted for the current quantities: while they
+      // are being edited these figures are stale, so they are muted.
+      tr.append(item, qty, element("td", "num approval-quoted", row.unit),
+        element("td", "num approval-quoted", row.lineTotal));
       tbody.append(tr);
     }
     const tfoot = element("tfoot");
@@ -184,13 +188,20 @@ export function createConsole(el, { mode, samples = [], onSend, onDecide, onNewC
     const totalLabel = element("th", "", "Total");
     totalLabel.scope = "row";
     totalLabel.colSpan = 3;
-    fr.append(totalLabel, element("td", "num approval-total", view.total));
-    tfoot.append(fr);
+    fr.append(totalLabel, element("td", "num approval-total approval-quoted", view.total));
+    const staleRow = element("tr", "approval-stale");
+    const staleCell = element("td", "", REQUOTED_LATER);
+    staleCell.colSpan = 4;
+    staleRow.append(staleCell);
+    tfoot.append(fr, staleRow);
     table.append(thead, tbody, tfoot);
     wrap.append(table);
     box.append(wrap);
 
+    // The total also sits here, so it is in view when the table scrolls (375 px).
     const facts = element("dl", "approval-facts");
+    const factStale = element("span", "approval-stale", ` · ${REQUOTED_LATER}`);
+    fact(facts, "Total", element("strong", "approval-quoted", view.total), factStale);
     fact(facts, "Cost centre", view.costCentre,
       ...(view.budgetRemaining ? [element("span", "approval-muted", ` · ${view.budgetRemaining} remaining`)] : []));
     if (view.policyReason) fact(facts, "Policy", view.policyReason);
@@ -233,18 +244,32 @@ export function createConsole(el, { mode, samples = [], onSend, onDecide, onNewC
     actions.append(approve, edit, reject);
     controls.push(approve, edit, reject, submitEdit, reason, rejectOrder);
 
+    // Approve commits exactly what the card shows, so it is available only
+    // while neither panel is open: then "Submit changes" or "Reject order" is
+    // the one way to commit. Disabled, it steps down from amber.
+    function refresh() {
+      const open = !editPanel.hidden || !rejectPanel.hidden;
+      approve.disabled = busy || open;
+      approve.classList.toggle("btn-primary", !approve.disabled);
+      approve.title = open ? "Close the open panel to approve the order as shown" : "";
+    }
     function setEditing(on) {
       editPanel.hidden = !on;
       edit.setAttribute("aria-expanded", String(on));
+      box.classList.toggle("is-editing", on);
+      staleRow.hidden = !on;
+      factStale.hidden = !on;
       for (const { field, shown } of qtyInputs) {
         if (!on) field.value = field.dataset.original;
         field.hidden = !on;
         shown.hidden = on;
       }
+      refresh();
     }
     function setRejecting(on) {
       rejectPanel.hidden = !on;
       reject.setAttribute("aria-expanded", String(on));
+      refresh();
     }
     setEditing(false);
     setRejecting(false);
@@ -300,7 +325,7 @@ export function createConsole(el, { mode, samples = [], onSend, onDecide, onNewC
     list.querySelector(":scope > .empty-hint")?.remove();
     list.append(box);
     prompt = box;
-    approval = { box, title, controls };
+    approval = { box, title, controls, refresh };
     syncControls();
     scroll();
     if (refocus) {  // a new card after an edit (or a re-quote): keyboard users land on it
@@ -481,6 +506,7 @@ export function createConsole(el, { mode, samples = [], onSend, onDecide, onNewC
     input.disabled = deciding;
     input.placeholder = deciding ? DECIDE_FIRST : placeholder;
     for (const c of approval?.controls ?? []) c.disabled = busy;
+    approval?.refresh();
     approval?.box.setAttribute("aria-busy", String(busy));
   }
 
