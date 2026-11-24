@@ -1,0 +1,356 @@
+{
+  "company": "Kestrelvale Trading (Pty) Ltd (fictional)",
+  "currency": "ZAR",
+  "suppliers": [
+    {
+      "supplier_id": "SUP-01",
+      "name": "Karoo Ridge Computing",
+      "lead_time_days": 5,
+      "rating": 4.6,
+      "preferred": true
+    },
+    {
+      "supplier_id": "SUP-02",
+      "name": "Clearwater Displays",
+      "lead_time_days": 7,
+      "rating": 4.3,
+      "preferred": true
+    },
+    {
+      "supplier_id": "SUP-03",
+      "name": "Fynbos Office Supply",
+      "lead_time_days": 2,
+      "rating": 4.1,
+      "preferred": false
+    },
+    {
+      "supplier_id": "SUP-04",
+      "name": "Highveld Furniture Works",
+      "lead_time_days": 14,
+      "rating": 4.4,
+      "preferred": true
+    },
+    {
+      "supplier_id": "SUP-05",
+      "name": "Umhlanga Network Systems",
+      "lead_time_days": 10,
+      "rating": 3.9,
+      "preferred": false
+    },
+    {
+      "supplier_id": "SUP-06",
+      "name": "Baobab Tech Distributors",
+      "lead_time_days": 3,
+      "rating": 4.0,
+      "preferred": false
+    }
+  ],
+  "cost_centres": [
+    {
+      "cost_centre": "CT-OPS",
+      "name": "Cape Town Operations",
+      "allocated": 300000,
+      "committed": 55000
+    },
+    {
+      "cost_centre": "JHB-FIN",
+      "name": "Johannesburg Finance",
+      "allocated": 150000,
+      "committed": 85000
+    },
+    {
+      "cost_centre": "DBN-LOG",
+      "name": "Durban Logistics",
+      "allocated": 200000,
+      "committed": 40000
+    },
+    {
+      "cost_centre": "HQ-IT",
+      "name": "Head Office IT",
+      "allocated": 500000,
+      "committed": 120000
+    }
+  ],
+  "catalogue": [
+    {
+      "sku": "LAP-001",
+      "name": "14-inch Business Laptop, 16 GB",
+      "category": "laptops",
+      "unit_price_zar": 12400,
+      "supplier_id": "SUP-01"
+    },
+    {
+      "sku": "LAP-002",
+      "name": "15-inch Business Laptop, 16 GB",
+      "category": "laptops",
+      "unit_price_zar": 13900,
+      "supplier_id": "SUP-01"
+    },
+    {
+      "sku": "LAP-003",
+      "name": "13-inch Lightweight Laptop, 16 GB",
+      "category": "laptops",
+      "unit_price_zar": 14800,
+      "supplier_id": "SUP-06"
+    },
+    {
+      "sku": "LAP-004",
+      "name": "14-inch Performance Laptop, 32 GB",
+      "category": "laptops",
+      "unit_price_zar": 16500,
+      "supplier_id": "SUP-01"
+    },
+    {
+      "sku": "LAP-005",
+      "name": "14-inch Rugged Field Laptop",
+      "category": "laptops",
+      "unit_price_zar": 17800,
+      "supplier_id": "SUP-06"
+    },
+    {
+      "sku": "LAP-006",
+      "name": "16-inch Workstation Laptop, 32 GB",
+      "category": "laptops",
+      "unit_price_zar": 18700,
+      "supplier_id": "SUP-01"
+    },
+    {
+      "sku": "MON-001",
+      "name": "24-inch Full HD Monitor",
+      "category": "monitors",
+      "unit_price_zar": 2900,
+      "supplier_id": "SUP-02"
+    },
+    {
+      "sku": "MON-002",
+      "name": "24-inch Height-Adjustable Monitor",
+      "category": "monitors",
+      "unit_price_zar": 3400,
+      "supplier_id": "SUP-02"
+    },
+    {
+      "sku": "MON-003",
+      "name": "27-inch QHD Monitor",
+      "category": "monitors",
+      "unit_price_zar": 4600,
+      "supplier_id": "SUP-02"
+    },
+    {
+      "sku": "MON-004",
+      "name": "27-inch 4K Monitor",
+      "category": "monitors",
+      "unit_price_zar": 6900,
+      "supplier_id": "SUP-06"
+    },
+    {
+      "sku": "MON-005",
+      "name": "32-inch 4K Monitor",
+      "category": "monitors",
+      "unit_price_zar": 7200,
+      "supplier_id": "SUP-02"
+    },
+    {
+      "sku": "MON-006",
+      "name": "34-inch Ultrawide Monitor",
+      "category": "monitors",
+      "unit_price_zar": 7400,
+      "supplier_id": "SUP-02"
+    },
+    {
+      "sku": "DCK-001",
+      "name": "USB-C Travel Dock",
+      "category": "docking stations",
+      "unit_price_zar": 1350,
+      "supplier_id": "SUP-01"
+    },
+    {
+      "sku": "DCK-002",
+      "name": "USB-C Docking Station",
+      "category": "docking stations",
+      "unit_price_zar": 2450,
+      "supplier_id": "SUP-01"
+    },
+    {
+      "sku": "DCK-003",
+      "name": "Dual-Display Docking Station",
+      "category": "docking stations",
+      "unit_price_zar": 3300,
+      "supplier_id": "SUP-01"
+    },
+    {
+      "sku": "DCK-004",
+      "name": "Thunderbolt Docking Station",
+      "category": "docking stations",
+      "unit_price_zar": 4200,
+      "supplier_id": "SUP-06"
+    },
+    {
+      "sku": "KBD-001",
+      "name": "Wired Keyboard",
+      "category": "keyboards",
+      "unit_price_zar": 380,
+      "supplier_id": "SUP-03"
+    },
+    {
+      "sku": "KBD-002",
+      "name": "Compact Wireless Keyboard",
+      "category": "keyboards",
+      "unit_price_zar": 540,
+      "supplier_id": "SUP-03"
+    },
+    {
+      "sku": "KBD-003",
+      "name": "Full-Size Wireless Keyboard",
+      "category": "keyboards",
+      "unit_price_zar": 690,
+      "supplier_id": "SUP-03"
+    },
+    {
+      "sku": "KBD-004",
+      "name": "Mechanical Keyboard",
+      "category": "keyboards",
+      "unit_price_zar": 1150,
+      "supplier_id": "SUP-03"
+    },
+    {
+      "sku": "KBD-005",
+      "name": "Ergonomic Split Keyboard",
+      "category": "keyboards",
+      "unit_price_zar": 1250,
+      "supplier_id": "SUP-03"
+    },
+    {
+      "sku": "MSE-001",
+      "name": "Wired Mouse",
+      "category": "mice",
+      "unit_price_zar": 190,
+      "supplier_id": "SUP-03"
+    },
+    {
+      "sku": "MSE-002",
+      "name": "Travel Mouse",
+      "category": "mice",
+      "unit_price_zar": 350,
+      "supplier_id": "SUP-03"
+    },
+    {
+      "sku": "MSE-003",
+      "name": "Wireless Mouse",
+      "category": "mice",
+      "unit_price_zar": 420,
+      "supplier_id": "SUP-03"
+    },
+    {
+      "sku": "MSE-004",
+      "name": "Ergonomic Vertical Mouse",
+      "category": "mice",
+      "unit_price_zar": 780,
+      "supplier_id": "SUP-03"
+    },
+    {
+      "sku": "MSE-005",
+      "name": "Precision Wireless Mouse",
+      "category": "mice",
+      "unit_price_zar": 990,
+      "supplier_id": "SUP-03"
+    },
+    {
+      "sku": "CHR-001",
+      "name": "Stackable Visitor Chair",
+      "category": "chairs",
+      "unit_price_zar": 1600,
+      "supplier_id": "SUP-04"
+    },
+    {
+      "sku": "CHR-002",
+      "name": "Task Chair",
+      "category": "chairs",
+      "unit_price_zar": 3200,
+      "supplier_id": "SUP-04"
+    },
+    {
+      "sku": "CHR-003",
+      "name": "Mesh-Back Task Chair",
+      "category": "chairs",
+      "unit_price_zar": 4500,
+      "supplier_id": "SUP-04"
+    },
+    {
+      "sku": "CHR-004",
+      "name": "Ergonomic Office Chair",
+      "category": "chairs",
+      "unit_price_zar": 6800,
+      "supplier_id": "SUP-04"
+    },
+    {
+      "sku": "CHR-005",
+      "name": "High-Back Executive Chair",
+      "category": "chairs",
+      "unit_price_zar": 9500,
+      "supplier_id": "SUP-04"
+    },
+    {
+      "sku": "DSK-001",
+      "name": "Fixed Desk, 1400 mm",
+      "category": "desks",
+      "unit_price_zar": 3900,
+      "supplier_id": "SUP-04"
+    },
+    {
+      "sku": "DSK-002",
+      "name": "Corner Desk, 1600 mm",
+      "category": "desks",
+      "unit_price_zar": 6200,
+      "supplier_id": "SUP-04"
+    },
+    {
+      "sku": "DSK-003",
+      "name": "Sit-Stand Desk, 1400 mm",
+      "category": "desks",
+      "unit_price_zar": 8900,
+      "supplier_id": "SUP-04"
+    },
+    {
+      "sku": "DSK-004",
+      "name": "Sit-Stand Desk, 1600 mm",
+      "category": "desks",
+      "unit_price_zar": 10400,
+      "supplier_id": "SUP-04"
+    },
+    {
+      "sku": "NET-001",
+      "name": "Cat6 Patch Cables, 2 m (10-pack)",
+      "category": "network gear",
+      "unit_price_zar": 420,
+      "supplier_id": "SUP-05"
+    },
+    {
+      "sku": "NET-002",
+      "name": "8-Port Gigabit Switch",
+      "category": "network gear",
+      "unit_price_zar": 1150,
+      "supplier_id": "SUP-05"
+    },
+    {
+      "sku": "NET-003",
+      "name": "Wi-Fi 6 Access Point",
+      "category": "network gear",
+      "unit_price_zar": 3600,
+      "supplier_id": "SUP-05"
+    },
+    {
+      "sku": "NET-004",
+      "name": "24-Port Managed Switch",
+      "category": "network gear",
+      "unit_price_zar": 7900,
+      "supplier_id": "SUP-05"
+    },
+    {
+      "sku": "NET-005",
+      "name": "Branch Firewall Appliance",
+      "category": "network gear",
+      "unit_price_zar": 14500,
+      "supplier_id": "SUP-05"
+    }
+  ]
+}
