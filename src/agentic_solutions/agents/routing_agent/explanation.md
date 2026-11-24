@@ -1,7 +1,7 @@
 # Routing
 
 ## What it is
-Classify each incoming request and hand it to the one handler best suited to it. A handler can be a prompt, a model, a tool chain or a whole agent. The router does not solve the request; it decides who does, once, and the chosen handler then owns the request to the end. The same mechanism serves two purposes: specialisation, where each kind of request gets instructions and tools tuned to it, and cost control, where easy requests go to a cheaper model and hard ones to a stronger model.
+Classify each incoming request and hand it to the one handler best suited to it. A handler can be a prompt, a model, a tool chain or a whole agent. The classifier does not solve the request; it decides who does, once, and the chosen handler then owns the request to the end. The same mechanism serves two purposes: specialisation, where each kind of request gets instructions and tools tuned to it, and cost control, where easy requests go to a cheaper model and hard ones to a stronger model.
 
 ## When to use it
 - Requests fall into a few clear kinds, such as billing, technical and everything else, and each kind needs different instructions or tools.
@@ -36,10 +36,10 @@ Flow:
 - Cheaper and simpler than keeping a coordinator in charge when one decision is enough.
 
 ## Related patterns
-- The dividing line with [[collaboration/supervisor]]: Routing decides once and hands off for good. A supervisor keeps a coordinator in charge, calling workers in turn and deciding when the job is finished.
+- The dividing line with [[collaboration/supervisor]]: Routing decides once and hands off for good. A supervisor keeps a coordinator in charge, calling workers in turn or in parallel and deciding when the job is finished.
 - [[collaboration/swarm]] lets specialists hand a request on to each other; in Routing only the classifier decides where a request goes.
 - [[execution/workflow]] may contain a routing branch, but the rest of its path is fixed in code.
-- [[governance/guardrails]] often sits before the router, so requests it blocks do not reach a specialist.
+- [[governance/guardrails]] often sits before the classifier, so requests it blocks do not reach a specialist.
 
 ## How this Studio implements it
 

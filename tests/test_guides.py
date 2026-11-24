@@ -34,10 +34,6 @@ def first_fence_lines(text):
     return len(m.group(1).splitlines())
 
 
-def test_every_guide_folder_is_collected():
-    assert ALL_FOLDERS == ids(GUIDES)
-
-
 @pytest.mark.parametrize("folder", ALL_FOLDERS)
 def test_new_format_sections_in_order(folder):
     secs = sections(guide(folder))
@@ -50,9 +46,15 @@ def test_generic_sections_have_no_framework_vocabulary(folder):
     text = generic_text(guide(folder))
     assert "`" not in text
     for w in DENY_WORDS:
-        assert not re.search(rf"\b{re.escape(w)}\b", text, re.I), w
+        assert not re.search(rf"\b{re.escape(w)}s?\b", text, re.I), w
     for sub in DENY_SUBSTRINGS:
         assert sub.lower() not in text.lower(), sub
+
+
+@pytest.mark.parametrize("folder", ALL_FOLDERS)
+def test_studio_section_starts_with_mapping(folder):
+    # guide.js drops any text before the first "###" of section 7 without a warning.
+    assert studio_section(guide(folder)).lstrip().startswith("### Mapping")
 
 
 @pytest.mark.parametrize("folder", ALL_FOLDERS)

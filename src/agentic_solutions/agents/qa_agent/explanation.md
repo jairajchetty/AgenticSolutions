@@ -1,7 +1,7 @@
 # Single Agent
 
 ## What it is
-One model handles the whole task in a single pass: a request goes in, one model call runs with a fixed instruction, and one reply comes out. There is no loop, no memory between requests and no branching. It is the baseline every other pattern adds to, and the yardstick for whether that extra machinery earns its cost.
+One model handles the whole task in a single pass: a request goes in, one model call runs with a fixed instruction, and one reply comes out. There is no loop, no memory between requests and no branching. It is the baseline every other pattern adds to, and the yardstick for whether that extra machinery earns its cost. In multi-agent comparisons, "single agent" often means one agent looping over all the tools; that is [[cognitive/react]], and this Guide takes the narrow one-call baseline.
 
 ## When to use it
 - One-shot tasks with a clear input and output: summarise a text, classify a ticket, rewrite a sentence, extract fields.

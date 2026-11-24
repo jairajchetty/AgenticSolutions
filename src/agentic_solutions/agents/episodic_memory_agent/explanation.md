@@ -41,7 +41,7 @@ Flow:
 
 ## Related patterns
 - The dividing line with [[memory/session]]: Session is one conversation, held in that conversation's checkpoints. Episodic carries memories across conversations. Start a new conversation and Session starts empty; Episodic still has what it stored about that user.
-- [[memory/semantic]] looks up shared knowledge from documents, the same for every user; Episodic recalls this user's own history.
+- [[memory/semantic]] looks up shared knowledge from documents, not tied to one user's history; Episodic recalls this user's own history.
 - [[memory/knowledge-graph]] can hold facts about a user as structured relations instead of episodes.
 - [[governance/audit]] also keeps durable records of runs, but for people to inspect later, not for the agent to recall.
 

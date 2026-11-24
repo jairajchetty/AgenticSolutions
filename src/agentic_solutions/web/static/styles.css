@@ -809,8 +809,9 @@ h3, .purpose-body h2 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   overflow: hidden;
 }
-/* Sections pair up (Concepts | Trade-offs, Key code | Try this); "How this
-   graph works" spans the sheet. Hairlines are right/bottom shadows clipped by
+/* "How it works" and "Design considerations" span the sheet; "Trade-offs" and
+   "Related patterns" pair up below them. The Studio section is a full-width
+   disclosure whose blocks stack. Hairlines are right/bottom shadows clipped by
    the container, so shared edges never double up. */
 .guide-block {
   min-width: 0;
@@ -818,7 +819,8 @@ h3, .purpose-body h2 {
   box-shadow: 1px 0 0 var(--rule), 0 1px 0 var(--rule);
 }
 .guide-intro,
-.guide-how-this-graph-works,
+.guide-how-it-works,
+.guide-design-considerations,
 .guide-what-it-is,
 .guide-when-to-use-it { grid-column: 1 / -1; }
 .guide-text { max-width: 75ch; }

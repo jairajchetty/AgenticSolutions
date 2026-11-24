@@ -18,7 +18,7 @@ Roles:
 - **Agent**: the model, which only ever sees turns that passed the screen.
 
 Flow:
-1. The user sends a turn. The end word finishes the session and a blank turn waits again, as in a normal chat.
+1. The user sends a turn. An explicit end signal finishes the session and a blank turn waits again, as in a normal chat.
 2. The screen evaluates the turn against the policy and records a verdict: clean, or a threat with its category and, where the check produces one, a score.
 3. A threat goes to the refusal responder. The turn is deleted from the history so it cannot ride along with later requests, and the user sees the fixed refusal.
 4. A clean turn goes to the agent, which replies as usual.
@@ -80,6 +80,7 @@ def route_after_guard(state: State) -> Literal["refuse", "answer"]:
     """Threat found -> refuse, otherwise -> answer."""
     return "refuse" if state["threat"] else "answer"
 
+builder.add_node("guard", guard_prompt)
 builder.add_conditional_edges("guard", route_after_guard)
 builder.add_edge("refuse", "ask")
 builder.add_edge("answer", "ask")

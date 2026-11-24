@@ -13,7 +13,7 @@ STUDIO_SUBSECTIONS = ["Mapping", "Framework concepts", "Key code", "Try this"]
 
 ALL_FOLDERS = sorted(p.parent.name for p in AGENTS.glob("*/explanation.md"))
 
-# Guides spec section 9.3 (case-insensitive).
+# Guides spec section 9.3 (case-insensitive, whole words, optional plural "s").
 DENY_WORDS = ["LangGraph", "LangChain", "MCP", "Model Context Protocol", "StateGraph", "ToolNode",
               "add_messages", "reducer", "checkpointer", "thread_id", "RemoveMessage", "get_graph",
               "build_graph", "build_skeleton", "Claude", "Anthropic", "OpenAI", "GPT"]

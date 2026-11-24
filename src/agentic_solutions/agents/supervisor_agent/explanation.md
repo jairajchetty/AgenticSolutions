@@ -6,7 +6,7 @@ One coordinator manages a set of specialist workers; this is often called the or
 ## When to use it
 - The task splits into distinct roles, such as research then writing, and the order is not known in advance.
 - One place should decide what happens next, so behaviour is easy to follow and to log.
-- A single agent holding every tool is choosing poorly among too many options.
+- One agent holding every tool is choosing poorly among too many options.
 - Not when the order of roles is fixed. A fixed sequence in code does the same job without a coordinator step between them.
 
 ## How it works
@@ -39,7 +39,7 @@ Flow:
 ## Related patterns
 - The dividing line across the three multi-agent patterns: Supervisor has exactly one coordinator. [[collaboration/hierarchy]] stacks supervisors of supervisors, and [[collaboration/swarm]] has no coordinator at all.
 - [[collaboration/single-agent]] is the baseline: one agent, no delegation.
-- [[execution/routing]] picks one specialist per request and hands off for good; a supervisor keeps control and may call several workers in turn.
+- [[execution/routing]] picks one specialist per request and hands off for good; a supervisor keeps control and may call several workers in turn or in parallel.
 
 ## How this Studio implements it
 

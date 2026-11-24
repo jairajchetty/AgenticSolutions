@@ -41,7 +41,7 @@ Flow:
 
 ## Related patterns
 - The dividing line with [[memory/knowledge-graph]]: Semantic retrieves passages of text that resemble the query. Knowledge Graph retrieves entities and the relations between them, so it can follow a chain of facts that no single passage states.
-- [[memory/episodic]] recalls one user's own history; Semantic looks up shared knowledge that is the same for everyone.
+- [[memory/episodic]] recalls one user's own history; Semantic looks up shared knowledge, not tied to one user's history.
 - [[cognitive/reflection]] critiques a draft; the grading step here judges the evidence before any draft exists.
 - [[cognitive/react]] is the loop to use when search is one tool among several that the agent calls as needed.
 

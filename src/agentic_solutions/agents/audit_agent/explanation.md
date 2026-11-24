@@ -49,7 +49,7 @@ Flow:
 This demo is a Guide-only skeleton: the nodes are placeholders that return `{}`, but the wiring is real and the diagram is drawn from it. The Studio's trace panel is the live view from the dividing line; this graph shows what durable records would add.
 
 - **Agent** → `act`: would perform the next action and append it to `actions`.
-- **Recorder** → `record`: would write the action to a durable store and to `log_entries`. Its router `route_record` follows `more_work`, sending control back to `act` or on to `summarize`, and is fixed to `summarize`.
+- **Recorder** → `record`: would write the action to a durable store and to `log_entries`. Its router `route_record` sends control back to `act` or on to `summarize`, and is fixed to `summarize`.
 - **Query and report** → `summarize`: would read `log_entries` back and set `report`, then end.
 - **Audit store** → not drawn; a live version would write to its own durable store.
 

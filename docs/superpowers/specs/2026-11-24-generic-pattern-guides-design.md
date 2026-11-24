@@ -75,7 +75,7 @@ Section 7 has no denylist.
   - The disclosure must be keyboard-operable and use the Blueprint tokens: a paper sheet with an ink focus ring.
   - Opening state persists per browser in `sessionStorage`, wrapped in try/catch.
 - `guide.js` keeps a single DOMPurify `innerHTML` path. `<details>` and `<summary>` are built with DOM APIs, or allowed by the sanitiser configuration. The builder decides which and states it.
-- **No-JS / CDN-down fallback:** the raw Markdown shows as today. The Studio section is simply part of it.
+- **CDN-down fallback:** when the Markdown or sanitiser library fails to load, the raw Markdown shows as today, and the Studio section is simply part of it. (Without JavaScript the single-page app renders nothing at all; that is pre-existing and out of scope here.)
 
 ## 6. Tests (update existing, add new)
 

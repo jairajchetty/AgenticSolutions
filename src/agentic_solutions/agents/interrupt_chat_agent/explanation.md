@@ -1,7 +1,7 @@
 # Approval
 
 ## What it is
-A person signs off before an agent's consequential action takes effect. The agent may only propose such an action with exact parameters; the run pauses durably with the proposal, an approver approves, edits or rejects it, and only a separate executor can carry out exactly what was approved. Enforcement does not rest on the agent's good behaviour: the agent never holds the commit capability, and the system of record refuses anything unapproved.
+A person signs off before an agent's consequential action takes effect. The agent may only propose such an action with exact parameters; when policy requires a person, the run pauses durably with the proposal, an approver approves, edits or rejects it, and only a separate executor can carry out exactly what was approved. Enforcement does not rest on the agent's good behaviour: the agent never holds the commit capability, and the system of record refuses anything unapproved.
 
 ## When to use it
 - Actions that spend money, change records, contact people or are hard to undo: purchases, payments, emails, deletions.
@@ -59,8 +59,8 @@ Flow:
 ### Mapping
 This demo currently shows only the pause mechanism: the run pauses for your input and resumes when you reply. The full approval demo (a proposal, approve, edit or reject, and enforcement at the system of record) comes later.
 
-- **Approver** → you: `ask` pauses the run and resumes with your reply.
-- **Agent** → `answer`: replies to your turn, then returns to `ask`.
+- **The person the paused run waits for** → you: `ask` pauses and resumes with your reply.
+- **Agent** → `answer` (replies to your turn, then returns to `ask`; no proposals yet).
 - **Durable pause** → the checkpointer saves the paused run, one `thread_id` per chat.
 - **Tools, policy, executor, system of record, audit log** → not in this demo yet.
 
@@ -74,8 +74,7 @@ This demo currently shows only the pause mechanism: the run pauses for your inpu
 ### Key code
 ```python
 def ask(state: State) -> dict:
-    """Node: pause the graph and wait for the user's next question."""
-    text = interrupt(QUESTION_PROMPT)
+        text = interrupt(QUESTION_PROMPT)
     return {"messages": [("user", text)]}
 
 builder = StateGraph(State)

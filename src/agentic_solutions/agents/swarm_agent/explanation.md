@@ -1,7 +1,7 @@
 # Swarm
 
 ## What it is
-A group of peer agents that hand control to each other directly. Each agent either answers or passes the conversation to a better-suited peer, which carries on from there. No manager chooses who goes next: the active agent decides, typically by calling a handoff tool or returning a handoff. The system remembers which agent is active, so the next user turn goes straight to it.
+A group of peer agents that hand control to each other directly. Each agent either answers or passes the conversation to a better-suited peer, which carries on from there. No manager chooses who goes next: the active agent decides, typically by calling a handoff tool or returning a handoff. The system usually remembers which agent is active, so the next user turn goes straight to it.
 
 ## When to use it
 - Distinct specialists should own the conversation in turn, such as refunds and then troubleshooting.
@@ -38,7 +38,7 @@ Flow:
 ## Related patterns
 - The dividing line across the three multi-agent patterns: Swarm has no coordinator at all. [[collaboration/supervisor]] has one coordinator that routes every step, and [[collaboration/hierarchy]] stacks supervisors of supervisors.
 - [[execution/routing]] makes one up-front choice of specialist; in a swarm the specialists keep choosing as the conversation goes on.
-- [[collaboration/single-agent]] is the baseline: one agent holds every tool.
+- [[collaboration/single-agent]] is the baseline: one agent, no handoffs.
 
 ## How this Studio implements it
 

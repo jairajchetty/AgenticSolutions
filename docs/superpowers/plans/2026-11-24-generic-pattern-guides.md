@@ -48,7 +48,7 @@
 1. **A generic section that slips in framework vocabulary through prose,** e.g. "the state graph", "a tool node", or a function name without backticks. The denylist catches the listed tokens. Reviewers of the content tasks also read for leaks the denylist can't see, such as node names (`ask`, `guard`) used as words in generic sections. Node names belong only in Mapping. Tests: Task 1's denylist, plus reviewer reading in Tasks 3–5.
 2. **Facts changed during the rewrite:** a pattern's generic description must stay accurate, e.g. Session vs Episodic, Guardrails vs Review. Reviewer reading in Tasks 3–5 checks this against the catalog spec §3.3.
 3. **A Studio section whose Mapping omits a node the diagram shows.** Test in Task 1 (`test_mapping_names_every_node`), applied to migrated Guides.
-4. **Collapsed section and the keyboard or no-JS reader.** The `<details>` must be focusable and toggle with Enter or Space. Without JS, the raw Markdown shows everything. Browser check in Task 6.
+4. **Collapsed section and the keyboard or CDN-down reader.** The `<details>` must be focusable and toggle with Enter or Space. If the Markdown or sanitiser library fails to load, the raw Markdown shows everything. (Without JS the app renders nothing; pre-existing.) Browser check in Task 6.
 5. **"Try this" inputs moved into section 7 must still each have a scripted offline reply.** Test in Task 1 (updated `test_offline_scripts.py` reads `### Try this`).
 
 ---
@@ -179,7 +179,7 @@ README.md                              MODIFY  Task 6
   - (b) The open state persists across patterns.
   - (c) Episodic: the generic body reads cleanly, and the collapsed section shows Mapping, Framework concepts, Key code and Try this.
   - (d) No console errors.
-  - (e) Without JS, Markdown is visible.
+  - (e) With the Markdown/sanitiser CDN scripts blocked, the raw Markdown is visible.
 
   Stop only your own server and Chrome, by PID or `--user-data-dir`. Never kill processes by name.
 - [ ] **Step 4: Commit:** "Retire the old Guide format; document the generic Guide format".

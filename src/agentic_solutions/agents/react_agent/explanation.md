@@ -1,7 +1,7 @@
 # ReAct
 
 ## What it is
-A loop in which the model alternates between reasoning and acting (Yao et al., "ReAct: Synergizing Reasoning and Acting"). It decides what it needs, requests a tool call, reads the result, and decides again. The loop ends when the model replies in plain text instead of requesting another call, or when a round limit is reached. Each round's decision rests on what the previous tools actually returned, not on a plan fixed in advance.
+A loop in which the model alternates between reasoning and acting (Yao et al., "ReAct: Synergizing Reasoning and Acting"). Each step leaves a visible trace: a short thought about what is needed, an action (a tool call), and the observation that comes back, which feeds the next thought. The loop ends when the model replies in plain text instead of requesting another call, or when a round limit is reached. Each round's decision rests on what the previous tools actually returned, not on a plan fixed in advance.
 
 ## When to use it
 - The path to the answer depends on what the tools return, so the steps cannot be listed in advance.
@@ -12,17 +12,18 @@ A loop in which the model alternates between reasoning and acting (Yao et al., "
 ## How it works
 Roles:
 - **User**: sends a request and receives the final reply.
-- **Reasoner**: the model, given the conversation and a description of each available tool. Each turn it either requests one or more tool calls or writes the final answer.
+- **Reasoner**: the model, given the conversation and a description of each available tool. Each turn it writes a short thought about what it knows and needs, then either requests one or more tool calls or writes the final answer.
 - **Tool runner**: executes the requested calls and returns each result, or its error, to the conversation.
 
 Flow:
 1. The user sends a request.
-2. The reasoner reads the conversation and decides: call tools, or answer.
-3. If it requests calls, the tool runner executes them and appends the results.
-4. The reasoner reads the results and decides again, back at step 2.
-5. When the reasoner answers in plain text, or the round limit is hit, the reply goes to the user and the system waits for the next request.
+2. The reasoner reads the conversation, writes a thought, and decides: act with a tool call, or answer.
+3. If it acts, the tool runner executes the calls and appends each result as an observation.
+4. The reasoner reads the observations, writes its next thought, and decides again, back at step 2.
+5. When the reasoner answers in plain text, or the round limit is hit, the reply goes to the user.
 
 ## Design considerations
+- **Visible reasoning:** writing the thought out before each action makes the run traceable and tends to improve tool choice, but costs tokens on every round. Native tool calling with hidden or no reasoning is cheaper and is what many loops called ReAct use today; it gives up the readable trace.
 - **Round cap:** bound tool rounds per request, and decide what the user sees when the cap is hit: a partial answer, an apology or an escalation.
 - **Tool descriptions:** the model chooses tools only from their names, descriptions and parameter schemas. Vague or overlapping descriptions lead to wrong calls.
 - **Tool results are untrusted input:** text returned by a tool can try to steer the model. Treat it like user input, and keep consequential actions behind a separate check.

@@ -18,7 +18,7 @@ Roles:
 
 Flow:
 1. The system waits for the user's turn and appends it to the history.
-2. The turn controller checks the turn. The end word finishes the session. A blank turn goes straight back to waiting, with no model call. Anything else goes to the agent.
+2. The turn controller checks the turn. An explicit end signal finishes the session. A blank turn goes straight back to waiting, with no model call. Anything else goes to the agent.
 3. The agent replies using the whole history. The reply is appended.
 4. The session store saves the history, and the system waits for the next turn.
 
@@ -26,7 +26,7 @@ Flow:
 - **Where the history lives:** in process memory it dies with the process. A durable store keyed by session id survives restarts and lets several servers serve one conversation.
 - **Session identity:** one id per conversation. Mixing ids leaks one user's history into another's.
 - **Growth and the context limit:** history grows every turn. Decide early how to trim or summarise it, and what must never be dropped.
-- **Cheap decisions before expensive ones:** the turn controller filters blank turns and the end word with plain code, so no model call is spent on them.
+- **Cheap decisions before expensive ones:** the turn controller filters blank turns and an explicit end signal with plain code, so no model call is spent on them.
 - **Explicit exits:** list every place a turn can go, including the end of the session, so the loop cannot run forever.
 - **Input trust:** every turn reaches the model and stays in the history. Untrusted users need a screen in front.
 

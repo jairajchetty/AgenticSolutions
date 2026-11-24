@@ -49,7 +49,7 @@ Flow:
 This demo is a Guide-only skeleton: the nodes are placeholders that return `{}`, but the wiring is real and the diagram is drawn from it.
 
 - **Author** → `draft`: would write or rewrite `content` from `task`, using `comments` if present.
-- **Reviewer** → `review`: would have a separate agent or a person set `comments` and `accepted`. Its router `route_review` sends control back to `draft` or on to `approve`, and is fixed to `approve`.
+- **Reviewer** → `review`: would have a separate agent or a person judge `content`, giving feedback and a verdict. Its router `route_review` sends control back to `draft` or on to `approve`, and is fixed to `approve`.
 - **Acceptance** → `approve`: would copy the accepted `content` into `final`, then end.
 - **Round limit** → not yet in state; a live version needs a counter that `route_review` reads.
 
