@@ -76,7 +76,7 @@ def test_generic_sections_have_no_framework_vocabulary(folder):
 @pytest.mark.parametrize("folder", MIGRATED)
 def test_when_to_use_has_a_not_when_bullet(folder):
     body = dict(sections(guide(folder)))["When to use it"]
-    assert re.search(r"^\s*[-*] .*\bnot when\b", body, re.I | re.M)
+    assert re.search(r"^\s*[-*]\s+(\*\*)?not when\b", body, re.I | re.M)
 
 
 @pytest.mark.parametrize("folder", MIGRATED)
@@ -92,7 +92,7 @@ def test_mapping_names_every_node(folder):
     mapping = dict(subsections(studio_section(guide(folder))))["Mapping"]
     nodes = {n["id"] for n in node_topology(folder)["nodes"]} - {"__start__", "__end__"}
     assert nodes
-    missing = {n for n in nodes if n not in mapping}
+    missing = {n for n in nodes if not re.search(rf"(?<![\w-]){re.escape(n)}(?![\w-])", mapping)}
     assert not missing, missing
 
 
