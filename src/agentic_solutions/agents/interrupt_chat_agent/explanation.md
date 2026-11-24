@@ -1,39 +1,77 @@
 # Approval
 
 ## What it is
-The same chat loop, but `ask` waits for you with `interrupt()` instead of `input()`. The graph pauses, saves its state, and hands control back to the caller. Later the caller resumes it with your text. This is the mechanism behind approval steps such as "OK to send this email?".
+A person signs off before an agent's consequential action takes effect. The agent may only propose such an action with exact parameters; the run pauses durably with the proposal, an approver approves, edits or rejects it, and only a separate executor can carry out exactly what was approved. Enforcement does not rest on the agent's good behaviour: the agent never holds the commit capability, and the system of record refuses anything unapproved.
 
 ## When to use it
-- Web apps and APIs, where nothing can block a terminal waiting for typing.
-- Approvals and reviews: pause before a risky action and let a person decide.
-- Pair it with [[governance/audit]] to record who approved what.
-- Any run that may wait minutes or days for a human, since a paused graph is just saved data.
+- Actions that spend money, change records, contact people or are hard to undo: purchases, payments, emails, deletions.
+- When accountability matters and a named person must own the decision.
+- When the agent's judgement is useful but not yet trusted to act alone on high-risk cases.
+- Pair it with [[governance/audit]] to record who approved what, and when.
+- Not when every action is low-risk and reversible. A person in the loop then adds delay and approval fatigue without reducing real risk.
 
-## How this graph works
-The graph is the same as the [[memory/session]] chat loop: `__start__`, `ask`, `answer`, back to `ask`, until `stop` goes to `__end__`. An empty message goes back to `ask`.
+## How it works
+Roles:
+- **Agent**: plans and gathers information, and may only propose consequential actions.
+- **Tools**: read-only or draft-only capabilities the agent may use freely.
+- **Policy**: decides whether a proposal needs a person, using an amount threshold, a budget or a risk rating.
+- **Approver**: a person who sees the exact proposal and decides.
+- **Executor**: the only component able to perform the consequential action.
+- **System of record**: holds the data, and independently refuses unapproved commits.
+- **Audit log**: records every proposal and decision.
 
-What differs is how `ask` behaves:
+Flow:
+1. The agent works with read-only and draft tools.
+2. The agent proposes an action with exact parameters.
+3. Policy either auto-approves a low-risk proposal or pauses the run with the proposal.
+4. The approver approves, edits or rejects.
+5. Edit changes the proposal and returns it to policy, so the edited proposal needs its own approval.
+6. Reject returns to the agent with the reason.
+7. Approve lets the executor perform exactly the approved proposal.
+8. Every step is recorded in the audit log.
 
-1. `ask` calls `interrupt()`. The run pauses and the prompt is sent to you.
-2. You reply. The caller resumes the graph with `Command(resume=...)`.
-3. `ask` runs again from its first line. This time `interrupt()` returns your text instead of pausing. That is why the trace marks this `ask` step as "resumed".
-4. The router and `answer` then work exactly as in the chat loop.
+## Design considerations
+- **Least privilege:** the agent never holds the commit capability. Only the executor does, and only after approval.
+- **Bind approval to the exact proposal:** the approval covers these parameters and no others. Any change invalidates it.
+- **Expiry:** approvals and quotes go stale. Give each an expiry and re-check it at execution time.
+- **Re-validate at execution:** check budget, price and availability again just before acting.
+- **Idempotent execution:** a retry or a resumed run must not perform the action twice.
+- **Durable pause:** the run's state is saved while it waits. Approval may take minutes or days, and the process may restart in between.
+- **Separation of duties:** the proposer cannot approve its own proposal.
+- **Clear presentation:** show the approver what will happen, to whom, for how much and why.
+- **Audit everything:** proposals, decisions, edits, rejections and executions, with who and when.
+- **Defence in depth:** the system of record checks the approval too, so a bug upstream cannot commit on its own.
 
-The dividing line: Approval is a person signing off at a pause point before the run goes on. [[governance/review]] is a separate agent or person checking the finished result, who can send it back for rework.
+## Trade-offs
+- Latency and human time: the run waits for a person.
+- Approval fatigue: too many requests and approvers stop reading. Policy thresholds keep low-risk cases automatic.
+- More states to manage: pending, expired, edited and rejected proposals all need handling.
 
-## LangGraph concepts
+## Related patterns
+- The dividing line: Approval is a person signing off at a pause point before the run goes on. [[governance/review]] is a separate agent or person checking the finished result, who can send it back for rework.
+- [[governance/guardrails]] blocks unsafe input or output automatically; Approval puts a person at the decision.
+- [[governance/audit]] keeps the durable record of each proposal and decision.
+- [[cognitive/react]] is the reason-and-act loop that typically produces the proposals.
+- [[execution/tool-use]] supplies the read-only and draft tools the agent works with.
+
+## How this Studio implements it
+
+### Mapping
+This demo currently shows only the pause mechanism: the run pauses for your input and resumes when you reply. The full approval demo (a proposal, approve, edit or reject, and enforcement at the system of record) comes later.
+
+- **Approver** → you: `ask` pauses the run and resumes with your reply.
+- **Agent** → `answer`: replies to your turn, then returns to `ask`.
+- **Durable pause** → the checkpointer saves the paused run, one `thread_id` per chat.
+- **Tools, policy, executor, system of record, audit log** → not in this demo yet.
+
+### Framework concepts
 - **interrupt(value)**: pauses the graph and shows `value` to the caller.
 - **Command(resume=x)**: resumes the graph. Inside the node, `interrupt()` returns `x`.
 - **Checkpointer**: storage for the paused state. Without one, `interrupt()` raises an error.
 - **thread_id**: names one conversation, so many chats can share one graph, each with its own saved state.
-- **Re-run rule**: on resume the paused node restarts from its first line, so any code before `interrupt()` must be safe to run twice.
+- **Re-run rule**: on resume the paused node restarts from its first line, so any code before `interrupt()` must be safe to run twice. A side effect there (sending an email, charging a card) would happen twice.
 
-## Trade-offs
-- Needs a checkpointer, and a thread id for every conversation.
-- The re-run rule is easy to forget. A side effect before `interrupt()` (sending an email, charging a card) would happen twice.
-- More moving parts than `input()`, in exchange for a graph that works with servers, Studio and long waits.
-
-## Key code
+### Key code
 ```python
 def ask(state: State) -> dict:
     """Node: pause the graph and wait for the user's next question."""
@@ -51,7 +89,7 @@ builder.add_edge("answer", "ask")
 return builder.compile(checkpointer=checkpointer)
 ```
 
-## Try this
+### Try this
 - Send any question. Watch the run pause at `ask`, then continue to `answer` once you reply.
 - Look for the "resumed" mark on `ask` in the trace after you send a message.
 - Send a message containing only spaces. The graph returns to `ask` and pauses again with no model call.

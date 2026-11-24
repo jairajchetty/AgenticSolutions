@@ -19,10 +19,10 @@ ALL_FOLDERS = sorted(p.parent.name for p in AGENTS.glob("*/explanation.md"))
 
 # Folders still in the old format. Shrinks to empty as batches migrate.
 UNMIGRATED: set[str] = {
-    "audit_agent", "autonomous_agent", "chat_agent", "episodic_memory_agent", "event_driven_agent",
-    "hierarchy_agent", "interrupt_chat_agent", "knowledge_graph_agent", "plan_execute_agent",
-    "qa_agent", "react_agent", "reflection_agent", "review_agent", "routing_agent",
-    "search_agent", "secure_chat_agent", "semantic_memory_agent", "supervisor_agent",
+    "audit_agent", "autonomous_agent", "episodic_memory_agent", "event_driven_agent",
+    "hierarchy_agent", "knowledge_graph_agent", "plan_execute_agent",
+    "react_agent", "reflection_agent", "review_agent", "routing_agent",
+    "search_agent", "semantic_memory_agent", "supervisor_agent",
     "swarm_agent", "workflow_agent",
 }
 MIGRATED = sorted(set(ALL_FOLDERS) - UNMIGRATED)
