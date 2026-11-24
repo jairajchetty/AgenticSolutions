@@ -17,13 +17,14 @@ Roles:
 - **Shared state and team-private state**: what every level sees, and what stays inside a team.
 
 Flow:
-1. The top coordinator reads the goal and assigns work to a team lead.
-2. The lead picks one of its workers, reads the result, and repeats until the team's part is done.
-3. The lead reports back to the top coordinator.
-4. The top coordinator assigns the next team, back at step 1, or finishes.
+1. The top coordinator reads the goal and assigns work to one or more team leads.
+2. Each lead delegates to one or more of its workers, merges their results, and repeats until the team's part is done.
+3. Each lead reports back to the top coordinator, which merges the team results.
+4. The top coordinator assigns further team work, back at step 1, or finishes.
 
 ## Design considerations
 - **Number of levels:** each level reduces the choices any one coordinator faces, but adds calls and latency. Add a level only when a coordinator's choices have become unreliable.
+- **Sequential or parallel delegation:** at each level, running teams or workers one after another lets later work build on earlier results; running independent ones in parallel cuts latency, but needs a clean split up front and a merge step that reconciles overlapping or conflicting results.
 - **What crosses a level:** a lead can pass up raw results or a summary. Summaries keep upper levels focused but can drop the detail a later team needs.
 - **Team boundaries:** group workers by the skills and context they share, so that most work stays inside one team.
 - **Private versus shared state:** keep a team's working notes private, and agree a small shared contract for what teams hand each other.
@@ -46,7 +47,7 @@ Flow:
 ### Mapping
 This demo is a Guide-only skeleton: the nodes are placeholders that return `{}`, but the wiring is real and the diagram is drawn from it. The teams are drawn as flat nodes, so the whole structure fits in one diagram.
 
-- **Top coordinator** → `director`: its router sends work to `research_lead`, to `writing_lead`, or to `__end__`. It never links to a worker.
+- **Top coordinator** → `director`: its router sends work to `research_lead`, to `writing_lead`, or to `__end__`. It never links to a worker, and it delegates to one team at a time; each lead likewise picks one worker at a time.
 - **Team leads** → `research_lead`, which supervises `searcher` and `analyst`, and `writing_lead`, which supervises `drafter` and `editor`. Each lead's router picks a worker or reports back to `director`.
 - **Workers** → `searcher` and `analyst` would build `findings`; `drafter` and `editor` would write and polish `draft`. Each returns to its own lead.
 - **Shared state** → `goal`, `findings` and `draft`. The routers are fixed, so the structure is drawn but never run.
