@@ -17,10 +17,11 @@ from datetime import timedelta
 from typing import Any, Protocol
 
 import anyio
+import httpx
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool, StructuredTool
 from mcp import ClientSession
-from mcp.client.streamable_http import streamablehttp_client
+from mcp.client.streamable_http import streamable_http_client
 from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import create_connected_server_and_client_session
 from mcp.types import CallToolResult, TextContent
@@ -70,10 +71,14 @@ class HttpErpClient:
     async def call(self, tool: str, args: dict) -> Any:
         try:
             with anyio.fail_after(self.timeout_s):
-                async with streamablehttp_client(self.url, timeout=self.timeout_s) as (read, write, _):
-                    async with ClientSession(read, write) as session:
-                        await session.initialize()
-                        result = await session.call_tool(tool, args)
+                # The transport does not close a client it is given, hence the async with.
+                async with (
+                    httpx.AsyncClient(timeout=httpx.Timeout(self.timeout_s)) as http,
+                    streamable_http_client(self.url, http_client=http) as (read, write, _),
+                    ClientSession(read, write) as session,
+                ):
+                    await session.initialize()
+                    result = await session.call_tool(tool, args)
         except Exception as err:
             # Connection refused, HTTP errors and timeouts, often wrapped in an
             # ExceptionGroup by the transport's task group. A tool error never
@@ -152,7 +157,7 @@ class CheckBudgetArgs(_Args):
 
 class GetPriceQuoteArgs(_Args):
     sku: str = Field(description="A catalogue SKU.")
-    quantity: int = Field(description="Units, 1 to 999.")
+    quantity: int = Field(ge=1, le=999, description="Units, 1 to 999.")
 
 
 class CreateRequisitionArgs(_Args):

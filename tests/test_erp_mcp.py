@@ -222,3 +222,66 @@ async def test_silent_server_times_out_as_unavailable():
         erp = HttpErpClient(f"http://127.0.0.1:{port}/mcp", timeout_s=0.5)
         with pytest.raises(ErpUnavailable):
             await erp.call("check_budget", {"tenant": "t", "cost_centre": "CT-OPS"})
+
+
+@pytest.mark.anyio
+async def test_internal_server_error_is_logged_not_shown(server, store, monkeypatch, caplog):
+    import sqlite3
+
+    from agentic_solutions.mcp_servers.erp.server import INTERNAL_ERROR
+
+    def locked(*_a, **_k):
+        raise sqlite3.OperationalError("database is locked at /secret/path")
+
+    monkeypatch.setattr(store, "check_budget", locked)
+    async with InProcessErpClient(server) as erp:
+        with caplog.at_level("ERROR", logger="agentic_solutions.mcp_servers.erp.server"):
+            with pytest.raises(ErpToolError) as caught:
+                await erp.call("check_budget", {"tenant": "t", "cost_centre": "CT-OPS"})
+    assert str(caught.value) == INTERNAL_ERROR
+    assert "database is locked" in caplog.text
+
+
+@pytest.mark.anyio
+async def test_model_tool_args_match_server_schemas(server):
+    async with create_connected_server_and_client_session(server._mcp_server) as session:
+        listed = {t.name: t.inputSchema for t in (await session.list_tools()).tools}
+    async with InProcessErpClient(server) as erp:
+        tools = model_tools(erp)
+    for t in tools:
+        mine = t.tool_call_schema.model_json_schema()
+        theirs = listed[t.name]
+        assert mine["properties"] == {k: v for k, v in theirs["properties"].items()
+                                      if k != "tenant"}, t.name
+        assert set(mine.get("required", [])) == set(theirs["required"]) - {"tenant"}, t.name
+        assert mine.get("$defs", {}) == theirs.get("$defs", {}), t.name
+
+
+@pytest.mark.anyio
+async def test_quantity_bounds_on_both_sides(server):
+    async with InProcessErpClient(server) as erp:
+        sku = (await erp.call("search_catalogue", {"tenant": "t", "query": "keyboard"}))[0]["sku"]
+        for bad in (0, 1000):
+            with pytest.raises(ErpToolError):
+                await erp.call("get_price_quote", {"tenant": "t", "sku": sku, "quantity": bad})
+        tool = next(t for t in model_tools(erp) if t.name == "get_price_quote")
+        out = await tool.ainvoke({"sku": sku, "quantity": 1000}, config=cfg("t"))
+    assert out.startswith("Error: invalid arguments (quantity:")
+
+
+@pytest.mark.anyio
+async def test_model_tool_without_thread_id_raises_and_calls_nothing():
+    class Recorder:
+        def __init__(self):
+            self.calls = []
+
+        async def call(self, tool, args):
+            self.calls.append((tool, args))
+            return {}
+
+    erp = Recorder()
+    tool = next(t for t in model_tools(erp) if t.name == "check_budget")
+    for config in ({}, {"configurable": {}}, {"configurable": {"thread_id": ""}}):
+        with pytest.raises(ValueError):
+            await tool.ainvoke({"cost_centre": "CT-OPS"}, config=config)
+    assert erp.calls == []

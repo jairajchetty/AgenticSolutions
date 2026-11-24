@@ -6,6 +6,7 @@ all the checking; this module only maps tools onto it and turns an `ErpError`
 into an MCP tool error whose text is the store's plain message.
 """
 
+import logging
 from collections.abc import Callable
 from typing import Any
 
@@ -13,10 +14,14 @@ import anyio
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from .config import ErpSettings
 from .store import ErpError, ErpStore
+
+log = logging.getLogger(__name__)
+
+INTERNAL_ERROR = "The ERP system could not complete this request."
 
 INSTRUCTIONS = (
     "A mock procurement ERP. Search the catalogue, quote prices, check budgets and draft "
@@ -35,19 +40,27 @@ class QuoteLine(BaseModel):
 
 
 class ErpServer(FastMCP):
-    """FastMCP whose tool errors carry the store's message as is.
+    """FastMCP whose tool errors are plain and safe to show.
 
     FastMCP prefixes every tool exception with "Error executing tool <name>: ".
-    The Studio shows ERP refusals to people, so the prefix is stripped here.
+    The Studio shows ERP errors to people, so:
+    - an `ErpError` (a refusal or a bad request) keeps the store's message as is;
+    - an argument the tool's schema rejects keeps FastMCP's validation text;
+    - anything else (a locked database, a bug) is logged here and reaches the
+      client only as a generic message, never as internal detail.
     """
 
     async def call_tool(self, name: str, arguments: dict[str, Any]):
         try:
             return await super().call_tool(name, arguments)
         except ToolError as err:
-            if isinstance(err.__cause__, ErpError):
-                raise ToolError(str(err.__cause__)) from err.__cause__
-            raise
+            cause = err.__cause__
+            if isinstance(cause, ErpError):
+                raise ToolError(str(cause)) from cause
+            if cause is None or isinstance(cause, ValidationError):
+                raise  # unknown tool or invalid arguments: FastMCP's text is already plain
+            log.exception("ERP tool %s failed", name, exc_info=cause)
+            raise ToolError(INTERNAL_ERROR) from cause
 
 
 def build_server(store: ErpStore, settings: ErpSettings) -> FastMCP:
@@ -91,7 +104,7 @@ def build_server(store: ErpStore, settings: ErpSettings) -> FastMCP:
     async def get_price_quote(
         tenant: str = Tenant,
         sku: str = Field(description="A catalogue SKU."),
-        quantity: int = Field(description="Units, 1 to 999."),
+        quantity: int = Field(ge=1, le=999, description="Units, 1 to 999."),
     ) -> dict[str, Any]:
         """A quote: quote_id, unit price after volume discount, line total, expires_at (+30 min)."""
         return await run(store.get_price_quote, tenant, sku, quantity)
@@ -139,7 +152,7 @@ def build_server(store: ErpStore, settings: ErpSettings) -> FastMCP:
     @server.tool(annotations=READ_ONLY)
     async def get_audit_trail(
         tenant: str = Tenant,
-        req_id: str = Field(description="The requisition id."),
+        req_id: str = Field(description="The requisition id, e.g. REQ-0001."),
     ) -> list[dict[str, Any]]:
         """A requisition's audit events in order, refusals with their reasons."""
         return await run(store.get_audit_trail, tenant, req_id)
@@ -147,7 +160,7 @@ def build_server(store: ErpStore, settings: ErpSettings) -> FastMCP:
     @server.tool(annotations=DRAFT)
     async def record_approval_event(
         tenant: str = Tenant,
-        req_id: str = Field(description="The requisition id."),
+        req_id: str = Field(description="The requisition id, e.g. REQ-0001."),
         version: int = Field(description="The version the decision is about."),
         event: str = Field(description="approval_requested, approved, rejected or auto_approved."),
         actor: str = Field(description="Who decided: a visitor id or policy."),
