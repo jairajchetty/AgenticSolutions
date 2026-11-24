@@ -63,6 +63,7 @@ FINISH_APPROVAL = "Finish the pending approval first"
 NOTHING_WAITING = "Nothing is waiting for approval"
 UNKNOWN_EDIT = "Unknown item in edits"
 EDIT_NEEDS_EDITS = "Send changed quantities to edit the order"
+EDITS_ONLY_WITH_EDIT = "Edits are only allowed with the edit decision"
 APPROVAL_NODE = "approval"
 
 
@@ -148,6 +149,38 @@ def _paused(state) -> tuple[str, object] | None:
         if task.interrupts:
             return task.name, task.interrupts[0].value
     return None
+
+
+async def _checked_input(spec: PatternSpec, graph, config: dict, body) -> object:
+    """The graph input for this request, or HTTPException (409/422) if it does not fit the pause.
+
+    Order: the kind of pause first (409), then the payload's content (422).
+    """
+    decision = body.resume
+    if spec.mode != "chat":
+        if decision is not None:  # a trigger never pauses
+            raise HTTPException(409, NOTHING_WAITING)
+        if not body.text.strip():
+            raise HTTPException(422, "text must not be empty")
+        return spec.make_input(body.text)
+    paused = _paused(await graph.aget_state(config))
+    at_approval = paused is not None and paused[0] == APPROVAL_NODE
+    if at_approval and decision is None:
+        raise HTTPException(409, FINISH_APPROVAL)
+    if not at_approval and decision is not None:
+        raise HTTPException(409, NOTHING_WAITING)
+    if decision is None:
+        return spec.make_input(body.text)
+    if decision.decision == "edit" and not decision.edits:
+        raise HTTPException(422, EDIT_NEEDS_EDITS)
+    if decision.decision != "edit" and decision.edits is not None:
+        raise HTTPException(422, EDITS_ONLY_WITH_EDIT)
+    if decision.edits:
+        card = paused[1] if isinstance(paused[1], dict) else {}
+        skus = {line.get("sku") for line in card.get("lines") or []}
+        if any(e.sku not in skus for e in decision.edits):
+            raise HTTPException(422, UNKNOWN_EDIT)
+    return Command(resume=decision.model_dump(exclude_none=True))
 
 
 def _sse(event: dict) -> str:
@@ -353,34 +386,20 @@ def create_app(settings: Settings | None = None, *, checkpointer=None, guard=Non
         chat = spec.mode == "chat"
         graph = request.app.state.graphs[spec.id]
         config = _config(record.id, record.session_id)
-        decision = body.resume
-        if decision is not None and decision.decision == "edit" and not decision.edits:
-            raise HTTPException(422, EDIT_NEEDS_EDITS)
-        if not chat:
-            if decision is not None:  # a trigger never pauses
-                raise HTTPException(409, NOTHING_WAITING)
-            if not body.text.strip():
-                raise HTTPException(422, "text must not be empty")
-        else:
-            # Which pause is this? Checked before claiming the run slot. Two
-            # resumes racing past this check are still serialised by begin_run;
-            # the loser's retry then finds the thread back at `ask`.
-            paused = _paused(await graph.aget_state(config))
-            at_approval = paused is not None and paused[0] == APPROVAL_NODE
-            if at_approval and decision is None:
-                raise HTTPException(409, FINISH_APPROVAL)
-            if not at_approval and decision is not None:
-                raise HTTPException(409, NOTHING_WAITING)
-            if at_approval and decision.edits:
-                card = paused[1] if isinstance(paused[1], dict) else {}
-                skus = {line.get("sku") for line in card.get("lines") or []}
-                if any(e.sku not in skus for e in decision.edits):
-                    raise HTTPException(422, UNKNOWN_EDIT)
-        graph_input = (spec.make_input(body.text) if decision is None
-                       else Command(resume=decision.model_dump(exclude_none=True)))
         sid = record.session_id
+        # Claim the run slot first, then check which pause the thread is in.
+        # The slot is per session and a thread belongs to one session, so the
+        # state read below cannot go stale: a second click or tab gets 409
+        # here, or (after the first run) a 409 for the pause it now finds.
         if not store.begin_run(sid):
             raise HTTPException(409, "a run is already in progress")
+        try:
+            graph_input = await _checked_input(spec, graph, config, body)
+        except BaseException:
+            # Refused (or cancelled) before any run started: free the slot, but
+            # never close the thread, which is exactly as it was.
+            store.end_run(sid)
+            raise
 
         finished = False
 

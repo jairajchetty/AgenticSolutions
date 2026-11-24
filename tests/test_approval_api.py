@@ -97,6 +97,10 @@ SCHEMA_CASES = {
     "neither": ({}, None),
     "edit without edits": ({"resume": EDIT}, "Send changed quantities to edit the order"),
     "edit with empty edits": ({"resume": {**EDIT, "edits": []}}, "Send changed quantities to edit the order"),
+    "edits with approve": ({"resume": {"decision": "approve", "edits": [{"sku": "LAP-001", "quantity": 2}]}},
+                           "Edits are only allowed with the edit decision"),
+    "edits with reject": ({"resume": {"decision": "reject", "edits": []}},
+                          "Edits are only allowed with the edit decision"),
     "unknown sku": ({"resume": {**EDIT, "edits": [{"sku": "NOPE-999", "quantity": 2}]}},
                     "Unknown item in edits"),
 }
@@ -128,8 +132,8 @@ def test_double_resume_places_one_po(client, app):                  # Review Foc
     sid = store._threads[tid].session_id
 
     # Second click while the first is still streaming: the first run holds the
-    # session's slot (claimed exactly as run_thread does), so this one passes the
-    # paused-at-approval check and is then refused by begin_run.
+    # session's slot (claimed exactly as run_thread does), so this one is
+    # refused before it reads the state or reaches the graph.
     assert store.begin_run(sid)
     r = client.post(f"/api/threads/{tid}/runs", json=APPROVE)
     assert r.status_code == 409 and r.json() == {"detail": IN_PROGRESS}
@@ -204,3 +208,42 @@ def test_pending_card_survives_state_reload(client):
     assert payload["total_zar"] > 5000
     assert isinstance(payload["short_hash"], str) and len(payload["short_hash"]) == 8
     assert state(client, tid)["paused"] == {"node": "approval", "payload": payload}  # stable on reload
+
+
+@pytest.mark.parametrize("body,status,detail", [
+    ({"text": "hello"}, 409, FINISH_FIRST),
+    ({"resume": {**EDIT, "edits": [{"sku": "NOPE-999", "quantity": 2}]}}, 422, "Unknown item in edits"),
+], ids=["text while pending", "unknown sku"])
+def test_refused_request_releases_the_slot_and_keeps_the_thread(client, app, body, status, detail):
+    tid = pending_thread(client)
+    r = client.post(f"/api/threads/{tid}/runs", json=body)
+    assert r.status_code == status and r.json() == {"detail": detail}
+    store, sid = app.state.store, app.state.store._threads[tid].session_id
+    assert store.begin_run(sid)                                     # the refusal freed the slot
+    store.end_run(sid)
+    after = state(client, tid)
+    assert after["closed"] is False and after["paused"]["node"] == "approval"
+    assert run(client, tid, APPROVE)[-1]["status"] == "paused"     # the card still works
+    assert len(submitted(state(client, tid)["values"])) == 1
+
+
+def test_text_while_a_run_holds_the_slot_never_reaches_the_card(client, app):   # Review Focus 5
+    tid = pending_thread(client)
+    store, sid = app.state.store, app.state.store._threads[tid].session_id
+    assert store.begin_run(sid)
+    r = client.post(f"/api/threads/{tid}/runs", json={"text": "hello"})
+    assert r.status_code == 409 and r.json() == {"detail": IN_PROGRESS}
+    store.end_run(sid)
+    after = state(client, tid)
+    assert after["closed"] is False and after["paused"]["node"] == "approval"
+
+
+@pytest.mark.parametrize("resume", [
+    {"decision": "edit"},
+    {"decision": "approve", "edits": [{"sku": "LAP-001", "quantity": 2}]},
+    {"decision": "edit", "edits": [{"sku": "NOPE-999", "quantity": 2}]},
+], ids=["edit without edits", "edits with approve", "unknown sku"])
+def test_pause_kind_is_checked_before_the_payload(client, resume):
+    tid = client.post("/api/patterns/approval/threads").json()["thread_id"]   # waiting at `ask`
+    r = client.post(f"/api/threads/{tid}/runs", json={"resume": resume})
+    assert r.status_code == 409 and r.json() == {"detail": NOTHING_WAITING}
