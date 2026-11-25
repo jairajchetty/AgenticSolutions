@@ -35,7 +35,7 @@ DENIED = {"detail": "model choice is not available"}
 UNKNOWN = {"detail": "unknown model"}
 OFFLINE_ONLY = [{"id": "offline", "label": "Offline (scripted)"}]
 ALL_MODELS = OFFLINE_ONLY + [{"id": "claude-haiku", "label": "Claude Haiku 5.5"},
-                             {"id": "deepseek", "label": "DeepSeek (via OpenRouter)"}]
+                             {"id": "deepseek", "label": "DeepSeek V4.1 Flash (via OpenRouter)"}]
 LAPTOPS = "Order 12 laptops for the Cape Town office under CT-OPS"
 
 
@@ -229,7 +229,7 @@ def _wrapped(exc):
 
 
 BUSY_CLAUDE = "Claude Haiku 5.5 is busy or unavailable. Try again in a moment."
-BUSY_DEEPSEEK = "DeepSeek (via OpenRouter) is busy or unavailable. Try again in a moment."
+BUSY_DEEPSEEK = "DeepSeek V4.1 Flash (via OpenRouter) is busy or unavailable. Try again in a moment."
 
 
 @pytest.mark.parametrize("model, exc, message", [
@@ -241,7 +241,7 @@ BUSY_DEEPSEEK = "DeepSeek (via OpenRouter) is busy or unavailable. Try again in 
     ("deepseek", _err("openai._exceptions", "InternalServerError", _OPENAI_STATUS, status_code=503,
                       message="No provider could serve this request."), BUSY_DEEPSEEK),
     ("claude-haiku", _err("anthropic", "APIConnectionError"), "Couldn't reach Claude Haiku 5.5."),
-    ("deepseek", _err("openai", "APITimeoutError"), "Couldn't reach DeepSeek (via OpenRouter)."),
+    ("deepseek", _err("openai", "APITimeoutError"), "Couldn't reach DeepSeek V4.1 Flash (via OpenRouter)."),
     ("deepseek", _err("openai._exceptions", "BadRequestError", _OPENAI_STATUS, status_code=400), "The run failed."),
     ("claude-haiku", _err("somewhere.else", "AuthenticationError"), "The run failed."),
     ("claude-haiku", _wrapped(_err("anthropic", "AuthenticationError")), "The Anthropic API key was rejected."),
@@ -301,7 +301,7 @@ def _openrouter_connection_error_naming_key():
 @pytest.mark.parametrize("model, make_exc, message, key_in_message", [
     ("claude-haiku", _anthropic_auth_error, "The Anthropic API key was rejected.", False),
     ("deepseek", _openrouter_auth_error, "The OpenRouter API key was rejected.", False),
-    ("deepseek", _openrouter_connection_error_naming_key, "Couldn't reach DeepSeek (via OpenRouter).", True),
+    ("deepseek", _openrouter_connection_error_naming_key, "Couldn't reach DeepSeek V4.1 Flash (via OpenRouter).", True),
 ], ids=["anthropic-headers", "openrouter-headers", "key-in-message"])
 def test_key_never_reaches_events_or_logs(live, monkeypatch, caplog, model, make_exc, message, key_in_message):
     """Review Focus 5 with the key where a leak would really come from.

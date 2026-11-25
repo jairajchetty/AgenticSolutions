@@ -15,9 +15,8 @@ from .config import Settings
 MODEL_CHOICE_DENIED = "model choice is not available"
 UNKNOWN_MODEL = "unknown model"
 
-# Placeholder slug: Task 5's live check confirms it on OpenRouter (and that it
-# supports tool calls) before it ships as the default.
-DEEPSEEK_SLUG = "deepseek/deepseek-chat"
+# Checked live on 2026-11-25 (Session turn and both Approval samples, with tools).
+DEEPSEEK_SLUG = "deepseek/deepseek-v4.1-flash"
 
 CREDENTIAL_ENV = {"anthropic": "ANTHROPIC_API_KEY", "openrouter": "OPENROUTER_API_KEY"}
 LOOPBACK_BIND = {"127.0.0.1", "::1", "localhost"}
@@ -40,7 +39,7 @@ OFFLINE = ModelEntry("offline", "Offline (scripted)", "offline", "")  # type: ig
 
 DEFAULT_ENTRIES: tuple[ModelEntry, ...] = (
     ModelEntry("claude-haiku", "Claude Haiku 5.5", "anthropic", "claude-haiku-5-5"),
-    ModelEntry("deepseek", "DeepSeek (via OpenRouter)", "openrouter", DEEPSEEK_SLUG),
+    ModelEntry("deepseek", "DeepSeek V4.1 Flash (via OpenRouter)", "openrouter", DEEPSEEK_SLUG),
 )
 
 _FIELDS = ("id", "label", "provider", "model")

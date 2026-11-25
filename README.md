@@ -232,9 +232,14 @@ The menu works only when `HOST` is a loopback address (`127.0.0.1`, `::1` or `lo
 
 ### Checked models
 
-The default DeepSeek name is a best guess until a live check confirms it on OpenRouter, including its tool support.
+Each default model was checked live on 2026-11-25 with one Session turn and both Approval samples. Every run used tool calls and reached the expected result.
 
-Not yet checked live.
+| Model | Result |
+|---|---|
+| Claude Haiku 5.5 (Anthropic) | Passed. It asks which item you mean when the request does not name one, so each Approval sample took two turns. |
+| DeepSeek V4.1 Flash (`deepseek/deepseek-v4.1-flash`, via OpenRouter) | Passed. It chose the laptop itself and reached the approval card in one turn; it asked which keyboard. |
+
+Qwen and Kimi were not needed. Check any model you add the same way before relying on it.
 
 ## Approval demo and the mock ERP
 
