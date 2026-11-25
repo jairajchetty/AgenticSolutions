@@ -23,6 +23,8 @@ CREDENTIAL_ENV = {"anthropic": "ANTHROPIC_API_KEY", "openrouter": "OPENROUTER_AP
 LOOPBACK_BIND = {"127.0.0.1", "::1", "localhost"}
 LOOPBACK_CLIENT = {"127.0.0.1", "::1"}
 LOOPBACK_HOSTNAMES = {"localhost", "127.0.0.1", "::1"}  # urlsplit strips the brackets
+# Any of these means a proxy or tunnel stands between the person and the app.
+FORWARDING_HEADERS = ("forwarded", "x-forwarded-for", "x-forwarded-host", "x-real-ip")
 
 
 @dataclass(frozen=True)
@@ -100,13 +102,24 @@ def _host_hostname(host: str | None) -> str | None:
 def may_choose_model(request: Request, settings: Settings) -> bool:
     """True only for the person on their own machine. The only gate for real models.
 
-    Every condition must hold: loopback bind, loopback peer, a loopback Host
-    (blocks DNS rebinding), and for POSTs an Origin, if sent, that matches Host
-    (blocks cross-site posts). Milestone 4 replaces this body with an admin rule.
+    Every condition must hold: loopback bind, a loopback local socket and peer,
+    no forwarding headers, a loopback Host (blocks DNS rebinding), and for POSTs
+    an Origin, if sent, that matches Host (blocks cross-site posts).
+
+    The socket address (``scope["server"]``) is the one proxy headers can't
+    rewrite. A proxy or tunnel on this machine that adds no forwarding header
+    and rewrites Host still passes: no request check can see it, so the README
+    says never to run one in front while a key is set. Milestone 4 replaces
+    this body with an admin rule.
     """
     if settings.host not in LOOPBACK_BIND:
         return False
+    server = request.scope.get("server")
+    if not server or server[0] not in LOOPBACK_CLIENT:
+        return False
     if request.client is None or request.client.host not in LOOPBACK_CLIENT:
+        return False
+    if any(name in request.headers for name in FORWARDING_HEADERS):
         return False
     host = request.headers.get("host")
     if _host_hostname(host) not in LOOPBACK_HOSTNAMES:

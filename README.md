@@ -160,7 +160,9 @@ The frontend's pure logic (hash routing, catalog search) has Node unit tests in 
 
 The Studio runs offline by default. A scripted model replies, so no key is needed and nothing costs money. You can also run a conversation on a real model.
 
-A "Model" menu in the header lists the choices. It appears only when you run the Studio on your own machine. The server must listen on a loopback address, and the request must come from that machine. The menu does not appear on a shared or public server. A later milestone will limit it to administrators.
+A "Model" menu in the header lists the choices. It appears only when you run the Studio on your own machine. The server must listen on a loopback address (your own machine), and the request must come from that machine. Open the page as `http://localhost:8000` or `http://127.0.0.1:8000`. The menu does not appear on a shared or public server. A later milestone will limit it to administrators.
+
+Never put a proxy or tunnel in front of the Studio while a key is set. This includes a reverse proxy, ngrok, cloudflared and SSH tunnels. The Studio refuses requests that carry forwarding headers. A forwarder that hides itself cannot be detected, so anyone who reaches it could run a paid model. Public use waits for the administrator rule in Milestone 4.
 
 ### Keys
 
@@ -190,7 +192,7 @@ If an OpenRouter entry is configured and the package is missing, the Studio refu
 | `provider` | `anthropic` or `openrouter`. |
 | `model` | The provider's model name. |
 
-This example keeps Claude Haiku and adds a Qwen model through OpenRouter:
+This example keeps Claude Haiku and adds a Qwen model through OpenRouter. The Qwen model name has not been checked; it shows the format only.
 
 ```bash
 STUDIO_MODELS='[

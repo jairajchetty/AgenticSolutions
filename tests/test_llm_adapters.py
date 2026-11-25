@@ -22,6 +22,29 @@ def ping() -> str:
     return "pong"
 
 
+class _Captured(Exception):
+    pass
+
+
+def streamed_payload(m):
+    """The payload a streamed call would send: captured, then stopped before any request."""
+    seen = {}
+    build = type(m)._get_request_payload
+
+    def capture(self, *a, **k):
+        seen["payload"] = build(self, *a, **k)
+        raise _Captured
+
+    cls = type(m)
+    cls._get_request_payload = capture
+    try:
+        with pytest.raises(_Captured):
+            next(m._stream([HumanMessage("hi")]))
+    finally:
+        cls._get_request_payload = build
+    return seen["payload"]
+
+
 def test_anthropic_entry_builds_with_max_tokens_and_no_temperature(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "dummy-key")
     m = make_model(CLAUDE, Settings())
@@ -39,8 +62,10 @@ def test_openrouter_payload_has_base_url_routing_and_headers(monkeypatch):
     payload = m._get_request_payload([HumanMessage("hi")])
     assert payload["extra_body"]["provider"] == {
         "data_collection": "deny", "require_parameters": True, "zdr": True}
-    assert (payload.get("max_tokens") or payload.get("max_completion_tokens")) == 4096
+    assert payload["max_completion_tokens"] == 4096         # OpenRouter's current field
+    assert "max_tokens" not in payload                      # deprecated there
     assert "temperature" not in payload
+    assert streamed_payload(m)["stream_options"]["include_usage"] is True   # else runs report 0 tokens
 
     plain = make_model(ROUTER, Settings())
     assert plain._get_request_payload([HumanMessage("hi")])["extra_body"]["provider"] == {

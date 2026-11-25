@@ -11,15 +11,20 @@ from agentic_solutions.web.models import (
     load_entries, may_choose_model)
 
 
-def make_request(client="127.0.0.1", host="127.0.0.1:8000", origin=None, method="GET"):
+def make_scope(client="127.0.0.1", host="127.0.0.1:8000", origin=None, method="GET",
+               server=("127.0.0.1", 8000), extra=()):
     headers = []
     if host is not None:
         headers.append((b"host", host.encode()))
     if origin is not None:
         headers.append((b"origin", origin.encode()))
-    scope = {"type": "http", "method": method, "headers": headers, "path": "/",
-             "query_string": b"", "client": (client, 5000) if client else None}
-    return Request(scope)
+    headers += [(k.encode(), v.encode()) for k, v in extra]
+    return {"type": "http", "method": method, "headers": headers, "path": "/", "query_string": b"",
+            "client": (client, 5000) if client else None, "server": server}
+
+
+def make_request(**kwargs):
+    return Request(make_scope(**kwargs))
 
 
 def test_defaults_and_env_override():
@@ -99,9 +104,39 @@ def test_listed_only_with_credential():
     ("127.0.0.1", {"method": "POST", "origin": "ftp://127.0.0.1:8000"}, False),
     ("127.0.0.1", {"method": "GET", "origin": "https://evil.example"}, True),
     ("127.0.0.1", {"method": "GET"}, True),
+    ("::1", {"client": "::1", "host": "[::1]:8000", "server": ("::1", 8000)}, True),
+    ("127.0.0.1", {"server": ("10.0.0.2", 8000)}, False),       # the socket is not on loopback
+    ("127.0.0.1", {"server": None}, False),                     # e.g. a unix socket behind a proxy
+    ("127.0.0.1", {"extra": [("forwarded", "for=127.0.0.1")]}, False),
+    ("127.0.0.1", {"extra": [("x-forwarded-for", "127.0.0.1")]}, False),
+    ("127.0.0.1", {"extra": [("x-forwarded-host", "localhost")]}, False),
+    ("127.0.0.1", {"extra": [("x-real-ip", "127.0.0.1")]}, False),
+    ("127.0.0.1", {"extra": [("x-forwarded-for", "")]}, False),  # present at all is enough
 ])
 def test_check_true_only_all_loopback(bind, kwargs, expected):
     assert may_choose_model(make_request(**kwargs), Settings(host=bind)) is expected
+
+
+@pytest.mark.anyio
+async def test_spoofed_forwarded_for_through_uvicorn_proxy_middleware_is_denied():
+    """With FORWARDED_ALLOW_IPS=*, uvicorn rewrites the peer from X-Forwarded-For.
+
+    A LAN client claiming to be 127.0.0.1 then looks like a loopback peer; the
+    check must still say no, because the forwarded header is present.
+    """
+    from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+
+    seen = {}
+
+    async def app(scope, receive, send):
+        seen["client"] = scope["client"]
+        seen["allowed"] = may_choose_model(Request(scope), Settings(host="127.0.0.1"))
+
+    wrapped = ProxyHeadersMiddleware(app, trusted_hosts="*")
+    scope = make_scope(client="10.0.0.5", host="localhost", extra=[("x-forwarded-for", "127.0.0.1")])
+    await wrapped(scope, None, None)
+    assert seen["client"][0] == "127.0.0.1"                     # the middleware did rewrite the peer
+    assert seen["allowed"] is False
 
 
 def test_main_uses_settings_host_port(monkeypatch):
@@ -113,3 +148,4 @@ def test_main_uses_settings_host_port(monkeypatch):
     (args, kwargs), = calls
     assert args == ("agentic_solutions.web.app:create_app",)
     assert kwargs["host"] == "127.0.0.1" and kwargs["port"] == 8123 and kwargs["workers"] == 1
+    assert kwargs["proxy_headers"] is False                     # never rewrite the peer from headers

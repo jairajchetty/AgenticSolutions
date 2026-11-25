@@ -9,13 +9,18 @@ import json
 import logging
 import time
 
+import anthropic
+import httpx2
+import openai
 import pytest
 from fastapi.testclient import TestClient
 from langgraph.checkpoint.memory import InMemorySaver
 
+from agentic_solutions.common import llm as llm_mod
 from agentic_solutions.web import registry as registry_module
 from agentic_solutions.web.app import create_app, graph_for
 from agentic_solutions.web.config import Settings
+from agentic_solutions.web.models import entry_for
 from agentic_solutions.web.offline.model import Script, ScriptedChatModel
 from agentic_solutions.web.offline.scripts import SCRIPTS
 from agentic_solutions.web.registry import PATTERNS
@@ -240,8 +245,14 @@ BUSY_DEEPSEEK = "DeepSeek (via OpenRouter) is busy or unavailable. Try again in 
     ("deepseek", _err("openai._exceptions", "BadRequestError", _OPENAI_STATUS, status_code=400), "The run failed."),
     ("claude-haiku", _err("somewhere.else", "AuthenticationError"), "The run failed."),
     ("claude-haiku", _wrapped(_err("anthropic", "AuthenticationError")), "The Anthropic API key was rejected."),
+    ("claude-haiku", anthropic.OverloadedError(
+        "Overloaded", response=httpx2.Response(529, request=httpx2.Request("POST", "https://api.anthropic.com")),
+        body=None), BUSY_CLAUDE),
+    ("claude-haiku", _err("anthropic._exceptions", "InternalServerError",
+                          type("APIStatusError", (Exception,), {"__module__": "anthropic._exceptions"}),
+                          status_code=529), BUSY_CLAUDE),
 ], ids=["auth-anthropic", "auth-openrouter", "rate-limit", "no-provider-404", "no-provider-503",
-        "connection", "timeout", "other-status", "not-a-provider", "wrapped"])
+        "connection", "timeout", "other-status", "not-a-provider", "wrapped", "overloaded", "status-529"])
 def test_provider_errors_map_to_safe_copy(live, fake_models, caplog, model, exc, message):   # Review Focus 5
     class Raising:
         def bind_tools(self, *_a, **_k):
@@ -260,10 +271,70 @@ def test_provider_errors_map_to_safe_copy(live, fake_models, caplog, model, exc,
     assert live.get(f"/api/threads/{tid}/state").json()["closed"] is True
     r = live.post(f"/api/threads/{tid}/runs", json={"text": "again"})
     assert r.status_code == 409
-    text = json.dumps(ev)
-    assert SENTINEL not in text and "provider-detail" not in text
-    assert SENTINEL not in caplog.text
+    assert "provider-detail" not in json.dumps(ev)                  # the exception text stays server-side
     assert "run failed" in caplog.text                              # the real exception is logged server-side
+
+
+KEY = "sk-leak-sentinel-7f3a"  # the only place it lives is the key, the request headers and the error
+
+
+def _anthropic_auth_error():
+    req = httpx2.Request("POST", "https://api.anthropic.com/v1/messages", headers={"x-api-key": KEY})
+    resp = httpx2.Response(401, request=req, headers={"x-echo-key": KEY})
+    return anthropic.AuthenticationError("invalid x-api-key", response=resp,
+                                         body={"error": {"message": f"key {KEY} is invalid"}})
+
+
+def _openrouter_auth_error():
+    req = httpx2.Request("POST", "https://openrouter.ai/api/v1/chat/completions",
+                         headers={"Authorization": f"Bearer {KEY}"})
+    resp = httpx2.Response(401, request=req, headers={"x-echo-key": KEY})
+    return openai.AuthenticationError("No auth credentials found", response=resp, body={"key": KEY})
+
+
+def _openrouter_connection_error_naming_key():
+    req = httpx2.Request("POST", "https://openrouter.ai/api/v1/chat/completions",
+                         headers={"Authorization": f"Bearer {KEY}"})
+    return openai.APIConnectionError(message=f"Connection failed using key {KEY}", request=req)
+
+
+@pytest.mark.parametrize("model, make_exc, message, key_in_message", [
+    ("claude-haiku", _anthropic_auth_error, "The Anthropic API key was rejected.", False),
+    ("deepseek", _openrouter_auth_error, "The OpenRouter API key was rejected.", False),
+    ("deepseek", _openrouter_connection_error_naming_key, "Couldn't reach DeepSeek (via OpenRouter).", True),
+], ids=["anthropic-headers", "openrouter-headers", "key-in-message"])
+def test_key_never_reaches_events_or_logs(live, monkeypatch, caplog, model, make_exc, message, key_in_message):
+    """Review Focus 5 with the key where a leak would really come from.
+
+    The real adapters are built (the key read from the environment into the
+    model), and the real SDK exception carries the key on its request headers,
+    its response and its body, and in one case in its message. Only the model
+    call is replaced, so nothing is sent.
+    """
+    monkeypatch.setenv("ANTHROPIC_API_KEY", KEY)
+    monkeypatch.setenv("OPENROUTER_API_KEY", KEY)
+    monkeypatch.setattr(registry_module, "make_model", llm_mod.make_model)   # the real adapters
+    exc = make_exc()
+
+    def boom(*_a, **_k):
+        raise exc
+
+    async def aboom(*_a, **_k):
+        raise exc
+
+    cls = type(llm_mod.make_model(entry_for(live.app.state.model_entries, model), Settings()))
+    for name, fn in (("_generate", boom), ("_stream", boom), ("_agenerate", aboom), ("_astream", aboom)):
+        monkeypatch.setattr(cls, name, fn)
+    caplog.set_level(logging.DEBUG)
+    tid = new_thread(live, model=model).json()["thread_id"]
+    ev = run(live, tid, {"text": "hello"})
+    assert [e for e in ev if e["type"] == "error"] == [{"type": "error", "message": message}]
+    assert KEY not in json.dumps(ev)                                # never in any SSE event
+    assert "run failed" in caplog.text                              # the failure is logged ...
+    if key_in_message:
+        assert KEY in caplog.text                                   # ... with its message (the traceback)
+    else:
+        assert KEY not in caplog.text                               # ... but never its headers, body or the model
 
 
 # ---- approval with a tool-calling live model -----------------------------
@@ -286,6 +357,37 @@ def test_approval_with_fake_tool_calling_live_model(live, fake_models):
     assert [e["event"] for e in after["values"]["audit"]].count("submitted") == 1
     assert "submitted" in [e["event"] for e in live.app.state.erp_store.get_audit_trail(tid, "REQ-0001")]
     assert set(fake_models.built) == {"claude-haiku"}
+
+
+def test_approval_resume_rechecks_and_does_not_close(live, fake_models):
+    fake_models(SCRIPTS["approval"])
+    tid = new_thread(live, "approval", "claude-haiku").json()["thread_id"]
+    run(live, tid, {"text": LAPTOPS})
+    card = live.get(f"/api/threads/{tid}/state").json()["paused"]
+    decision = {"decision": "approve", "version": card["payload"]["version"],
+                "short_hash": card["payload"]["short_hash"]}
+    for headers in ({"host": "rebound.example:8000"}, {"origin": "http://other-site.example"}):
+        r = live.post(f"/api/threads/{tid}/runs", json={"resume": decision}, headers=headers)
+        assert r.status_code == 403 and r.json() == DENIED
+        st = live.get(f"/api/threads/{tid}/state").json()
+        assert st["closed"] is False and st["paused"]["node"] == "approval"   # the card still waits
+    ev = run(live, tid, {"resume": decision})                       # and is decided once the check holds
+    assert ev[-1]["status"] == "paused"
+    assert live.get(f"/api/threads/{tid}/state").json()["paused"]["node"] == "ask"
+
+
+# ---- startup -------------------------------------------------------------
+
+
+@pytest.mark.parametrize("raw, message", [
+    ("{not json", "STUDIO_MODELS is not valid JSON"),
+    (json.dumps([{"id": "x", "label": "X", "provider": "openai", "model": "m"}]), "unknown provider 'openai'"),
+])
+def test_bad_studio_models_fails_startup(tmp_path, raw, message):
+    app = make_app(tmp_path, studio_models=raw)
+    with pytest.raises(ValueError, match=message):
+        with TestClient(app):
+            pass
 
 
 # ---- lazy graphs ---------------------------------------------------------

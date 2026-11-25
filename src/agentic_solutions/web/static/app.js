@@ -268,8 +268,11 @@ function renderPatternChrome(detail) {
 // next to it picks the model of the next one (model picker spec §7).
 const MODEL_KEY = "studio.model";
 const NEXT_CHAT_NOTE = "Applies to your next chat.";
+const NO_REAL_MODELS = "Real models aren't available here. This chat runs offline.";
+let badgeModel = null;  // {id, label} the badge names: the conversation on screen
 
 function setBadge(model) {
+  badgeModel = model ?? null;
   const badge = $("mode-badge");
   badge.dataset.mode = !model || model.id === OFFLINE_ID ? "offline" : "live";
   badge.querySelector(".mode-text").textContent = badgeText(model);
@@ -467,30 +470,35 @@ async function refreshThreadCaption(b, gen, threadId) {
   } catch { /* the caption is informational only */ }
 }
 
-// Start a thread on the chosen model. If the server refuses a real model
-// (its check failed since the menu was drawn), fall back to Offline, redraw
-// the menu and say why. The note about the next chat is spent either way.
-async function createThread(b, patternId) {
-  $("model-note").textContent = "";
-  const model = state.choice === OFFLINE_ID ? undefined : state.choice;
+// Start a thread on the chosen model, or on `modelId` (a lost thread's own
+// model, so a restart never moves a conversation to another model). If the
+// server refuses a real model (its check failed since the menu was drawn),
+// fall back to Offline, redraw the menu and say why. The note about the next
+// chat is spent whenever the thread starts on the menu's choice.
+async function createThread(b, patternId, modelId = state.choice) {
+  if (modelId === state.choice) $("model-note").textContent = "";
+  const model = modelId === OFFLINE_ID ? undefined : modelId;
   let created;
   try {
     created = await postThread(patternId, { model });
   } catch (err) {
     if (!model || !(err instanceof ApiError && err.status === 403)) throw err;
-    state.choice = OFFLINE_ID;
-    storeChoice(OFFLINE_ID);
-    renderMenu();
-    b.console.showNotice(`${err.message}. This chat runs offline.`);
+    if (model === state.choice) {
+      state.choice = OFFLINE_ID;
+      storeChoice(OFFLINE_ID);
+      renderMenu();
+    }
+    b.console.showNotice(NO_REAL_MODELS);
     created = await postThread(patternId);
   }
-  const used = state.options.find((o) => o.id === created.mode);
+  const used = state.options.find((o) => o.id === created.mode)
+    ?? (badgeModel?.id === created.mode ? badgeModel : null);  // a lost thread's model, since unlisted
   setBadge(used ?? { id: created.mode, label: created.mode });
   return created;
 }
 
-async function newChatThread(b, gen) {
-  const { thread_id } = await createThread(b, b.pattern.id);
+async function newChatThread(b, gen, modelId) {
+  const { thread_id } = await createThread(b, b.pattern.id, modelId);
   if (!live(b, gen)) return null;
   setThread(thread_id);
   const saved = await getState(thread_id);  // primed: paused at `ask`
@@ -536,10 +544,12 @@ async function send(b, text) {
       await run(tid);
     } catch (err) {
       if (!(err instanceof ApiError && err.status === 404) || !live(b, gen)) throw err;
-      // The server forgot this thread (it restarted): start over once, quietly.
-      tid = chat ? await newChatThread(b, gen) : null;
+      // The server forgot this thread (it restarted): start over once, quietly,
+      // on the lost thread's own model (the badge's), not the menu's choice.
+      const lost = badgeModel?.id ?? OFFLINE_ID;
+      tid = chat ? await newChatThread(b, gen, lost) : null;
       if (!chat) {
-        ({ thread_id: tid } = await createThread(b, b.pattern.id));
+        ({ thread_id: tid } = await createThread(b, b.pattern.id, lost));
         if (!live(b, gen)) return;
         setThread(tid);
       }
@@ -589,7 +599,7 @@ async function decide(b, body) {
       // The server forgot this thread (it restarted). The decision belonged to
       // a proposal that no longer exists, so it is not replayed.
       try {
-        if (await newChatThread(b, gen)) b.console.showNotice(LOST_ORDER);
+        if (await newChatThread(b, gen, badgeModel?.id ?? OFFLINE_ID)) b.console.showNotice(LOST_ORDER);
       } catch (again) {
         if (live(b, gen)) b.console.showNotice(`Could not start a chat: ${again.message}.`);
       }

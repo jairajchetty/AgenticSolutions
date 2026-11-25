@@ -95,7 +95,8 @@ def make_model(entry, settings) -> BaseChatModel:
             model=entry.model,
             base_url=OPENROUTER_URL,
             api_key=os.environ.get("OPENROUTER_API_KEY"),
-            max_tokens=MAX_TOKENS,
+            max_tokens=MAX_TOKENS,  # sent as max_completion_tokens, OpenRouter's current field
+            stream_usage=True,  # with a custom base_url it is off, and streamed runs report 0 tokens
             extra_body={"provider": provider},
             default_headers=headers or None,
         )

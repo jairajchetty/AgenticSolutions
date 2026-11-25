@@ -59,7 +59,9 @@ def provider_error_message(exc: BaseException, label: str | None, provider: str 
         names = _provider_class_names(err)
         if "AuthenticationError" in names:
             return f"The {provider} API key was rejected."
-        if "RateLimitError" in names:
+        # Anthropic's overload is HTTP 529: OverloadedError, or a bare status error in older SDKs.
+        if "RateLimitError" in names or "OverloadedError" in names or (
+                "APIStatusError" in names and getattr(err, "status_code", None) == 529):
             return f"{label} is busy or unavailable. Try again in a moment."
         if names & {"APIConnectionError", "APITimeoutError"}:
             return f"Couldn't reach {label}."
@@ -185,8 +187,9 @@ async def run_events(
         yield {"type": "error", "message": str(err)}
         yield {"type": "run_finished", "status": "error", "output": None, "usage": usage}
     except Exception as exc:
-        # The traceback names the exception and its message only: never the
-        # request, its headers or the model object, so no key is logged.
+        # The event never carries the exception's text, only the fixed safe copy.
+        # The log has the traceback (class and message) but not the exception's
+        # request, response, headers or body, nor any frame's locals.
         log.exception("run failed (thread %s, model %s)", thread_id, model)
         yield {"type": "error", "message": provider_error_message(exc, label, provider)}
         yield {"type": "run_finished", "status": "error", "output": None, "usage": usage}
