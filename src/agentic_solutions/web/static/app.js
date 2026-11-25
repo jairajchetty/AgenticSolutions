@@ -9,7 +9,7 @@
 // for it and runs messages through `streamRun`. Otherwise the Guide-only view
 // shows.
 import {
-  ApiError, createThread, getCatalog, getCatalogPage, getPattern, getSession, getState, streamRun,
+  ApiError, createThread as postThread, getCatalog, getCatalogPage, getPattern, getSession, getState, streamRun,
 } from "./api.js";
 import { renderGuide, renderInlineCode, renderPurpose, splitPurpose } from "./guide.js";
 import { renderHome } from "./catalog.js";
@@ -19,11 +19,12 @@ import { createGraph } from "./graph.js";
 import { createTrace } from "./trace.js";
 import { createConsole } from "./console.js";
 import { formatHash, parseHash } from "./router.js";
+import { OFFLINE_ID, badgeText, menuOptions, rememberedChoice } from "./models.js";
 
 const NOT_FOUND_TEXT = "That pattern wasn't found";
 const HOME = "home";  // requestedRoute while the catalog home is showing
 
-export const state = { pattern: null, threadId: null, session: null };
+export const state = { pattern: null, threadId: null, session: null, options: [], choice: OFFLINE_ID };
 
 const $ = (id) => document.getElementById(id);
 let loadToken = 0;  // ignores late responses after a quicker route change
@@ -263,11 +264,51 @@ function renderPatternChrome(detail) {
   $("console-send").textContent = detail.mode === "chat" ? "Send" : "Run";
 }
 
-function renderSession(session) {
+// The header badge names the model of the conversation on screen; the menu
+// next to it picks the model of the next one (model picker spec §7).
+const MODEL_KEY = "studio.model";
+const NEXT_CHAT_NOTE = "Applies to your next chat.";
+
+function setBadge(model) {
   const badge = $("mode-badge");
-  badge.dataset.mode = session.mode;
-  badge.querySelector(".mode-text").textContent =
-    session.mode === "offline" ? "Offline (scripted)" : "Live";
+  badge.dataset.mode = !model || model.id === OFFLINE_ID ? "offline" : "live";
+  badge.querySelector(".mode-text").textContent = badgeText(model);
+}
+
+function chosenModel() {
+  return state.options.find((o) => o.id === state.choice) ?? state.options[0];
+}
+
+function storeChoice(id) {
+  try { sessionStorage.setItem(MODEL_KEY, id); } catch { /* storage may be blocked */ }
+}
+
+function renderMenu() {
+  const menu = $("model-menu");
+  const select = $("model-select");
+  menu.hidden = state.options.length < 2;
+  select.replaceChildren(...state.options.map((o) => {
+    const opt = document.createElement("option");
+    opt.value = o.id;
+    opt.textContent = o.label;
+    return opt;
+  }));
+  select.value = state.choice;
+}
+
+function renderSession(session) {
+  state.options = menuOptions(session);
+  let stored = null;
+  try { stored = sessionStorage.getItem(MODEL_KEY); } catch { /* storage may be blocked */ }
+  state.choice = rememberedChoice(stored, state.options);
+  renderMenu();
+  setBadge(chosenModel());
+  $("model-select").addEventListener("change", () => {
+    state.choice = rememberedChoice($("model-select").value, state.options);
+    storeChoice(state.choice);
+    $("model-note").textContent = NEXT_CHAT_NOTE;
+    if (!state.threadId) setBadge(chosenModel());  // nothing on screen yet: show what will run
+  });
   if (session.max_input_chars) $("console-text").maxLength = session.max_input_chars;  // the server's limit
 }
 
@@ -390,6 +431,7 @@ function dispatch(b, evt) {
 
 // Show a thread's saved state in every panel (page reload, new thread).
 function restoreBench(b, saved, { fresh = false } = {}) {
+  if (saved.model) setBadge(saved.model);
   b.graph.reset();
   if (saved.paused) b.graph.setNodeState(saved.paused.node, "paused");
   if (saved.ended) b.graph.setNodeState("__end__", "done");
@@ -411,6 +453,7 @@ function showThreadCaption(b, threadId, saved) {
   const parts = [];
   if (saved.paused) parts.push(`⏸ paused at ${saved.paused.node}`);
   parts.push(`thread ${threadId.slice(0, 4)}…`, `${n} checkpoint${n === 1 ? "" : "s"}`);
+  if (saved.model) parts.push(saved.model.label);
   el.textContent = parts.join("  ·  ");
   el.title = `thread_id ${threadId}`;
   el.hidden = false;
@@ -424,8 +467,30 @@ async function refreshThreadCaption(b, gen, threadId) {
   } catch { /* the caption is informational only */ }
 }
 
+// Start a thread on the chosen model. If the server refuses a real model
+// (its check failed since the menu was drawn), fall back to Offline, redraw
+// the menu and say why. The note about the next chat is spent either way.
+async function createThread(b, patternId) {
+  $("model-note").textContent = "";
+  const model = state.choice === OFFLINE_ID ? undefined : state.choice;
+  let created;
+  try {
+    created = await postThread(patternId, { model });
+  } catch (err) {
+    if (!model || !(err instanceof ApiError && err.status === 403)) throw err;
+    state.choice = OFFLINE_ID;
+    storeChoice(OFFLINE_ID);
+    renderMenu();
+    b.console.showNotice(`${err.message}. This chat runs offline.`);
+    created = await postThread(patternId);
+  }
+  const used = state.options.find((o) => o.id === created.mode);
+  setBadge(used ?? { id: created.mode, label: created.mode });
+  return created;
+}
+
 async function newChatThread(b, gen) {
-  const { thread_id } = await createThread(b.pattern.id);
+  const { thread_id } = await createThread(b, b.pattern.id);
   if (!live(b, gen)) return null;
   setThread(thread_id);
   const saved = await getState(thread_id);  // primed: paused at `ask`
@@ -458,7 +523,7 @@ async function send(b, text) {
     let tid = state.threadId;
     if (!chat) {
       // A trigger thread runs once, so every Run gets a fresh thread and trace.
-      ({ thread_id: tid } = await createThread(b.pattern.id));
+      ({ thread_id: tid } = await createThread(b, b.pattern.id));
       if (!live(b, gen)) return;
       setThread(tid);
       b.graph.reset();
@@ -474,7 +539,7 @@ async function send(b, text) {
       // The server forgot this thread (it restarted): start over once, quietly.
       tid = chat ? await newChatThread(b, gen) : null;
       if (!chat) {
-        ({ thread_id: tid } = await createThread(b.pattern.id));
+        ({ thread_id: tid } = await createThread(b, b.pattern.id));
         if (!live(b, gen)) return;
         setThread(tid);
       }
@@ -574,6 +639,8 @@ async function startNewChat(b) {
   b.trace.reset();
   b.console.reset();
   showThreadCaption(b, null, null);
+  $("model-note").textContent = "";
+  setBadge(chosenModel());
   b.console.setBusy(false);
   if (b.pattern.mode === "chat") await primeChat(b, gen);
 }
@@ -612,6 +679,7 @@ async function openBench(pattern) {
   });
 
   showThreadCaption(b, null, null);
+  setBadge(chosenModel());  // until a thread (or a restore) names its own model
 
   // Reload mid-conversation: rebuild the panels from the saved checkpoint.
   // The console stays busy meanwhile: a send now would race the restore.
