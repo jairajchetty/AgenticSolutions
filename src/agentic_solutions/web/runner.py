@@ -8,7 +8,9 @@
 
 The runner never raises: a failure or timeout becomes a safe ``error`` event
 followed by ``run_finished{status: "error"}``. Details go to the server log only,
-except for a ``UserFacingError``, whose message is written to be shown as is.
+except for a ``UserFacingError``, whose message is written to be shown as is,
+and a provider error on a live run, which becomes a fixed safe message
+(model picker spec §5).
 """
 import asyncio
 import logging
@@ -26,6 +28,46 @@ log = logging.getLogger(__name__)
 
 RunStatus = Literal["completed", "paused", "error"]  # M3 adds "budget_exhausted"
 _HIDDEN_NODES = {"__start__", "__end__"}
+_PROVIDER_MODULES = ("anthropic", "openai")  # matched by name, so neither SDK is imported here
+RUN_FAILED = "The run failed."
+
+
+def _provider_class_names(exc: BaseException) -> set[str]:
+    """Class names in the exception's MRO that come from a provider SDK."""
+    return {c.__name__ for c in type(exc).__mro__
+            if (c.__module__ or "").split(".")[0] in _PROVIDER_MODULES}
+
+
+def _chain(exc: BaseException):
+    """The exception and those it wraps (``__cause__``, then ``__context__``), without loops."""
+    seen: set[int] = set()
+    while exc is not None and id(exc) not in seen:
+        seen.add(id(exc))
+        yield exc
+        exc = exc.__cause__ or exc.__context__
+
+
+def provider_error_message(exc: BaseException, label: str | None, provider: str | None) -> str:
+    """The safe copy for a provider error on a live run; "The run failed." for anything else.
+
+    Only the exception's class and status are read: its text, request and
+    headers never reach the browser.
+    """
+    if label is None or provider is None:
+        return RUN_FAILED
+    for err in _chain(exc):
+        names = _provider_class_names(err)
+        if "AuthenticationError" in names:
+            return f"The {provider} API key was rejected."
+        if "RateLimitError" in names:
+            return f"{label} is busy or unavailable. Try again in a moment."
+        if names & {"APIConnectionError", "APITimeoutError"}:
+            return f"Couldn't reach {label}."
+        if "APIStatusError" in names and getattr(err, "status_code", None) in (404, 503):
+            text = str(err).lower()
+            if "provider" in text or "endpoint" in text:  # OpenRouter: no compliant provider
+                return f"{label} is busy or unavailable. Try again in a moment."
+    return RUN_FAILED
 
 
 def _messages_in(value: Any) -> list[BaseMessage]:
@@ -49,8 +91,14 @@ async def run_events(
     resumed: bool,
     timeout_s: float = 90.0,
     output: Callable[[dict], str | None] | None = None,
+    model: str = "offline",
+    label: str | None = None,
+    provider: str | None = None,
 ) -> AsyncIterator[dict]:
-    yield {"type": "run_started", "run_id": uuid.uuid4().hex, "thread_id": thread_id, "mode": mode}
+    """``mode`` is "offline" or "live"; ``model`` is the menu id. ``label`` and
+    ``provider`` (e.g. "Anthropic") name a live model in the safe error copy."""
+    yield {"type": "run_started", "run_id": uuid.uuid4().hex, "thread_id": thread_id, "mode": mode,
+           "model": model}
 
     usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
     started: dict[str, tuple[int, float]] = {}  # task id -> (step, monotonic start)
@@ -136,9 +184,11 @@ async def run_events(
         log.warning("run stopped (thread %s): %s", thread_id, err, exc_info=True)  # cause stays here
         yield {"type": "error", "message": str(err)}
         yield {"type": "run_finished", "status": "error", "output": None, "usage": usage}
-    except Exception:
-        log.exception("run failed (thread %s)", thread_id)
-        yield {"type": "error", "message": "The run failed."}
+    except Exception as exc:
+        # The traceback names the exception and its message only: never the
+        # request, its headers or the model object, so no key is logged.
+        log.exception("run failed (thread %s, model %s)", thread_id, model)
+        yield {"type": "error", "message": provider_error_message(exc, label, provider)}
         yield {"type": "run_finished", "status": "error", "output": None, "usage": usage}
     finally:
         await stream.aclose()

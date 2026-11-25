@@ -19,7 +19,7 @@ from agentic_solutions.agents.interrupt_chat_agent import graph as interrupt_gra
 from agentic_solutions.agents.qa_agent import graph as qa_graph
 from agentic_solutions.agents.secure_chat_agent import graph as secure_graph
 from agentic_solutions.agents.secure_chat_agent.guard import ThreatGuard
-from agentic_solutions.common.llm import LLMFactory
+from agentic_solutions.common.llm import LLMFactory, make_model
 from agentic_solutions.web.offline.model import ScriptedChatModel
 from agentic_solutions.web.offline.scripts import SCRIPTS
 from agentic_solutions.common.messages import text_of
@@ -157,3 +157,12 @@ def offline_factory(pattern_id: str, latency_scale: float = 1.0) -> LLMFactory:
         return ScriptedChatModel(script=script, latency=latency, tokens_per_second=tps)
 
     return factory
+
+
+def live_factory(entry, settings) -> LLMFactory:
+    """Return a factory building the menu entry's real model, a new one per call.
+
+    ``make_model`` is looked up when the factory is called, so tests can
+    replace it with a fake; keys are read from the environment there.
+    """
+    return lambda: make_model(entry, settings)
