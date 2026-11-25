@@ -2,6 +2,17 @@
 
 A learning repo for building agentic AI with [LangGraph](https://langchain-ai.github.io/langgraph/) and Claude, run locally.
 
+## Writing Guidelines
+- The audience are solution achitects and enterprise architects
+- The writing style should be professional, clear and concise.
+- Avoid using jargon, technical detail should be just sufficient to explain the solution.
+- Use plain direct language and short sentences
+- Example for the Approval pattern "What it is" : "The Approval pattern requires a person to approve an action before it can be executed.
+
+The agent can analyse information and prepare a recommendation, but it cannot perform the action. The workflow pauses until an authorised person approves, modifies, or rejects the proposal.
+
+Only approved actions can be executed. Approval is enforced by the platform, ensuring that people remain accountable for important decisions."
+
 ## Architecture
 
 ```
