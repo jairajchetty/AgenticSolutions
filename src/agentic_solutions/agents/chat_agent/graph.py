@@ -33,7 +33,7 @@ from langchain_core.messages import SystemMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 
-from agentic_solutions.common.llm import LLMFactory, get_llm
+from agentic_solutions.common.llm import LLMFactory, declined_or, get_llm
 
 SYSTEM_PROMPT = "You are a helpful assistant. Answer concisely and accurately."
 
@@ -103,7 +103,7 @@ def build_graph(ask_node=ask, checkpointer=None, llm_factory: LLMFactory | None 
     def answer_node(state: State) -> dict:
         # Resolved at call time so patching the module-level `get_llm` works.
         llm = (llm_factory or get_llm)()
-        reply = llm.invoke([SystemMessage(SYSTEM_PROMPT), *state["messages"]])
+        reply = declined_or(llm.invoke([SystemMessage(SYSTEM_PROMPT), *state["messages"]]))
         return {"messages": [reply]}
 
     builder = StateGraph(State)

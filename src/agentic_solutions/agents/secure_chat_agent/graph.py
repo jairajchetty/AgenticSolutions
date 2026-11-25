@@ -33,7 +33,7 @@ from langgraph.graph.message import add_messages
 
 from agentic_solutions.agents.chat_agent.graph import STOP_WORD, ask
 from agentic_solutions.agents.secure_chat_agent.guard import ThreatGuard
-from agentic_solutions.common.llm import LLMFactory, get_llm
+from agentic_solutions.common.llm import LLMFactory, declined_or, get_llm
 
 SYSTEM_PROMPT = "You are a helpful assistant. Answer concisely and accurately."
 
@@ -99,7 +99,7 @@ def build_graph(
     def answer(state: State) -> dict:
         """Node: ask Claude (same as agent 2). Only clean prompts get here."""
         llm = (llm_factory or get_llm)()  # resolved at call time
-        reply = llm.invoke([SystemMessage(SYSTEM_PROMPT), *state["messages"]])
+        reply = declined_or(llm.invoke([SystemMessage(SYSTEM_PROMPT), *state["messages"]]))
         return {"messages": [reply], "refusal": None}
 
     # ---- Routers --------------------------------------------------------

@@ -51,7 +51,7 @@ from langgraph.types import Command, interrupt
 from agentic_solutions.agents.chat_agent.graph import STOP_WORD
 from agentic_solutions.agents.interrupt_chat_agent.graph import ask as ask_for_text
 from agentic_solutions.common.errors import UserFacingError
-from agentic_solutions.common.llm import LLMFactory, get_llm
+from agentic_solutions.common.llm import LLMFactory, declined_or, get_llm
 from agentic_solutions.mcp_servers.erp import policy as order_policy
 
 from .erp import ErpClient, ErpToolError, ErpUnavailable, HttpErpClient, model_tools
@@ -231,7 +231,7 @@ def build_graph(
         # Up to MAX_TOOL_ROUNDS tools passes; the call after the last one must answer in text.
         capped = rounds >= MAX_TOOL_ROUNDS or proposals >= MAX_PROPOSALS
         llm = llm.bind_tools(tools, tool_choice=NO_TOOLS) if capped else llm.bind_tools(tools)
-        reply = await llm.ainvoke([SystemMessage(SYSTEM_PROMPT), *state["messages"]], config)
+        reply = declined_or(await llm.ainvoke([SystemMessage(SYSTEM_PROMPT), *state["messages"]], config))
         calls = reply.tool_calls
         if capped and calls:
             # Defence in depth: a model that ignores tool_choice still cannot pass the caps.
