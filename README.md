@@ -3,7 +3,7 @@
 A learning repo for building agentic AI with [LangGraph](https://langchain-ai.github.io/langgraph/) and Claude, run locally.
 
 ## Writing Guidelines
-- The audience are solution achitects and enterprise architects
+- The audience are solution architects and enterprise architects
 - The writing style should be professional, clear and concise.
 - Avoid using jargon, technical detail should be just sufficient to explain the solution.
 - Use plain direct language and short sentences
