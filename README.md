@@ -156,6 +156,84 @@ The server runs a single worker because thread ownership is kept in memory. Desi
 
 The frontend's pure logic (hash routing, catalog search) has Node unit tests in `tests/js`, run by `tests/test_js.py` as part of `pytest`. They need Node 21 or newer; with none found the test is skipped (set `NODE_BIN` to point at a specific binary).
 
+## Choosing a model
+
+The Studio runs offline by default. A scripted model replies, so no key is needed and nothing costs money. You can also run a conversation on a real model.
+
+A "Model" menu in the header lists the choices. It appears only when you run the Studio on your own machine. The server must listen on a loopback address, and the request must come from that machine. The menu does not appear on a shared or public server. A later milestone will limit it to administrators.
+
+### Keys
+
+| Key | Adds |
+| --- | --- |
+| `ANTHROPIC_API_KEY` | Claude Haiku 5.5 |
+| `OPENROUTER_API_KEY` | DeepSeek, through OpenRouter |
+
+An entry appears in the menu only when its key is set. With neither key, the menu is hidden and the Studio stays offline. Put the keys in `.env`.
+
+OpenRouter needs one extra package:
+
+```bash
+pip install -e '.[providers]'
+```
+
+If an OpenRouter entry is configured and the package is missing, the Studio refuses to start and says so.
+
+### Changing the list
+
+`STUDIO_MODELS` replaces the default entries. It is a JSON array. Each entry has four fields:
+
+| Field | Meaning |
+| --- | --- |
+| `id` | A short unique name. `offline` is reserved. |
+| `label` | The name shown in the menu. |
+| `provider` | `anthropic` or `openrouter`. |
+| `model` | The provider's model name. |
+
+This example keeps Claude Haiku and adds a Qwen model through OpenRouter:
+
+```bash
+STUDIO_MODELS='[
+  {"id":"claude-haiku","label":"Claude Haiku 5.5","provider":"anthropic","model":"claude-haiku-5-5"},
+  {"id":"qwen","label":"Qwen (via OpenRouter)","provider":"openrouter","model":"qwen/qwen3-235b-a22b"}
+]'
+```
+
+Check the model name on OpenRouter first. The model must support tool calls. The Studio refuses to start if the JSON is malformed, a field is missing, an id is repeated, or the provider is unknown.
+
+### What OpenRouter is told
+
+Every OpenRouter request says two things:
+
+- Do not use hosts that collect or train on the data (`data_collection: deny`).
+- Use only hosts that support every parameter in the request, including tools.
+
+OpenRouter may still send the request to any other host that meets both rules. Set `OPENROUTER_ZDR=1` to allow only hosts with a zero data retention policy. With that set, fewer hosts qualify, and a request may fail when none does.
+
+To label your traffic in OpenRouter, set `OPENROUTER_SITE_URL` and `OPENROUTER_APP_TITLE`. They are sent only when set.
+
+### Address and port
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `HOST` | `127.0.0.1` | The address the server listens on |
+| `PORT` | `8000` | The port the server listens on |
+
+The menu works only when `HOST` is a loopback address (`127.0.0.1`, `::1` or `localhost`). If you set `HOST` to anything else, such as `0.0.0.0`, the menu is off and every conversation runs offline.
+
+### How a choice applies
+
+- A conversation keeps the model it started with.
+- A change in the menu applies to your next chat. The page says so.
+- Before a chat starts, the badge shows the model the next chat will use. Once it starts, the badge shows that chat's model.
+- The choice is remembered for the browser session. If the model is no longer listed, the menu returns to Offline.
+
+### Checked models
+
+The default DeepSeek name is a best guess until a live check confirms it on OpenRouter, including its tool support.
+
+Not yet checked live.
+
 ## Approval demo and the mock ERP
 
 The Approval demo orders goods from a mock ERP (enterprise resource planning) system for a fictional South African company, priced in rand. The agent can search the catalogue, check budgets, get quotes and draft a requisition. It cannot place the order. Orders of R5,000 or less are approved by policy; larger orders pause for you to approve, edit or reject. The ERP is an MCP server, and it checks every approval itself.
