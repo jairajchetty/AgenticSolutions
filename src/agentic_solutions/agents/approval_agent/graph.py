@@ -67,8 +67,10 @@ SYSTEM_PROMPT = (
     "mock ERP with prices in ZAR. To order something: search the catalogue, check the cost "
     "centre's budget, get a price quote for each item, draft a requisition, then call "
     "propose_order(req_id, summary) on its own. You cannot place orders yourself: a policy "
-    "or a person approves each proposal, and you are told the outcome. Otherwise answer in "
-    "plain text."
+    "or a person approves each proposal, and you are told the outcome. Never assume missing "
+    "details: if the request does not say exactly which item, how many, or which cost centre, "
+    "or more than one catalogue item matches, ask the person before drafting anything. "
+    "Otherwise answer in plain text."
 )
 
 PROPOSE_ALONE = "Error: call propose_order on its own, after the other tools."
