@@ -102,6 +102,7 @@ All entries are built through one factory: `make_model(entry) -> BaseChatModel`,
 `may_choose_model(request) -> bool` is the only gate. **Now** it returns true when **both** hold:
 1. The server's bind host is loopback: `HOST` (default `127.0.0.1`), which `web/__main__.py` also uses with `PORT` (default `8000`).
 2. The requesting client is loopback (`request.client.host` in `127.0.0.1` / `::1`). This holds even if the app is started another way, e.g. `uvicorn --host 0.0.0.0` behind Docker.
+3. **(Added by the final review.)** The connection's own local socket address (`scope["server"]`) is loopback, and the request carries no forwarding header (`Forwarded`, `X-Forwarded-For`, `X-Forwarded-Host`, `X-Real-IP`). Proxy headers can rewrite `request.client` but not the socket. `web/__main__.py` runs uvicorn with `proxy_headers=False`. No header check can see a forwarder that hides itself, so the README says never to put a proxy or tunnel in front while a key is set. Public use needs Milestone 4's admin rule.
 
 **Later (Milestone 4):** the body becomes "the session belongs to an admin". Every caller is unchanged.
 
