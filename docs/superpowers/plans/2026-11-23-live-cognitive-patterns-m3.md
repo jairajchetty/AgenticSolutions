@@ -1,5 +1,7 @@
 # Live Cognitive Patterns + Local Live Mode (Milestone 3) Implementation Plan
 
+> **Superseded in part (2026-11-25):** the local Live switch moved to the Model Picker spec (`docs/superpowers/specs/2026-11-25-model-picker-design.md`). Task 8 (Local Live backend), the Live switch and mode badge in Task 10, Task 12 (live smoke check), and Task 1's live API error mapping are superseded; skip them when M3 resumes. The tool-calling scripted model from Task 2 is already built on `feature/approval-demo`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make ReAct, Reflection and Plan-and-Execute live demos (offline-scripted by default), and add a local-only Live switch that runs a conversation on real Claude.

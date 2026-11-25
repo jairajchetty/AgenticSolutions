@@ -1,20 +1,20 @@
-# Live Cognitive Patterns + Local Live Mode (Milestone 3): Design Spec
+# Live Cognitive Patterns (Milestone 3): Design Spec
 
 - **Date:** 2026-11-23
 - **Status:** Draft, builder-checked, awaiting the person's approval
-- **Builds on:** the Studio spec (`2026-11-22-agentic-patterns-studio-design.md`) and the Catalog spec (`2026-11-22-pattern-catalog-menu-design.md`). Pattern behaviour is already specified in Studio spec §4.7–4.9 and §8. This document adds the decisions those specs left open, plus the new local Live switch.
+- **Builds on:** the Studio spec (`2026-11-22-agentic-patterns-studio-design.md`) and the Catalog spec (`2026-11-22-pattern-catalog-menu-design.md`). Pattern behaviour is already specified in Studio spec §4.7–4.9 and §8. This document adds the decisions those specs left open.
+- **Live model choice moved (2026-11-25):** the local Live switch that was §3 here is now the Model Picker spec (`2026-11-25-model-picker-design.md`), built on its own branch. M3's patterns use that picker for live runs.
 - **Branch:** `feature/cognitive-live`, stacked on `feature/pattern-catalog`.
 
 ## 1. Intent
 
-Make ReAct, Reflection and Planning **live demos**: they run in the workbench with an animated trace, a console and a Guide, instead of being Guide-only skeletons. Also let the person running the Studio **on their own machine** switch a conversation to real Claude.
+Make ReAct, Reflection and Planning **live demos**: they run in the workbench with an animated trace, a console and a Guide, instead of being Guide-only skeletons.
 
-**Why:** these three patterns are where the model's own reasoning is the lesson. Scripted runs show the mechanics (which nodes fire, and in what order). Only a real model shows the intelligence: which tool it picks, what its critique says, how it splits a goal into steps. The person chose to add a local Live switch now, rather than wait for Milestone 4's public unlock and budgets, so they can check that the patterns teach well before deploying.
+**Why:** these three patterns are where the model's own reasoning is the lesson. Scripted runs show the mechanics (which nodes fire, and in what order). Only a real model shows the intelligence: which tool it picks, what its critique says, how it splits a goal into steps. Live runs use the Model Picker (separate spec).
 
 **Goals**
 - `react`, `reflection` and `plan_execute` are registered live demos. The catalog shows them as ● with no catalog edits, and Tool Use follows ReAct.
 - Every live demo works offline, scripted and free, exactly as the Studio spec §8 describes.
-- When run locally with an Anthropic key, any live demo can run a conversation on real Claude (default Claude Haiku 5.5).
 - The trace stays truthful in both modes: tool calls appear as real `tools` nodes and as console chips; the Reflection drafts and scores and the plan checklist are visible.
 
 **Non-goals**
@@ -23,79 +23,19 @@ Make ReAct, Reflection and Planning **live demos**: they run in the workbench wi
 - Replanning in Plan-and-Execute (the Guide describes it as a variation).
 
 **Anti-goals**
-- A Live switch reachable by anyone other than the person at the machine. Never expose Live when the server listens on a non-loopback address.
 - A trace that hides tool use inside a node.
 - An offline demo that silently looks like real reasoning: scripted output must stay labelled as scripted.
 
-## 2. Approaches considered
+## 2–3. Live switch (moved)
 
-The person chose **A** for the local Live switch.
+Moved to the Model Picker spec, `2026-11-25-model-picker-design.md`, which covers model choice, who may choose, the API, error mapping and text-node refusals. Section numbers below are kept so existing references stay valid.
 
-| | Approach | Trade-offs |
-|---|---|---|
-| **A (chosen)** | **A per-conversation switch.** `/api/session` reports Live as available when an API key is set and the server binds only to loopback. The console shows an Offline / Live switch. The choice applies to the next New chat or Run, and that conversation keeps its mode (Studio spec §9). Graphs are compiled once per pattern and mode. | Matches Milestone 4's design: the unlock then just decides who may flip the switch. You can compare scripted and real runs side by side. |
-| B | A server-wide `LIVE=1` flag with no UI switch. | Smallest change, but you can't compare modes without a restart, and Milestone 4 would replace it. |
-| C | A model choice per message. | Breaks the "mode fixed per conversation" rule and confuses the trace and the accounting. Rejected. |
-
-Earlier choice: offline-only until Milestone 4 (option A in that question) was rejected in favour of adding local Live now.
-
-## 3. Local Live mode
-
-### 3.1 When Live is available
-
-Live is available when **all** of these hold:
-1. `ANTHROPIC_API_KEY` is set. More generally, the credential for `LIVE_MODEL`'s provider is set (Studio spec §3a).
-2. The server's bind host is a loopback address: `127.0.0.1`, `::1` or `localhost`.
-   - The bind host comes from a new setting, `HOST` (default `127.0.0.1`), which `web/__main__.py` also uses, together with `PORT` (default `8000`). This closes the M1 follow-up "`__main__` host/port from env".
-   - If `HOST` is anything else, Live is reported as unavailable, whatever the key, and the startup log says why.
-4. **Per-request loopback check (builder's call, from the builder check).** Every request that reports or uses Live must come from a loopback client (`request.client.host` in `127.0.0.1` / `::1`). That covers `/api/session`'s `live_available` and creating or running a live thread. This holds even if the app is started another way, e.g. `uvicorn --host 0.0.0.0` or Docker, while `HOST` still says loopback. Verified: a Windows browser reaching WSL2 through localhost forwarding arrives as `127.0.0.1`, so the person's own setup keeps working. A non-loopback client sees `live_available: false`, and live thread creation returns 403.
-3. `LIVE_MODEL`'s provider package imports. Studio spec §3a: fail startup with a clear message if `LIVE_MODEL` names a missing provider.
-
-### 3.2 API changes (additive)
-
-- `GET /api/session` → `{mode: "offline", live_available: bool, live_model: str | null, live_model_label: str | null, max_input_chars}`.
-  - `live_model` is the raw `LIVE_MODEL` string.
-  - `live_model_label` is a display name, e.g. "Claude Haiku 5.5" (a small lookup with a fallback to the raw model id).
-  - `mode` stays the session default, which is always `offline`.
-- `POST /api/patterns/{id}/threads` accepts an optional JSON body `{"mode": "offline" | "live"}`. The default is `"offline"`.
-  - `"live"` when Live is unavailable → **403** `{"detail": "live mode is not available"}`.
-  - The thread record stores its mode, and every run on it uses that mode's graph.
-- `GET /api/threads/{tid}/state` adds `mode`.
-- Graphs are compiled at startup per `(pattern_id, mode)`. Live graphs are compiled only when Live is available.
-  - Live factory: `make_chat_model(LIVE_MODEL)` from `common/llm.py`, called **per call** like the offline factory, so no state is shared between runs.
-  - The guardrail's embedding guard is the same object in both modes.
-
-### 3.3 Live model behaviour
-
-- **Model:** `LIVE_MODEL` (default `anthropic:claude-haiku-5-5`).
-- **Settings:** no explicit `temperature`. Thinking is left at the model default (adaptive), and `max_tokens` is 4096 per call, enough for these short demos.
-- **Thinking content:** Haiku 5.5 may return thinking blocks.
-  - Only text blocks are shown in chat bubbles; `text_of` already ignores non-text blocks.
-  - Tokens stream from text deltas only.
-  - Thinking is not displayed in v1.
-- **Refusals (builder's call for structured nodes):**
-  - **Text nodes** (`agent`, `generate`, `revise`, `executor`, `synthesizer`): if the response metadata shows `stop_reason == "refusal"`, the reply text becomes "The model declined this request." and the run continues normally.
-  - **Structured nodes:** a refusal or a parse failure (`parsed is None`) ends the pattern cleanly, with status `completed`, never `error`.
-    - `critique` declined: stop revising, keep the current draft as the result, and show "The critic declined to score this draft." in the Drafts list.
-    - `planner` declined: skip to `synthesizer`, whose result card shows "The model declined to plan this task." The routers gain one branch each for this case: Reflection `critique → END`, which already exists, and Planning `planner → synthesizer`. The topology changes for Planning, so update the Catalog spec §6 row and the tests together.
-    - State gains `declined: bool`.
-- **Errors map to safe `error` events** with specific copy:
-  - authentication failure → "The Anthropic API key was rejected."
-  - rate limit → "Claude is busy. Try again in a moment."
-  - connection or timeout → "Couldn't reach Claude."
-  - anything else → "The run failed."
-
-  The thread is then closed, as in M1. The real exception is logged server-side.
-- **No budgets locally.** It's the person's own key. Each `run_finished.usage` already reports tokens, and the console shows a small "N tokens" note after a live run.
-
-### 3.4 UI
-
-- **The switch:** when `live_available`, the console header shows a two-state switch, `Offline · scripted` | `Live · {live_model_label}`.
-  - The choice is remembered per browser (`sessionStorage`, with try/catch), and the default is Offline.
-  - Changing it does **not** alter the open conversation. It applies to the next New chat (chat patterns) or the next Run (trigger patterns, which create a thread per run anyway). A one-line note says so: "Applies to your next chat."
-- **The masthead badge** shows the mode of the conversation on screen: `Offline (scripted)` or `Live · Claude Haiku 5.5`.
-- **Without Live:** when `live_available` is false, the switch is not rendered at all.
-- **Restore:** a restored thread shows its own mode, taken from `/state`.
+**Kept here, because it is specific to these patterns:** structured-node refusals with a real model.
+- A refusal or a parse failure (`parsed is None`) ends the pattern cleanly with status `completed`, never `error`.
+- **`critique` declined:** stop revising and keep the current draft as the result. Show "The critic declined to score this draft." in the Drafts list.
+- **`planner` declined:** skip to `synthesizer`, whose result card shows "The model declined to plan this task."
+- The routers gain one branch each for this: Reflection `critique → END`, which already exists, and Planning `planner → synthesizer`. Planning's topology changes, so update the Catalog spec §6 row and its tests together.
+- State gains `declined: bool`.
 
 ## 4. The three patterns
 
@@ -204,19 +144,12 @@ From `docs/superpowers/plans/2026-11-22-patterns-studio-m1-followups.md` ("M2" l
   - Topology for each equals the Catalog spec §6 rows.
 - **Tools:** calculator safety (rejects `__import__`, names, attributes, huge exponents, division by zero as an error string); time zones; unit conversions and unknown units; glossary hit and miss.
 - **Offline scripts:** every sample hits specific rules; free text completes through the fallbacks; the "Try this" inputs are scripted.
-- **Local Live (API):**
-  - `live_available` is true only with a key and a loopback host. Test with monkeypatched env and settings; no network.
-  - Creating a live thread is 403 when Live is unavailable.
-  - Creating a live thread with a fake live factory (a `FakeListChatModel`-style model injected in place of `make_chat_model`) runs a full turn and reports `mode: "live"` in `/state`.
-  - Error mapping, using a fake model that raises `anthropic.AuthenticationError`, `RateLimitError` and `APIConnectionError` → the exact safe copy, and the thread closes.
-  - Refusal mapping uses a fake response with `stop_reason: "refusal"`.
 - **JS:** a node unit test for the tool-chip text formatter and the plan-checklist reducer (pure functions).
 - **Browser checklist** (headless Chrome over CDP, offline):
   - ReAct: chips and the loop animating.
   - Reflection: a drafts list with two scores.
   - Planning: the checklist ticking, and a `tools` node lighting up.
   - The catalog shows the three as ● and Tool Use as ●.
-  - The Live switch is absent when Live is unavailable.
 - **Live smoke check (manual, needs the person's go-ahead):** with the person's key, run one sample of each of the three patterns live and record a screenshot plus the token totals. The controller asks before spending on the key.
 
 ## 10. Out of scope / left to the builder
