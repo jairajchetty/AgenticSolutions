@@ -128,13 +128,13 @@ EDGE_LABELS = {
 # directions between a pair of nodes stay apart.
 LAYOUT = {
     "positions": {
-        "__start__": (300, 0), "ask": (300, 110), "__end__": (560, 110),
-        "agent": (300, 300), "tools": (620, 300),
-        "grade": (620, 480), "rewrite_query": (900, 390),
+        "__start__": (250, 0), "ask": (250, 120), "__end__": (520, 120),
+        "agent": (250, 300), "tools": (500, 300), "grade": (750, 300),
+        "rewrite_query": (625, 450),
     },
     "bends": {
-        ("ask", "agent"): 75, ("agent", "ask"): 75,
-        ("grade", "rewrite_query"): 30, ("rewrite_query", "tools"): 30, ("rewrite_query", "agent"): -60,
+        ("ask", "agent"): 60, ("agent", "ask"): 60,
+        ("grade", "agent"): 110,  # arcs back over the agent -> tools -> grade row
     },
 }
 

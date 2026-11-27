@@ -62,6 +62,7 @@ Flow:
 
 ### Framework concepts
 - **Forced first search:** the first model call of each question is bound with `tool_choice="search_book"`. If a model answers in text or calls another tool instead, `agent` replaces that reply with the search.
+- **Structured grading and rewriting:** `grade` and `rewrite_query` call the selected model with one forced tool each, `grade_passages(relevant)` and `rewrite_search(query)`, so their replies are structured. If the grader's reply is unusable, the passages pass through unchanged.
 - **Prebuilt tool node:** `tools` is LangGraph's `ToolNode`. It runs the model's tool calls and returns each result as a message.
 - **`Command(goto=...)` routing:** `ask` and `agent` return a `Command` that names the next node.
 - **MCP client:** the library server runs in-process over MCP's in-memory transport. The same server runs on its own with `python -m agentic_solutions.mcp_servers.library`.
@@ -92,5 +93,5 @@ How `agent` makes the first step of every question a search:
 ### Try this
 - Send `What does Satan mean by 'Better to reign in Hell'?`. The first step is `search_book`. The answer is two sentences, and its sources at the end quote Book I with the line range.
 - Send `How does the poem end?`. A passage search cannot know what comes last, so the agent calls `read_passage` on the end of Book XII.
-- Send `What did Milton eat for breakfast?`. The search finds nothing relevant, and the agent says the passages don't cover it instead of answering from memory.
+- Send `What did Milton eat for breakfast?`. `grade` finds no relevant passage, so `rewrite_query` rephrases the search twice. Nothing relevant turns up, and the agent says the passages don't cover it instead of answering from memory.
 - Compare with [[memory/knowledge-graph]]: which question about Satan and Beelzebub would need relations between entities rather than passages?
