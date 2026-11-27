@@ -112,7 +112,7 @@ categories:
       - id: semantic
         name: Semantic (RAG)
         use_case: |
-          The agent answers questions about the book "Paradise Lost" which has been stored in a Vector Database and made available as an MCP tool.
+          The agent answers questions about the book "Paradise Lost" by John Milton. It uses a vector database to find relevant sections, then summarizes them to answer the user's question.
         description: Look up facts from a document store
         aliases: [RAG, retrieval, vector search, knowledge base]
         demo: semantic
