@@ -125,3 +125,10 @@ test("splitStudio handles CRLF", () => {
   assert.equal(studio.subsections[3].markdown, "R body.");
   assert.ok(!body.includes("\r"));
 });
+
+test("useCaseParagraphs splits the owner's text on blank lines", async () => {
+  const { useCaseParagraphs } = await import("../../src/agentic_solutions/web/static/guide.js");
+  assert.deepEqual(useCaseParagraphs("First line\nstill first.\n\n  Second.  \n\n\n"), ["First line still first.", "Second."]);
+  assert.deepEqual(useCaseParagraphs(null), []);
+  assert.deepEqual(useCaseParagraphs("   "), []);
+});

@@ -7,6 +7,16 @@
 # Per pattern: id, name, description (required); aliases, demo (registry id of
 # a live demo), folder (agent folder holding explanation.md and the skeleton),
 # crosslist_of (route whose page this pattern opens), builds_on (optional).
+#
+# use_case (optional): your description of the use case the pattern's demo
+# implements. It shows in a "Use case" box beside the name on the pattern's
+# page; leave it out and no box shows. Write it as a block, with a blank line
+# between paragraphs:
+#
+#       use_case: |
+#         The agent drafts purchase orders on a mock ERP for a South African company.
+#
+#         Orders over R5,000 wait for a person to approve them.
 # A pattern has exactly one of folder and crosslist_of.
 # The app checks this file at startup and refuses to start if it is invalid.
 
@@ -100,7 +110,7 @@ categories:
         builds_on: [memory/session, execution/tool-use]
 
       - id: semantic
-        name: Semantic
+        name: Semantic (RAG)
         description: Look up facts from a document store
         aliases: [RAG, retrieval, vector search, knowledge base]
         demo: semantic

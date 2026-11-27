@@ -345,6 +345,7 @@ def _catalog_pages(registry: dict[str, PatternSpec], topologies: dict[str, dict]
                 "name": t.name, "status": status,
                 "demo": demo, "demo_title": registry[demo].title if demo else None,
                 "explanation_md": (AGENTS_DIR / t.folder / "explanation.md").read_text(encoding="utf-8"),
+                "use_case": t.use_case,
                 "topology": topologies[demo] if demo else _skeleton_topology(t.folder),
                 "prev": prev, "next": next_,
             }

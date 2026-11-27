@@ -212,3 +212,12 @@ export function renderPurpose(el, markdownPurpose, { linkFor } = {}) {
     if (section) el.append(buildBlock(cls, `${cls}-h`, title, section.body, linkFor, { level: 2 }));
   });
 }
+
+// The owner's use-case text (catalog.yaml `use_case`) as paragraphs: split on
+// blank lines, each paragraph's lines joined with a space. Shown as plain text.
+export function useCaseParagraphs(text) {
+  return String(text ?? "")
+    .split(/\n\s*\n/)
+    .map((p) => p.split("\n").map((line) => line.trim()).filter(Boolean).join(" "))
+    .filter(Boolean);
+}

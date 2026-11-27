@@ -14,7 +14,7 @@ EXPECTED = {
     "collaboration/hierarchy": ('Hierarchy', 'Teams of agents led by supervisors', ('hierarchical teams', 'nested supervisors')),
     "memory/session": ('Session', 'Remember the current conversation', ('short-term memory', 'thread', 'conversation history', 'checkpointer')),
     "memory/episodic": ('Episodic', 'Recall past interactions with this user', ('long-term memory', 'user memory', 'experiences')),
-    "memory/semantic": ('Semantic', 'Look up facts from a document store', ('RAG', 'retrieval', 'vector search', 'knowledge base')),
+    "memory/semantic": ('Semantic (RAG)', 'Look up facts from a document store', ('RAG', 'retrieval', 'vector search', 'knowledge base')),
     "memory/knowledge-graph": ('Knowledge Graph', 'Reason over entities and relationships', ('graph RAG', 'entity memory', 'ontology')),
     "execution/tool-use": ('Tool Use', 'Call functions and APIs', ('function calling', 'tools', 'actions')),
     "execution/routing": ('Routing', 'Send each request to the right specialist', ('router', 'classifier', 'intent routing', 'dispatch')),
@@ -210,3 +210,25 @@ def test_crosslist_must_point_at_a_page(tmp_path):  # review: chains crashed sta
       - id: ok""")
     fails(tmp_path, chained, r"gov/x.*gov/y")
     fails(tmp_path, MINI.replace("folder: log_agent", "crosslist_of: gov/log"), "gov/log")
+
+
+def test_use_case_is_optional_and_keeps_paragraphs(tmp_path):
+    text = MINI.replace("        aliases: [sign-off]\n",
+                        "        aliases: [sign-off]\n        use_case: |\n          First paragraph.\n\n          Second paragraph.\n")
+    (cat,) = c.load_catalog(write(tmp_path, text))
+    assert cat.patterns[1].use_case == "First paragraph.\n\nSecond paragraph."
+    assert cat.patterns[0].use_case is None
+
+
+def test_empty_use_case_fails(tmp_path):
+    fails(tmp_path, MINI.replace("        aliases: [sign-off]\n", "        aliases: [sign-off]\n        use_case: ''\n"),
+          "use_case")
+
+
+def test_semantic_is_named_rag_everywhere_it_is_written():
+    from pathlib import Path
+
+    assert c.entry("memory/semantic").name == "Semantic (RAG)"
+    guide = Path("src/agentic_solutions/agents/semantic_memory_agent/explanation.md").read_text()
+    assert guide.startswith("# Semantic (RAG)\n")
+    assert "The Semantic (RAG) pattern" in guide

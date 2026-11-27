@@ -126,7 +126,7 @@ The interface uses the Blueprint design system (`docs/superpowers/specs/2026-11-
 | --- | --- | --- |
 | Cognitive | How should the agent think? | ReAct, Reflection, Planning, Search |
 | Collaboration | How many agents, and who leads? | Single Agent **(live)**, Supervisor, Swarm, Hierarchy |
-| Memory | What must it remember? | Session **(live)**, Episodic, Semantic **(live)**, Knowledge Graph |
+| Memory | What must it remember? | Session **(live)**, Episodic, Semantic (RAG) **(live)**, Knowledge Graph |
 | Execution | How does it act and run? | Tool Use (opens ReAct), Routing, Workflow, Event Driven, Autonomous |
 | Governance | How is it kept safe and accountable? | Guardrails **(live)**, Approval **(live)**, Audit, Review |
 
@@ -306,9 +306,9 @@ The CLI uses Claude, so it needs `ANTHROPIC_API_KEY`. It runs the ERP in-process
 
 In `langgraph.json`, the `approval_agent` graph connects to a separate ERP server, so `langgraph dev` needs `ERP_MCP_URL` and `ERP_APPROVAL_SECRET` set (for example in `.env`).
 
-## Semantic demo and the library
+## Semantic (RAG) demo and the library
 
-The Semantic demo answers questions about John Milton's *Paradise Lost* from a vector database. The poem is split into overlapping passages of about 20 lines within each Book and stored in Qdrant (local mode), each with a dense embedding (`BAAI/bge-small-en-v1.5`) and a BM25 keyword vector. Both are computed locally with `fastembed`, so no API key is needed. A `library` MCP server offers two read-only tools, `search_book` (hybrid search) and `read_passage` (lines by position). The agent must search before it answers, answers only from the passages, and cites the Book and lines. Line numbers follow this edition.
+The Semantic (RAG) demo answers questions about John Milton's *Paradise Lost* from a vector database. The poem is split into overlapping passages of about 20 lines within each Book and stored in Qdrant (local mode), each with a dense embedding (`BAAI/bge-small-en-v1.5`) and a BM25 keyword vector. Both are computed locally with `fastembed`, so no API key is needed. A `library` MCP server offers two read-only tools, `search_book` (hybrid search) and `read_passage` (lines by position). The agent must search before it answers, answers only from the passages, and cites the Book and lines. Line numbers follow this edition.
 
 ### First start
 
