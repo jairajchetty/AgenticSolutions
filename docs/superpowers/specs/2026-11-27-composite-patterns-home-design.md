@@ -155,7 +155,7 @@ The catalog sheet becomes a stack of **category bands**, in file order:
 
 `GET /api/catalog` keeps its shape and adds fields:
 - Each category gains `description`. `question` is removed, and the frontend changes to match.
-- Each pattern gains `description` (replacing `hint`), `composite` (true or false) and `builds_on`. `builds_on` is a list of `{route, target, name, category, description, composite}`, resolved on the server, so the browser needs no lookups.
+- Each pattern gains `description` (replacing `hint`), `composite` (true or false) and `builds_on`. `builds_on` is a list of `{route, target, name, category, description, aliases, composite}`, resolved on the server, so the browser needs no lookups.
 
 `/api/catalog/page/...` (the Guide page data) is unchanged.
 
