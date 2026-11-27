@@ -93,6 +93,14 @@ def route_after_ask(state: State) -> Literal["answer", "ask", "__end__"]:
     return "answer"
 
 
+# What the Studio draws on each conditional edge: (short label, full rule).
+EDGE_LABELS = {
+    ("ask", "__end__"): ("stop", 'You typed "stop": the conversation ends.'),
+    ("ask", "ask"): ("empty", "Empty message: wait for the next one, with no model call."),
+    ("ask", "answer"): ("message", "Any other message goes to the model."),
+}
+
+
 def build_graph(ask_node=ask, checkpointer=None, llm_factory: LLMFactory | None = None):
     """Wire the nodes and edges together and compile them into a runnable.
 

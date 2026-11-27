@@ -59,6 +59,16 @@ class State(TypedDict):
     refusal: str | None  # the refusal text to show the user, None if not refused
 
 
+# What the Studio draws on each conditional edge: (short label, full rule).
+EDGE_LABELS = {
+    ("ask", "__end__"): ("stop", 'You typed "stop": the conversation ends.'),
+    ("ask", "ask"): ("empty", "Empty message: wait for the next one, with no model call."),
+    ("ask", "guard"): ("message", "Any other message is screened before the model sees it."),
+    ("guard", "refuse"): ("flagged", "The threat screen matched a known attack: refuse, and drop the message."),
+    ("guard", "answer"): ("clean", "No threat found: the model answers."),
+}
+
+
 def build_graph(
     guard: ThreatGuard | None = None,
     ask_node=ask,

@@ -536,10 +536,27 @@ h3, .purpose-body h2 {
 }
 
 .trace-graph {
+  position: relative;  /* anchors .graph-tip */
   height: clamp(300px, 46vh, 520px);
   border: 1px solid var(--frame-rule);
 }
+/* The full rule of a conditional edge, shown on hover (graph.js). */
+.graph-tip {
+  position: absolute;
+  z-index: 2;
+  max-width: 280px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  pointer-events: none;
+}
 .diagram-graph { height: clamp(340px, 60vh, 580px); }
+/* A hand-placed graph (Approval) carries a label on every edge: room to read them. */
+.trace-graph.is-fixed { height: clamp(460px, 66vh, 660px); }
 
 .graph-legend {
   display: flex;

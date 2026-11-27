@@ -4,7 +4,12 @@
 // glyph in the label (▶ active, ✓ done, ✕ error, ⏸ paused), so the state can
 // be read without colour vision (spec §6, accessibility). Edges flash when
 // the runner reports a transition and keep a traversal count in their label.
-// Conditional edges (a router picks one of them) are dashed and labelled "if".
+// Conditional edges (a router picks one of them) are dashed and carry the
+// pattern's short label for the condition ("stop", "> R5,000"), or "if" when
+// the pattern gives none. Hovering a labelled edge shows the full rule.
+//
+// A pattern may fix its layout (every node has a position, edges may bend);
+// otherwise dagre lays the graph out top to bottom.
 //
 // Static mode (Catalog spec §4.3) draws a Guide-only pattern's skeleton: the
 // same layout and idle styling, conditional edges still dashed and labelled,
@@ -114,6 +119,11 @@ function stylesheet(t, { still = false } = {}) {
     } },
     { selector: "edge.conditional", style: { "line-style": "dashed", "line-dash-pattern": [6, 4] } },
     { selector: "edge.loop", style: { "loop-direction": "90deg", "loop-sweep": "-50deg", "control-point-step-size": 60 } },
+    { selector: "edge.loop-left", style: { "loop-direction": "-90deg" } },
+    { selector: "edge.bent", style: {
+      "curve-style": "unbundled-bezier", "control-point-distances": "data(bend)", "control-point-weights": 0.5,
+    } },
+    { selector: "edge.hover", style: { "line-color": t.paper, "target-arrow-color": t.paper, "width": 2.5, "color": t.paper } },
     { selector: "edge.taken", style: { "line-color": t.line, "target-arrow-color": t.line, "width": 2, "color": t.paper } },
     { selector: "edge.flash", style: { "line-color": t.amber, "target-arrow-color": t.amber, "width": 3.5, "color": t.amber } },
   ];
@@ -131,12 +141,54 @@ function nodeDisplay(data, state) {
 // display font, so a state change never resizes the node.
 const nodeWidth = (label) => Math.max(72, Math.ceil(label.length * 8.2 + 2 * 8.2 + 30));
 
-function edgeDisplay(data) {
+export function edgeDisplay(data) {
   const parts = [];
   if (data.conditional) parts.push(data.label || "if");
   else if (data.label) parts.push(data.label);
   if (data.count) parts.push(`×${data.count}`);
   return parts.join(" ");
+}
+
+// The hover text for an edge: its short label and full rule, or "" without a rule.
+export function tooltipText(data) {
+  return data.detail ? `${data.label}: ${data.detail}` : "";
+}
+
+const isFixed = (topology) => topology.nodes.length > 0 && topology.nodes.every((n) => n.position);
+
+export function layoutFor(topology) {
+  return isFixed(topology)
+    ? { name: "preset", padding: 24 }
+    : { name: "dagre", rankDir: "TB", nodeSep: 60, rankSep: 56, edgeSep: 20, padding: 24 };
+}
+
+// Cytoscape elements for a topology, every node idle and every count at zero.
+export function buildElements(topology) {
+  const fixed = isFixed(topology);
+  const elements = [
+    ...topology.nodes.map((n) => ({
+      group: "nodes",
+      data: { id: n.id, label: n.label, kind: n.kind, state: "idle", display: "", width: nodeWidth(n.label) },
+      classes: n.kind === "node" ? "" : "terminal",
+      ...(fixed ? { position: { x: n.position.x, y: n.position.y } } : {}),
+    })),
+    ...topology.edges.map((e) => {
+      const loop = e.source === e.target;
+      const bent = fixed && !loop && e.bend != null && e.bend !== 0;
+      return {
+        group: "edges",
+        data: { id: edgeId(e.source, e.target), source: e.source, target: e.target,
+                conditional: e.conditional, label: e.label, detail: e.detail ?? null,
+                count: 0, display: "", ...(bent ? { bend: e.bend } : {}) },
+        classes: [e.conditional ? "conditional" : "", loop ? "loop" : "", loop && fixed ? "loop-left" : "",
+                  bent ? "bent" : ""].filter(Boolean).join(" "),
+      };
+    }),
+  ];
+  for (const item of elements) {
+    item.data.display = item.group === "nodes" ? nodeDisplay(item.data, "idle") : edgeDisplay(item.data);
+  }
+  return elements;
 }
 
 // Static mode's accessible text: the graph's nodes and edges, in words.
@@ -147,7 +199,7 @@ function describeStatic(topology) {
   };
   const nodes = topology.nodes.filter((n) => n.kind === "node").map((n) => n.label);
   const edges = topology.edges.map((e) =>
-    `${name(e.source)} to ${name(e.target)}${e.conditional ? ` (conditional${e.label ? `: ${e.label}` : ""})` : ""}`);
+    `${name(e.source)} to ${name(e.target)}${e.conditional ? ` (conditional${e.label ? `: ${e.detail || e.label}` : ""})` : ""}`);
   return `Diagram of the pattern's graph. Nodes: ${nodes.join(", ")}. Edges: ${edges.join("; ")}.`;
 }
 
@@ -159,28 +211,11 @@ export function createGraph(el, topology, { static: isStatic = false } = {}) {
   live.get(el)?.destroy();
 
   const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
-  const elements = [
-    ...topology.nodes.map((n) => ({
-      group: "nodes",
-      data: { id: n.id, label: n.label, kind: n.kind, state: "idle", display: "", width: nodeWidth(n.label) },
-      classes: n.kind === "node" ? "" : "terminal",
-    })),
-    ...topology.edges.map((e) => ({
-      group: "edges",
-      data: { id: edgeId(e.source, e.target), source: e.source, target: e.target,
-              conditional: e.conditional, label: e.label, count: 0, display: "" },
-      classes: [e.conditional ? "conditional" : "", e.source === e.target ? "loop" : ""].join(" ").trim(),
-    })),
-  ];
-  for (const item of elements) {
-    item.data.display = item.group === "nodes" ? nodeDisplay(item.data, "idle") : edgeDisplay(item.data);
-  }
-
   const cy = cytoscape({
     container: el,
-    elements,
+    elements: buildElements(topology),
     style: stylesheet(palette(), { still: reduceMotion.matches }),
-    layout: { name: "dagre", rankDir: "TB", nodeSep: 60, rankSep: 56, edgeSep: 20, padding: 24 },
+    layout: layoutFor(topology),
     maxZoom: 1.5,  // a two-node graph should not fill the drawing
     userZoomingEnabled: false,
     userPanningEnabled: false,
@@ -198,9 +233,12 @@ export function createGraph(el, topology, { static: isStatic = false } = {}) {
     cy.getElementById(id).removeClass("pulse");
   }
 
+  const rules = topology.edges.filter((e) => e.detail).map((e) => `${e.label}: ${e.detail}`);
+  const conditions = rules.length ? ` Conditions: ${rules.join(" ")}` : "";
+
   function describe() {
     const parts = cy.nodes("[kind = 'node']").map((n) => `${n.data("label")}: ${STATE_WORDS[n.data("state")]}`);
-    el.setAttribute("aria-label", `Graph of the selected pattern. ${parts.join(", ")}.`);
+    el.setAttribute("aria-label", `Graph of the selected pattern. ${parts.join(", ")}.${conditions}`);
   }
 
   function setNodeState(id, state) {
@@ -245,6 +283,32 @@ export function createGraph(el, topology, { static: isStatic = false } = {}) {
     highlight(null);
   }
 
+  // The full rule on hover. The tip lives inside the graph's container, which
+  // is positioned, so the edge's rendered midpoint is also the tip's offset.
+  const tip = document.createElement("div");
+  tip.className = "graph-tip";
+  tip.setAttribute("role", "tooltip");
+  tip.hidden = true;
+  el.appendChild(tip);
+  cy.on("mouseover", "edge", (evt) => {
+    const text = tooltipText(evt.target.data());
+    if (!text) return;
+    evt.target.addClass("hover");
+    const p = evt.target.renderedMidpoint();
+    tip.textContent = text;
+    tip.hidden = false;
+    const x = Math.min(Math.max(p.x + 12, 8), el.clientWidth - tip.offsetWidth - 8);
+    const y = p.y - tip.offsetHeight - 12 < 8 ? p.y + 16 : p.y - tip.offsetHeight - 12;
+    tip.style.left = `${Math.max(8, x)}px`;
+    tip.style.top = `${y}px`;
+  });
+  // Leaving the canvas fast skips Cytoscape's mouseout, so the container hides it too.
+  const hideTip = () => { cy.edges(".hover").removeClass("hover"); tip.hidden = true; };
+  cy.on("mouseout", "edge", hideTip);
+  el.addEventListener("mouseleave", hideTip);
+  // A fixed layout is drawn at close to full size, so its panel is taller (styles.css).
+  el.classList.toggle("is-fixed", isFixed(topology));
+
   const refit = () => { cy.resize(); cy.fit(undefined, 24); cy.center(); };
   const observer = new ResizeObserver(refit);
   observer.observe(el);
@@ -258,6 +322,9 @@ export function createGraph(el, topology, { static: isStatic = false } = {}) {
       for (const id of [...pulses.keys()]) stopPulse(id);
       for (const handle of flashes.values()) clearTimeout(handle);
       observer.disconnect();
+      el.removeEventListener("mouseleave", hideTip);
+      el.classList.remove("is-fixed");
+      tip.remove();
       cy.destroy();
       live.delete(el);
     },
