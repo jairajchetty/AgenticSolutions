@@ -7,17 +7,20 @@
 //
 // Search is word-wise. The query is split on whitespace and punctuation other
 // than "-", and a pattern matches when EVERY word is a case-insensitive
-// substring of its text: name, hint, aliases, category name and category
-// question. A word of 4+ characters ending in "s" also matches without it, so
-// "remember users" finds Episodic: "remember" from Memory's question, "user"
-// from its hint. Shorter words get no fallback, or "is" would match every "i".
+// substring of its text: name, description, aliases, category name and
+// category description, plus the names and aliases of the patterns it builds
+// on, so "tool use" finds Approval. A word of 4+ characters ending in "s" also
+// matches without it, so "remember users" finds Episodic: "remember" from
+// Memory's description, "user" from its own. Shorter words get no fallback,
+// or "is" would match every "i".
 
 export const queryWords = (query) =>
   String(query ?? "").toLowerCase().split(/[^\p{L}\p{N}-]+/u).filter(Boolean);
 
 export function matches(query, pattern, category) {
-  const haystack = [pattern.name, pattern.hint, ...(pattern.aliases ?? []), category.name, category.question]
-    .join("\n").toLowerCase();
+  const blocks = (pattern.builds_on ?? []).flatMap((b) => [b.name, ...(b.aliases ?? [])]);
+  const haystack = [pattern.name, pattern.description, ...(pattern.aliases ?? []),
+    category.name, category.description, ...blocks].join("\n").toLowerCase();
   return queryWords(query).every((w) =>
     haystack.includes(w) || (w.length >= 4 && w.endsWith("s") && haystack.includes(w.slice(0, -1))));
 }
