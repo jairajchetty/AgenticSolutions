@@ -61,14 +61,6 @@ def test_builds_on_a_crosslist_targets_its_page(client):  # Review Focus 4
     assert tool["target"] == "cognitive/react"
 
 
-def test_every_route_is_reachable_from_the_main_page(client):
-    rows = list(catalog_rows(client).values())
-    shown = {p["route"] for p in rows if p["composite"]}          # cards
-    shown |= {p["route"] for p in rows if not p["composite"]}     # building-blocks strip
-    shown |= {b["route"] for p in rows for b in p["builds_on"]}   # card links
-    assert shown == {p["route"] for p in rows} and len(shown) == 21
-
-
 def test_page_for_live_pattern(client):
     page = client.get("/api/catalog/governance/approval").json()
     assert page["route"] == page["target"] == "governance/approval"

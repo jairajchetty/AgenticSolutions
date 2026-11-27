@@ -83,3 +83,15 @@ test("a card matches on a building block's alias (Review Focus 5)", () => {
   assert.ok(found.includes("governance/approval") && found.includes("memory/semantic"));
   assert.ok(!found.includes("governance/review"));  // Review builds on Reflection and Single Agent only
 });
+
+test("every pattern's own page is linked from the main page (review: Tool Use)", async () => {
+  const { cardHref, blockHref } = await import("../../src/agentic_solutions/web/static/catalog.js");
+  const linked = new Set();
+  for (const { p } of all) {
+    if (p.composite) linked.add(cardHref(p));
+    else linked.add(blockHref(p));  // the building-blocks strip
+    for (const b of p.builds_on) linked.add(blockHref(b));
+  }
+  assert.deepEqual([...all.map(({ p }) => `#/${p.route}`)].filter((h) => !linked.has(h)), []);
+  assert.equal(blockHref(all.find(({ p }) => p.route === "execution/tool-use").p), "#/execution/tool-use");
+});

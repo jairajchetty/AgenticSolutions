@@ -50,11 +50,17 @@ function statusMark(status) {
   return mark;
 }
 
+// Where the main page's links go: always the pattern's own route. A cross-list
+// (Tool Use) has its own page, which shows its target's Guide under its own
+// category, breadcrumb and arrows, so linking the route keeps that page reachable.
+export const cardHref = (p) => `#/${p.route}`;
+export const blockHref = (b) => `#/${b.route}`;
+
 // A link to a building block. `b` is either a resolved `builds_on` item or a
 // simple pattern from the listing (both carry name, target and route).
 function blockLink(b, { categoryName, names }) {
   const a = make("a", `cat-block${b.composite ? " is-composite" : ""}`);
-  a.href = `#/${b.target}`;
+  a.href = blockHref(b);
   a.title = `${categoryName}: ${b.description}`;
   a.append(make("span", "cat-block-name", b.name));
   if (b.target !== b.route) {
@@ -69,7 +75,7 @@ function blockLink(b, { categoryName, names }) {
 function patternCard(p, names) {
   const li = make("li", "cat-card");
   const a = make("a", "cat-card-link");
-  a.href = `#/${p.route}`;
+  a.href = cardHref(p);
   a.append(statusMark(p.status), make("span", "cat-label", p.name));
   li.append(a, make("p", "cat-card-description", p.description));
   if (p.builds_on.length) {

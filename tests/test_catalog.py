@@ -190,3 +190,23 @@ def test_category_without_composite_fails(tmp_path):
 
 def test_invalid_yaml_fails_with_file_name(tmp_path):
     fails(tmp_path, MINI.replace("      - id: log", "\t- id: log"), "catalog.yaml")
+
+
+def test_unknown_keys_fail(tmp_path):  # review: a misspelt builds_on would turn a composite simple
+    fails(tmp_path, MINI.replace("builds_on: [gov/log]", "buildson: [gov/log]"), r"gov/ok.*buildson")
+    fails(tmp_path, MINI.replace("    description: Kept safe?", "    descrption: x\n    description: Kept safe?"), r"gov.*descrption")
+    fails(tmp_path, "colours: []\n" + MINI, "colours")
+
+
+def test_crosslist_must_point_at_a_page(tmp_path):  # review: chains crashed startup without naming the entry
+    chained = MINI.replace("      - id: ok", """      - id: x
+        name: X
+        description: Cross-list
+        crosslist_of: gov/y
+      - id: y
+        name: Y
+        description: Cross-list
+        crosslist_of: gov/log
+      - id: ok""")
+    fails(tmp_path, chained, r"gov/x.*gov/y")
+    fails(tmp_path, MINI.replace("folder: log_agent", "crosslist_of: gov/log"), "gov/log")

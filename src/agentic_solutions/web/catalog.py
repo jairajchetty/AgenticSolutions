@@ -23,6 +23,11 @@ import yaml
 CATALOG_PATH = Path(__file__).with_name("catalog.yaml")
 
 
+TOP_KEYS = {"categories"}
+CATEGORY_KEYS = {"id", "name", "description", "patterns"}
+PATTERN_KEYS = {"id", "name", "description", "aliases", "demo", "folder", "crosslist_of", "builds_on"}
+
+
 class CatalogError(ValueError):
     """The catalog file is invalid. The message names the file and the entry."""
 
@@ -81,14 +86,22 @@ def load_catalog(path: Path) -> tuple[Category, ...]:
             fail(where, f"`{key}` must be a list of non-empty strings")
         return tuple(v.strip() for v in value)
 
+    def known(obj: dict, allowed: set[str], where: str):
+        # A misspelt key (`buildson`) would otherwise be ignored silently.
+        unknown = sorted(set(obj) - allowed)
+        if unknown:
+            fail(where, f"unknown key(s) {', '.join(unknown)}; allowed: {', '.join(sorted(allowed))}")
+
     if not isinstance(data, dict) or not isinstance(data.get("categories"), list) or not data["categories"]:
         fail("top level", "expected a non-empty `categories` list")
+    known(data, TOP_KEYS, "top level")
 
     categories, seen_ids = [], set()
     for i, raw in enumerate(data["categories"]):
         if not isinstance(raw, dict):
             fail(f"category {i + 1}", "expected a mapping")
         cid = text(raw, "id", f"category {i + 1}")
+        known(raw, CATEGORY_KEYS, cid)
         if cid in seen_ids:
             fail(cid, "duplicate category id")
         seen_ids.add(cid)
@@ -100,6 +113,7 @@ def load_catalog(path: Path) -> tuple[Category, ...]:
                 fail(f"{cid} pattern {j + 1}", "expected a mapping")
             pid = text(rp, "id", f"{cid} pattern {j + 1}")
             where = f"{cid}/{pid}"
+            known(rp, PATTERN_KEYS, where)
             patterns.append(CatalogPattern(
                 id=pid, category=cid, name=text(rp, "name", where), description=text(rp, "description", where),
                 aliases=strings(rp, "aliases", where), demo=text(rp, "demo", where, required=False),
@@ -121,6 +135,10 @@ def load_catalog(path: Path) -> tuple[Category, ...]:
                 fail(pat.route, "set exactly one of `folder` and `crosslist_of`")
             if pat.crosslist_of is not None and pat.crosslist_of not in by_route:
                 fail(pat.route, f"`crosslist_of` names unknown route {pat.crosslist_of!r}")
+            if pat.crosslist_of is not None and by_route[pat.crosslist_of].folder is None:
+                # target() follows one hop: the target must have a page of its own.
+                fail(pat.route, f"`crosslist_of` must name a pattern with its own page; "
+                                f"{pat.crosslist_of} is itself a cross-list")
             if len(set(pat.builds_on)) != len(pat.builds_on):
                 dup = next(r for r in pat.builds_on if pat.builds_on.count(r) > 1)
                 fail(pat.route, f"`builds_on` lists {dup} twice")
