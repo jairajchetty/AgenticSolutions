@@ -8,3 +8,6 @@ __pycache__/
 data/
 tests/js/.fixture/
 CV_*.pdf
+
+# Local design samples and screenshots (not committed)
+/images/
