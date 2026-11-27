@@ -25,10 +25,10 @@ def test_catalog_listing_shape_and_order(client):
     body = client.get("/api/catalog").json()
     cats = body["categories"]
     assert [c["id"] for c in cats] == ["cognitive", "collaboration", "memory", "execution", "governance"]
-    assert set(cats[0]) == {"id", "name", "question", "patterns"}
+    assert set(cats[0]) == {"id", "name", "description", "patterns"}
     rows = [p for c in cats for p in c["patterns"]]
     assert len(rows) == 21
-    assert set(rows[0]) == {"id", "name", "hint", "aliases", "status", "route", "target"}
+    assert set(rows[0]) == {"id", "name", "description", "aliases", "status", "route", "target", "composite", "builds_on"}
     statuses = {p["route"]: p["status"] for p in rows}
     assert {r for r, s in statuses.items() if s == "live"} == LIVE_ROUTES
     assert sum(s == "guide" for s in statuses.values()) == 17
@@ -36,6 +36,37 @@ def test_catalog_listing_shape_and_order(client):
     tool_use = next(p for p in rows if p["route"] == "execution/tool-use")
     assert tool_use["target"] == "cognitive/react"
     assert all(p["target"] == p["route"] for p in rows if p is not tool_use)
+
+
+def catalog_rows(client):
+    return {p["route"]: p for c in client.get("/api/catalog").json()["categories"] for p in c["patterns"]}
+
+
+def test_builds_on_is_resolved(client):
+    rows = catalog_rows(client)
+    approval = rows["governance/approval"]
+    assert approval["composite"] is True
+    assert [b["route"] for b in approval["builds_on"]] == [
+        "memory/session", "cognitive/react", "execution/tool-use", "execution/routing", "governance/audit"]
+    assert approval["builds_on"][0] == {
+        "route": "memory/session", "target": "memory/session", "name": "Session", "category": "Memory",
+        "description": "Remember the current conversation",
+        "aliases": ["short-term memory", "thread", "conversation history", "checkpointer"], "composite": False}
+    assert rows["memory/session"]["builds_on"] == [] and rows["memory/session"]["composite"] is False
+
+
+def test_builds_on_a_crosslist_targets_its_page(client):  # Review Focus 4
+    tool = next(b for b in catalog_rows(client)["governance/approval"]["builds_on"]
+                if b["route"] == "execution/tool-use")
+    assert tool["target"] == "cognitive/react"
+
+
+def test_every_route_is_reachable_from_the_main_page(client):
+    rows = list(catalog_rows(client).values())
+    shown = {p["route"] for p in rows if p["composite"]}          # cards
+    shown |= {p["route"] for p in rows if not p["composite"]}     # building-blocks strip
+    shown |= {b["route"] for p in rows for b in p["builds_on"]}   # card links
+    assert shown == {p["route"] for p in rows} and len(shown) == 21
 
 
 def test_page_for_live_pattern(client):

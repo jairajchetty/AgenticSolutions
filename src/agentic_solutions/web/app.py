@@ -321,11 +321,21 @@ def _catalog_pages(registry: dict[str, PatternSpec], topologies: dict[str, dict]
 
 
 def _catalog_listing(registry: dict[str, PatternSpec]) -> dict:
+    """The main page's data. `builds_on` is resolved here, so the browser needs no lookups."""
+    category_names = {k.id: k.name for k in catalog.CATALOG}
+
+    def block(route: str) -> dict:
+        b = catalog.entry(route)
+        return {"route": b.route, "target": catalog.target(b).route, "name": b.name,
+                "category": category_names[b.category], "description": b.description,
+                "aliases": list(b.aliases), "composite": b.composite}
+
     return {"categories": [
-        {"id": k.id, "name": k.name, "question": k.question, "patterns": [
-            {"id": p.id, "name": p.name, "hint": p.hint, "aliases": list(p.aliases),
+        {"id": k.id, "name": k.name, "description": k.description, "patterns": [
+            {"id": p.id, "name": p.name, "description": p.description, "aliases": list(p.aliases),
              "status": catalog.status(p, registry), "route": p.route,
-             "target": catalog.target(p).route}
+             "target": catalog.target(p).route, "composite": p.composite,
+             "builds_on": [block(r) for r in p.builds_on]}
             for p in k.patterns]}
         for k in catalog.CATALOG]}
 
