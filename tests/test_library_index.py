@@ -92,3 +92,61 @@ def test_real_models_find_famous_passages(tmp_path):
     assert "I" in [h.book for h in idx.search("Better to reign in Hell than serve in Heaven", 3, None)]
     assert "II" in [h.book for h in idx.search("What does Mammon propose?", 3, None)]
     idx.close()
+
+
+def test_cached_open_loads_the_models_before_serving(tmp_path, text):  # review: lazy load at first search
+    emb = FakeEmbedder()
+    open_index(tmp_path, text, emb).close()
+    loads = emb.loads
+    open_index(tmp_path, text, emb).close()  # fingerprint matches: nothing embedded
+    assert emb.loads == loads + 1
+
+
+def test_fast_embedder_loads_both_models_once_under_concurrency(tmp_path, monkeypatch):  # review: race
+    import threading
+    import time
+    import types
+
+    import fastembed
+
+    from agentic_solutions.mcp_servers.library.index import FastEmbedder
+
+    made = []
+
+    class Vec(list):
+        def tolist(self):
+            return list(self)
+
+    class Dense:
+        def __init__(self, *a, **k):
+            made.append("dense")
+
+        def query_embed(self, text):
+            yield Vec([0.0])
+
+    class Sparse:
+        def __init__(self, *a, **k):
+            time.sleep(0.2)  # slow to load: another thread would see dense set and sparse missing
+            made.append("sparse")
+
+        def query_embed(self, text):
+            yield types.SimpleNamespace(indices=Vec([1]), values=Vec([1.0]))
+
+    monkeypatch.setattr(fastembed, "TextEmbedding", Dense)
+    monkeypatch.setattr(fastembed, "SparseTextEmbedding", Sparse)
+    emb = FastEmbedder(tmp_path)
+    errors = []
+
+    def search():
+        try:
+            emb.dense_query("x")
+            emb.sparse_query("x")
+        except Exception as err:  # noqa: BLE001
+            errors.append(err)
+
+    threads = [threading.Thread(target=search) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert errors == [] and sorted(made) == ["dense", "sparse"]

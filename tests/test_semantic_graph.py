@@ -93,3 +93,21 @@ def test_edge_labels_cover_conditional_edges():
     t = graph_topology(build_graph(library=FakeLibrary()))
     conditional = {(e["source"], e["target"]) for e in t["edges"] if e["conditional"]}
     assert conditional == set(EDGE_LABELS)
+
+
+async def test_round_zero_read_passage_is_replaced_by_the_search():  # review: forced search bypass
+    read_first = AIMessage("", tool_calls=[{"name": "read_passage", "args": {"book": "I", "start_line": 1,
+                                                                            "end_line": 5}, "id": "r1"}])
+    model = RecordingModel([read_first, AIMessage("From the passage (Book I, 1–3).")])
+    g, cfg, library = await start(model)
+    await g.ainvoke(Command(resume="How does the poem begin?"), cfg)
+    assert [t for t, _ in library.calls] == ["search_book"]
+
+
+async def test_forced_search_ids_are_unique_per_question():  # review: repeated tool-call id
+    model = RecordingModel([AIMessage("no"), AIMessage("Answer one."), AIMessage("no"), AIMessage("Answer two.")])
+    g, cfg, _ = await start(model)
+    await g.ainvoke(Command(resume="First question?"), cfg)
+    await g.ainvoke(Command(resume="Second question?"), cfg)
+    ids = [c["id"] for m in (await g.aget_state(cfg)).values["messages"] if m.type == "ai" for c in m.tool_calls]
+    assert len(ids) == 2 and len(set(ids)) == 2

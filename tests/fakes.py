@@ -41,6 +41,10 @@ class FakeEmbedder:
 
     def __init__(self):
         self.dense_calls = 0
+        self.loads = 0
+
+    def load(self):
+        self.loads += 1
 
     def _dense_one(self, text):
         v = [0.0] * 384

@@ -56,7 +56,7 @@ Flow:
 - **Grader and query rewriter** → not separate nodes. The agent searches again with other words when the passages miss, up to 6 tool rounds per question.
 
 ### Framework concepts
-- **Forced first search:** the first model call of each question is bound with `tool_choice="search_book"`. If a model answers in text anyway, `agent` replaces that answer with the search.
+- **Forced first search:** the first model call of each question is bound with `tool_choice="search_book"`. If a model answers in text or calls another tool instead, `agent` replaces that reply with the search.
 - **Prebuilt tool node:** `tools` is LangGraph's `ToolNode`. It runs the model's tool calls and returns each result as a message.
 - **`Command(goto=...)` routing:** `ask` and `agent` return a `Command` that names the next node.
 - **MCP client:** the library server runs in-process over MCP's in-memory transport. The same server runs on its own with `python -m agentic_solutions.mcp_servers.library`.
@@ -77,10 +77,10 @@ How `agent` makes the first step of every question a search:
             # Defence in depth: a model that ignores tool_choice still cannot pass the cap.
             reply = AIMessage(reply.text.strip() or STEP_LIMIT)
             calls = []
-        if rounds == 0 and not calls:
-            # A model that ignored the forced choice: search with the question, and drop its text.
-            reply = AIMessage("", tool_calls=[
-                {"name": FORCED_TOOL, "args": {"query": _question(state)}, "id": "forced-search"}])
+        if rounds == 0 and not any(c["name"] == FORCED_TOOL for c in calls):
+            # A model that ignored the forced choice: search with the question, and drop its reply.
+            reply = AIMessage("", tool_calls=[{"name": FORCED_TOOL, "args": {"query": _question(state)},
+                                               "id": f"forced-search-{uuid4().hex[:12]}"}])
             calls = reply.tool_calls
 ```
 

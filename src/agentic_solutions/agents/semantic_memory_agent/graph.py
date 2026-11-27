@@ -17,6 +17,7 @@ MAX_TOOL_ROUNDS tool rounds the model must answer in text.
 from __future__ import annotations
 
 from typing import Annotated, Literal, TypedDict
+from uuid import uuid4
 
 from langchain_core.messages import AIMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
@@ -104,10 +105,10 @@ def build_graph(*, library: LibraryClient, checkpointer=None, llm_factory: LLMFa
             # Defence in depth: a model that ignores tool_choice still cannot pass the cap.
             reply = AIMessage(reply.text.strip() or STEP_LIMIT)
             calls = []
-        if rounds == 0 and not calls:
-            # A model that ignored the forced choice: search with the question, and drop its text.
-            reply = AIMessage("", tool_calls=[
-                {"name": FORCED_TOOL, "args": {"query": _question(state)}, "id": "forced-search"}])
+        if rounds == 0 and not any(c["name"] == FORCED_TOOL for c in calls):
+            # A model that ignored the forced choice: search with the question, and drop its reply.
+            reply = AIMessage("", tool_calls=[{"name": FORCED_TOOL, "args": {"query": _question(state)},
+                                               "id": f"forced-search-{uuid4().hex[:12]}"}])
             calls = reply.tool_calls
         if calls:
             return Command(goto="tools", update={"messages": [reply], "tool_rounds": rounds + 1})

@@ -209,3 +209,23 @@ def test_app_closes_the_in_process_erp_on_shutdown(tmp_path):
         erp_store = app.state.erp_store
         assert erp_store._conn is not None
     assert erp_store._conn is None
+
+
+def test_studio_starts_when_the_library_cannot_open(monkeypatch, tmp_path):  # review: one failure took all demos down
+    import agentic_solutions.web.app as app_module
+    from fastapi.testclient import TestClient
+    from langgraph.checkpoint.memory import InMemorySaver
+
+    from agentic_solutions.web.app import create_app
+    from agentic_solutions.web.config import Settings
+    from fakes import make_guard
+
+    def broken(settings, stack):
+        raise RuntimeError("no network to download the embedding models")
+
+    monkeypatch.setattr(app_module, "_open_library_index", broken)
+    settings = Settings(session_secret="s", offline_latency_scale=0, checkpoint_db=":memory:",
+                        erp_db=str(tmp_path / "erp.sqlite"), erp_approval_secret="x")
+    with TestClient(create_app(settings, checkpointer=InMemorySaver(), guard=make_guard())) as c:
+        assert [p["id"] for p in c.get("/api/patterns").json()][-1] == "semantic"
+        assert c.get("/api/patterns/guardrail").status_code == 200

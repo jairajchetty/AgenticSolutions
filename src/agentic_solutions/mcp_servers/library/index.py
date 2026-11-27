@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -37,6 +38,10 @@ BATCH = 64
 class Embedder(Protocol):
     names: tuple[str, str]  # (dense model, sparse model): part of the fingerprint
 
+    def load(self) -> None:
+        """Load the models now (and download them if needed), before the first query."""
+        ...
+
     def dense(self, texts: list[str]) -> list[list[float]]: ...
     def sparse(self, texts: list[str]) -> list[tuple[list[int], list[float]]]: ...
     def dense_query(self, text: str) -> list[float]: ...
@@ -44,22 +49,35 @@ class Embedder(Protocol):
 
 
 class FastEmbedder:
-    """bge-small-en-v1.5 and BM25 through fastembed (ONNX, CPU). Models load on first use."""
+    """bge-small-en-v1.5 and BM25 through fastembed (ONNX, CPU).
+
+    `load` builds both models together under a lock, so concurrent searches
+    never see one model loaded and the other not. `LibraryIndex.open` calls it,
+    so the models are ready before the app serves requests.
+    """
 
     names = (DENSE_MODEL, SPARSE_MODEL)
 
     def __init__(self, cache_dir: Path):
         self.cache_dir = Path(cache_dir)
-        self._dense = None
-        self._sparse = None
+        self._pair = None
+        self._lock = threading.Lock()
+
+    def load(self) -> None:
+        self._models()
 
     def _models(self):
-        if self._dense is None:
-            from fastembed import SparseTextEmbedding, TextEmbedding
+        pair = self._pair
+        if pair is None:
+            with self._lock:
+                if self._pair is None:
+                    from fastembed import SparseTextEmbedding, TextEmbedding
 
-            self._dense = TextEmbedding(DENSE_MODEL, cache_dir=str(self.cache_dir))
-            self._sparse = SparseTextEmbedding(SPARSE_MODEL, cache_dir=str(self.cache_dir))
-        return self._dense, self._sparse
+                    dense = TextEmbedding(DENSE_MODEL, cache_dir=str(self.cache_dir))
+                    sparse = SparseTextEmbedding(SPARSE_MODEL, cache_dir=str(self.cache_dir))
+                    self._pair = (dense, sparse)  # both at once, only once both are built
+                pair = self._pair
+        return pair
 
     def dense(self, texts):
         return [v.tolist() for v in self._models()[0].embed(texts, batch_size=BATCH)]
@@ -109,6 +127,7 @@ class LibraryIndex:
             current = json.loads(meta.read_text(encoding="utf-8")).get("fingerprint")
         except (OSError, ValueError, AttributeError):
             current = None  # missing or corrupt: rebuild
+        embedder.load()  # a cached start loads the models here too, not on the first search
         client = QdrantClient(path=str(root / "qdrant"))
         built = current != wanted or not client.collection_exists(COLLECTION)
         if built:

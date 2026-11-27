@@ -78,6 +78,14 @@ class InProcessLibraryClient:
             return UNAVAILABLE
 
 
+class UnavailableLibrary:
+    """The client the Studio uses when the library could not open (no network for the first
+    model download, say): every call says so, and the other demos keep working."""
+
+    async def call(self, tool: str, args: dict) -> Any:
+        return UNAVAILABLE
+
+
 class SearchArgs(BaseModel):
     query: str = Field(description="What to look for: a question, a phrase, a name or a theme.")
     limit: int = Field(5, description="How many passages to return, 1 to 10.")
