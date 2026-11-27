@@ -1,43 +1,72 @@
 # Autonomous
 
 ## What it is
-An autonomous agent is long-running and self-directed until the goal is met. It is given a goal rather than a single question, makes its own plan, acts, looks at what happened, and keeps going round that loop. It decides for itself when to stop, by checking progress against the goal. This guide uses the narrow meaning: not every agent is autonomous, only one that runs this way over a long task.
-
-The dividing line from ReAct: **ReAct answers one request in a short loop.** [[cognitive/react]] ends when the model can answer, while Autonomous keeps pursuing the goal across many rounds.
+An agent given a goal rather than a single question, which works on its own over a long run until it judges the goal met. It plans, acts, observes the results, records progress and checks itself against the goal, round after round, deciding for itself what to do next and when it is done. The run may span many rounds, hours or restarts, and a person is involved only at chosen points, if at all. This Guide uses the narrow meaning: not every agent that calls tools is autonomous, only one that pursues an open goal this way. Because it acts without step-by-step supervision, its limits, such as budgets, permissions and points where a person is consulted, are part of the design rather than an afterthought.
 
 ## When to use it
-- The goal is open-ended, such as "keep this dataset clean" or "work through this backlog", and no fixed list of steps fits.
-- The task takes long enough that progress must be checked and recorded along the way.
+- The goal is open-ended, such as "work through this backlog" or "keep this dataset clean", and no fixed list of steps fits.
+- The task takes long enough that progress must be recorded and checked along the way.
 - You can state what "done" means in a form the agent can check.
+- Not when the request can be answered in a handful of tool calls. A short reason-and-act loop is cheaper and easier to oversee.
 
-## How this graph works
-This is a skeleton: the nodes below are placeholders, but the wiring is real.
+## How it works
+Roles:
+- **Goal**: what to achieve, with criteria the agent can check.
+- **Planner**: decides the next steps toward the goal, given progress so far.
+- **Executor**: carries out a step, usually through tools.
+- **Progress record**: what was done and what came back, kept outside the model's context when it grows long.
+- **Goal check**: compares progress with the goal and the budget.
+- **Reporter**: summarises the outcome when the run ends.
 
-Autonomous here means long-running and self-directed until the goal is met. The line from ReAct is visible in the shape: [[cognitive/react]] answers one request in a short loop and stops, while here the loop closes through a goal check, and only `check_goal` can end the run.
+Flow:
+1. The request is turned into a goal with checkable criteria.
+2. The planner chooses the next steps.
+3. The executor acts, and the result is recorded as progress.
+4. The goal check decides: the goal is met, so report; the budget is spent, so report what was achieved; otherwise, back to step 2.
 
-- `set_goal` turns the request into a goal the agent can check.
-- `plan` writes the next steps toward the goal.
-- `act` carries out a step, and `observe` records what came back.
-- `check_goal` compares the observations with the goal. Its router sends control back to `plan` when the goal is not met, or to `report` when it is.
-- `report` summarises what was done, and the run ends.
-
-The skeleton's router is fixed to `report`, so the diagram shows the loop without running it.
-
-## LangGraph concepts
-A live version would use:
-- **Conditional edges**: the router, annotated `Literal["plan", "report"]`, closes the loop or leaves it.
-- **recursion_limit**: a config setting that stops a graph after a set number of steps with `langgraph.errors.GraphRecursionError`. A long-running agent needs this backstop.
-- **Checkpointing**: saves state after each step, so a long run can survive a restart.
-- **interrupt()**: `langgraph.types.interrupt` can pause for a person when the agent is unsure or about to do something risky.
+## Design considerations
+- **Defining done:** checkable criteria, such as tests passing or a queue emptying, are reliable; a model judging its own progress is flexible but may declare success early or never. A weak check is a common cause of runaway runs.
+- **Budgets:** cap rounds, spend and wall-clock time, enforced outside the model so the agent cannot argue past them.
+- **Re-plan every round or follow a plan:** re-planning each round adapts to surprises but costs more and can drift from the goal; planning once and revising on failure is cheaper and steadier.
+- **Progress memory:** history soon exceeds the context window. Summarise it, keep a task list or scratchpad, or store it externally and recall what is relevant.
+- **Durability:** save state after each step so a crash or deploy resumes the run instead of restarting it, and make steps safe to repeat.
+- **Oversight points:** decide where a person is consulted, such as before irreversible actions, on low confidence or at milestones, and provide a way to stop the run at any time.
+- **Permissions:** grant the least access the goal needs and sandbox risky tools; autonomy multiplies the effect of one bad action.
 
 ## Trade-offs
-- Cost and time are open-ended unless you set limits on rounds, spend and wall-clock time.
-- If the goal check is weak, the agent may stop too early or never stop.
-- Errors compound. A wrong early observation can steer every later plan.
-- Needs more oversight than a short loop, such as logs and a way to stop it.
+- Handles open goals that no fixed sequence or single request can cover.
+- Cost and duration are open-ended unless budgets bound them.
+- Errors compound: a wrong early observation can steer every later plan.
+- Harder to test and evaluate, because runs are long and paths vary.
+- Needs monitoring, logs and a reliable way to stop it.
 
-## Key code
-These are the wiring lines from `build_skeleton()`. The node bodies are placeholders that return `{}`.
+## Related patterns
+- The dividing line with [[cognitive/react]]: ReAct answers one request in a short loop and ends when it can answer. Autonomous pursues an open goal over a long run, deciding for itself when it is done.
+- [[cognitive/planning]] supplies the planning step; an autonomous agent plans repeatedly as it learns.
+- [[governance/approval]] is how a person is consulted at the chosen oversight points.
+- [[governance/audit]] keeps the durable record a long unattended run needs.
+- [[execution/event-driven]] can start an autonomous run, or wake one that is waiting.
+
+## How this Studio implements it
+
+### Mapping
+This demo is a Guide-only skeleton: the nodes are placeholders that return `{}`, but the wiring is real and the diagram is drawn from it.
+
+- **Goal** → `set_goal`: would turn the request into a checkable `goal`.
+- **Planner** → `plan`: would write the next `steps` toward `goal`.
+- **Executor** → `act`: would carry out the next step in `steps`.
+- **Progress record** → `observe`: would append what the action produced to `observations`.
+- **Goal check** → `check_goal`: would judge `observations` and set `goal_met`. Its router `route_check_goal` sends control back to `plan` or on to `report`, and is fixed to `report`.
+- **Reporter** → `report`: would summarise the run in `summary`, then end.
+- The budget is not modelled in state; a live version would rely on the framework's step limit, below, and its own counters.
+
+### Framework concepts
+- **Conditional edges**: the router is annotated `Literal["plan", "report"]`, so the loop appears in the diagram.
+- **recursion_limit**: a config setting that ends a run after a set number of steps by raising `langgraph.errors.GraphRecursionError`; a long-running graph needs this backstop.
+- **Checkpointer**: saves state after each step, so a long run can survive a restart.
+- **interrupt()**: `langgraph.types.interrupt` can pause for a person before a risky step (see [[governance/approval]]).
+
+### Key code
 ```python
 builder = StateGraph(State)
 builder.add_node("set_goal", set_goal)
@@ -58,7 +87,8 @@ builder.add_edge("report", END)
 return builder.compile()
 ```
 
-## Try this
-- Which State field does `check_goal` set so the router can leave the loop? Answer with its name from the skeleton.
+### Try this
+- Which state field does `check_goal` set so the router can leave the loop?
 - Trace one full round by node names, starting at `plan` and ending at the node that decides whether to go round again.
-- Compare with [[cognitive/react]]: which node name in this graph decides when the run is over?
+- Where would you add a spend budget: a new state field read by `route_check_goal`, or only the step limit? What does each catch?
+- Compare with [[cognitive/react]]: which node in this graph decides when the run is over?

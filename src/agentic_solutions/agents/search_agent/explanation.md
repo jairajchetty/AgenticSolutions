@@ -1,37 +1,65 @@
 # Search
 
 ## What it is
-Search treats reasoning as exploring a tree of possibilities. Instead of committing to one line of thought, the model proposes several candidate next steps, a scorer rates them, weak ones are pruned, and the best are expanded further. This is the idea behind Tree of Thoughts, which uses breadth-first or depth-first search over "thoughts", and LATS (Language Agent Tree Search), which brings in Monte Carlo tree search. Beam search is the simplest version: keep the top few candidates at each depth.
+Reasoning treated as exploring a space of possibilities. Instead of committing to one line of thought, the model proposes several candidate next steps, an evaluator rates them, weak candidates are dropped, and promising ones are expanded further, until a candidate is good enough or the budget is spent. Tree of Thoughts and LATS (Language Agent Tree Search) are well-known forms; they differ in how candidates are rated and how the next one to expand is chosen.
 
 ## When to use it
-- Problems where a wrong early step is costly and hard to undo: puzzles, planning with constraints, code that must pass tests.
-- You can judge a partial solution reasonably well, by a rule, a test or a model rating.
-- You can pay for many model calls to get a better answer.
+- Problems where a wrong early step is costly and hard to undo: puzzles, constrained planning, code that must pass tests.
+- A partial solution can be judged reasonably well, by a rule, a test or a model rating.
+- A better answer is worth many more model calls.
+- Not when one good attempt is usually enough. Search multiplies cost and latency, and adds little when the first answer is already right or candidates cannot be told apart.
 
-## How this graph works
-This is a skeleton: the nodes below are placeholders, but the wiring is real.
+## How it works
+Roles:
+- **Proposer**: expands a candidate into several possible next steps.
+- **Evaluator**: rates each candidate, by a test, a rule or a model judgement.
+- **Selector**: decides which candidates to keep and which to expand next.
+- **Budget**: limits depth, breadth or total calls.
 
-- `propose` expands the current candidates into several possible next steps.
-- `score` rates every candidate and keeps only the best few. Its router sends the search back to `propose` while it is promising and within budget, or on to `answer`.
-- `answer` returns the best candidate found, and the graph ends.
+Flow:
+1. Start from the problem as the only candidate.
+2. The proposer expands the selected candidates into new ones.
+3. The evaluator rates the new candidates.
+4. The selector keeps the promising ones and drops the rest.
+5. If a candidate is good enough or the budget is spent, return the best one; otherwise go back to step 2.
 
-The `propose` -> `score` -> `propose` cycle is one level of the tree per lap. The skeleton's router is fixed to `answer`, so the diagram shows the loop without running it. A live version would bound depth and total model calls.
-
-## LangGraph concepts
-A live version would use:
-- **Send**: `langgraph.types.Send` fans out one task per candidate, so candidates are expanded in parallel.
-- **Reducers**: a state channel with a reducer merges the results from the parallel branches.
-- **Conditional edges**: the router, annotated `Literal["propose", "answer"]`, decides to go deeper or stop.
-- **Checkpointing**: saves each level, so a long search can be inspected or resumed.
+## Design considerations
+- **Search strategy:** keeping the top few at each level (beam search) is simple and bounded; breadth-first or depth-first search is systematic but explores many weak branches; best-first expands the highest-rated candidate anywhere in the tree; Monte Carlo tree search balances exploring new branches against exploiting good ones, and copes with noisy ratings, at the price of more bookkeeping and calls.
+- **Evaluator kind:** a test, rule or checker is reliable and cheap where one exists; a model rating works for open-ended tasks but is noisy and can be fooled by confident wording.
+- **Breadth and depth:** cost grows roughly with breadth times depth. Set both, or a total call budget, before the run.
+- **Candidate diversity:** near-identical proposals waste the budget. Vary prompts or sampling, or deduplicate.
+- **Parallel expansion:** expanding candidates in parallel keeps latency manageable, but parallel results must be merged before selection.
+- **Backtracking:** keeping dropped candidates lets the search return to them when every kept branch fails, at the cost of memory.
 
 ## Trade-offs
-- The most expensive pattern here. Cost grows with breadth times depth.
-- Only as good as the scorer. A model rating partial work can be noisy, so a test or rule is better when one exists.
-- Diverse candidates are needed. If every proposal is a near copy, the search adds cost and no benefit.
-- Latency stays acceptable only with parallel expansion and a firm budget.
+- Expensive: many model calls per answer, growing with breadth and depth.
+- Only as good as the evaluator; a weak one prunes the right path early.
+- Higher latency than a single pass, even with parallel expansion.
+- More state to keep and inspect than a linear loop.
 
-## Key code
-These are the wiring lines from `build_skeleton()`. The node bodies are placeholders that return `{}`.
+## Related patterns
+- [[cognitive/reflection]] improves one draft in place; Search keeps several candidates and compares them.
+- [[cognitive/planning]] commits to a single plan; Search explores alternatives before committing.
+- [[cognitive/react]] takes one step at a time along a single path.
+- [[governance/review]] can act as the evaluator when a separate checker is needed.
+
+## How this Studio implements it
+
+### Mapping
+This demo is a Guide-only skeleton: the nodes are placeholders that return `{}`, but the wiring is real and the diagram is drawn from it. The Studio sketches a beam search: keep the best few candidates at each level.
+
+- **Proposer** → `propose`: would expand each candidate in `frontier` into several next steps.
+- **Evaluator and selector** → `score`: would rate candidates into `scores` and keep the best few. Its router loops back to `propose` while promising and within budget, or goes on to `answer`; it is fixed to `answer`.
+- **Budget** → the `depth` state key, which a live router would read.
+- **Result** → `answer`: would return the best candidate found, then the run ends.
+
+### Framework concepts
+- **Send**: a live version would use `langgraph.types.Send` to fan out one task per candidate, so candidates expand in parallel.
+- **Reducers**: a state channel with a reducer would merge the parallel results.
+- **Conditional edges**: the router is annotated `Literal["propose", "answer"]`, so both exits appear in the diagram.
+- **Checkpointing**: would save each level, so a long search can be inspected or resumed.
+
+### Key code
 ```python
 builder = StateGraph(State)
 builder.add_node("propose", propose)
@@ -46,7 +74,7 @@ builder.add_edge("answer", END)
 return builder.compile()
 ```
 
-## Try this
-- Suppose the first lap starts from the task alone, `propose` makes 3 candidates per kept candidate, and `score` keeps the best 2 each lap. How many candidates exist after four laps, counting those pruned? (Answer: 3 + 6 + 6 + 6 = 21.)
+### Try this
+- The first lap starts from the task alone, `propose` makes 3 candidates per kept candidate, and `score` keeps the best 2 each lap. How many candidates exist after four laps, counting those dropped? (Answer: 3 + 6 + 6 + 6 = 21.)
 - What would you use to score a candidate for a coding task, and why is that better than asking a model?
-- Compare with [[cognitive/reflection]], which improves one draft in place, and [[cognitive/planning]], which commits to a single plan.
+- Compare with [[cognitive/reflection]], which improves one draft in place.

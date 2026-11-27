@@ -10,6 +10,7 @@ from agentic_solutions.web.offline.model import ScriptedChatModel
 from agentic_solutions.web.offline.scripts import SCRIPTS
 from agentic_solutions.web.registry import PATTERNS, BuildContext, offline_factory
 from fakes import make_guard
+from guide_format import try_this_text
 
 # Inputs a Guide may name that deliberately never reach a scripted rule.
 SPECIAL = {
@@ -28,7 +29,7 @@ def try_this_inputs(spec):
     """Backticked spans in the Guide's "Try this" section that are user inputs,
     i.e. not node names or state keys."""
     md = spec.explanation_path.read_text(encoding="utf-8")
-    section = md.split("## Try this", 1)[1].split("\n## ", 1)[0]
+    section = try_this_text(md)
     graph = spec.build(BuildContext(offline_factory(spec.id, 0), InMemorySaver(), make_guard()))
     names = set(graph.get_graph().nodes) | STATE_KEYS
     return [s for s in re.findall(r"`([^`]+)`", section) if s not in names]

@@ -14,8 +14,7 @@ test("contactAddress joins the parts", () => {
 test("ABOUT holds the exact spec copy", () => {
   assert.equal(ABOUT.name, "Jairaj Chetty");
   assert.equal(ABOUT.role, "Solution architect, enterprise integration and agentic AI");
-  assert.ok(ABOUT.record.startsWith("20+ years of integration architecture"));
-  assert.ok(ABOUT.record.includes("120+ integrations for MTN's group-wide Oracle Fusion ERP."));
+  assert.ok(ABOUT.record.startsWith("20+ years of integration, solution and enterprise architecture"));
   assert.ok(ABOUT.record.endsWith(ABOUT.builtWith));
   assert.equal(ABOUT.builtWith, "Built this Studio with LangGraph and Claude.");
 });

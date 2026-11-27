@@ -1,59 +1,82 @@
 # Hierarchy
 
 ## What it is
-A hierarchy is supervisors of supervisors. A top-level coordinator delegates to team leads, and each team lead is itself a supervisor that manages its own workers. Work flows down through the levels and results flow back up. It is the Supervisor pattern applied recursively, and it is often built by making each team a subgraph.
-
-The dividing line from the other two multi-agent patterns: **Hierarchy stacks supervisors of supervisors.** [[collaboration/supervisor]] has one coordinator over workers, and [[collaboration/swarm]] has no coordinator at all.
+Supervisors of supervisors. A top-level coordinator delegates to team leads, and each lead is itself a supervisor over its own workers. Work flows down through the levels and results flow back up. It is the Supervisor pattern applied recursively, with each team typically packaged as a self-contained unit that can be built and tested on its own.
 
 ## When to use it
-- One supervisor would have too many workers or tools to choose between reliably.
-- The work groups into teams, such as a research team and a writing team, each with its own skills.
-- You want each team to be built, tested and changed on its own.
+- One coordinator would have too many workers or tools to choose between reliably.
+- The work groups into teams, such as research and writing, each with its own skills.
+- Each team should be built, tested and changed independently.
+- Not when a handful of workers would do. Every extra level adds coordinator calls, latency and a place where detail can be lost.
 
-## How this graph works
-This is a skeleton: the nodes below are placeholders, but the wiring is real. The teams are drawn as flat nodes so the whole structure fits in one diagram.
+## How it works
+Roles:
+- **Top coordinator**: splits the goal across teams and decides when the whole job is done. It talks only to team leads.
+- **Team leads**: each supervises its own workers, then reports a result upward.
+- **Workers**: specialists that do one piece of work and report to their own lead.
+- **Shared state and team-private state**: what every level sees, and what stays inside a team.
 
-The line from [[collaboration/supervisor]] is the extra level: `director` never talks to a worker directly. It talks to leads, and the leads talk to workers.
+Flow:
+1. The top coordinator reads the goal and assigns work to one or more team leads.
+2. Each lead delegates to one or more of its workers, merges their results, and repeats until the team's part is done.
+3. Each lead reports back to the top coordinator, which merges the team results.
+4. The top coordinator assigns further team work, back at step 1, or finishes.
 
-- `director` is the top coordinator. Its router sends work to `research_lead`, to `writing_lead`, or to the end.
-- `research_lead` supervises `searcher` and `analyst`, then reports back to `director`.
-- `writing_lead` supervises `drafter` and `editor`, then reports back to `director`.
-- Each worker returns to its own lead, never to the director.
-
-The skeleton's routers are fixed, so the diagram shows the structure without running it.
-
-## LangGraph concepts
-A live version would use:
-- **Subgraphs**: each team is its own compiled graph, added as a node of the parent graph. State can be shared or mapped between levels.
-- **Conditional edges**: each lead has a router annotated with its worker targets and the way back up.
-- **Command**: a node can return `langgraph.types.Command` with `goto` to move control, including up to a parent level where supported.
-- **State**: a shared goal and findings, with each team free to keep private fields.
+## Design considerations
+- **Number of levels:** each level reduces the choices any one coordinator faces, but adds calls and latency. Add a level only when a coordinator's choices have become unreliable.
+- **Sequential or parallel delegation:** at each level, running teams or workers one after another lets later work build on earlier results; running independent ones in parallel cuts latency, but needs a clean split up front and a merge step that reconciles overlapping or conflicting results.
+- **What crosses a level:** a lead can pass up raw results or a summary. Summaries keep upper levels focused but can drop the detail a later team needs.
+- **Team boundaries:** group workers by the skills and context they share, so that most work stays inside one team.
+- **Private versus shared state:** keep a team's working notes private, and agree a small shared contract for what teams hand each other.
+- **Mixing patterns per team:** a team does not have to be a supervisor inside; a lead can run a fixed sequence or a peer group where that fits better.
+- **Limits per level:** cap rounds at every level, since a loop low in the tree multiplies cost above it.
 
 ## Trade-offs
-- More levels mean more coordinator calls, so latency and cost rise quickly.
+- More levels mean more coordinator calls, so cost and latency rise quickly.
 - Each level can lose or distort detail passed through it.
-- The structure adds design work. For a handful of workers a single supervisor is simpler.
-- Teams are easier to test and reuse on their own than one large flat graph.
+- Teams are easier to test and reuse than one large flat group.
+- More design work up front than a single supervisor.
 
-## Key code
-These are the wiring lines from `build_skeleton()`. The node bodies are placeholders that return `{}`.
+## Related patterns
+- The dividing line across the three multi-agent patterns: Hierarchy stacks supervisors of supervisors. [[collaboration/supervisor]] has one coordinator over workers, and [[collaboration/swarm]] has no coordinator at all.
+- [[collaboration/single-agent]] is the baseline: one agent, no teams.
+- [[cognitive/planning]] can drive the top coordinator, turning the goal into team assignments.
+
+## How this Studio implements it
+
+### Mapping
+This demo is a Guide-only skeleton: the nodes are placeholders that return `{}`, but the wiring is real and the diagram is drawn from it. The teams are drawn as flat nodes, so the whole structure fits in one diagram.
+
+- **Top coordinator** → `director`: its router sends work to `research_lead`, to `writing_lead`, or to `__end__`. It never links to a worker, and it delegates to one team at a time; each lead likewise picks one worker at a time.
+- **Team leads** → `research_lead`, which supervises `searcher` and `analyst`, and `writing_lead`, which supervises `drafter` and `editor`. Each lead's router picks a worker or reports back to `director`.
+- **Workers** → `searcher` and `analyst` would build `findings`; `drafter` and `editor` would write and polish `draft`. Each returns to its own lead.
+- **Shared state** → `goal`, `findings` and `draft`. The routers are fixed, so the structure is drawn but never run.
+
+### Framework concepts
+- **Subgraphs**: a live version would make each team its own compiled graph, added as a node of the parent, with state shared or mapped between levels.
+- **Conditional edges**: each lead's router is annotated with its worker targets and the way back up.
+- **Command**: a node could return `langgraph.types.Command` with `goto` to move control, including up to a parent graph.
+
+### Key code
 ```python
+builder = StateGraph(State)
+for name, fn in [("director", director), ("research_lead", research_lead),
+                 ("writing_lead", writing_lead), ("searcher", searcher),
+                 ("analyst", analyst), ("drafter", drafter), ("editor", editor)]:
+    builder.add_node(name, fn)
+
 builder.add_edge(START, "director")
 builder.add_conditional_edges("director", route_director)
 builder.add_conditional_edges("research_lead", route_research_lead)
 builder.add_conditional_edges("writing_lead", route_writing_lead)
-
-# Each worker reports back to its own lead.
-for worker, lead in [("searcher", "research_lead"),
-                     ("analyst", "research_lead"),
-                     ("drafter", "writing_lead"),
-                     ("editor", "writing_lead")]:
+for worker, lead in [("searcher", "research_lead"), ("analyst", "research_lead"),
+                     ("drafter", "writing_lead"), ("editor", "writing_lead")]:
     builder.add_edge(worker, lead)
 
 return builder.compile()
 ```
 
-## Try this
+### Try this
 - Count the hops from `director` to `editor` and back. Compare with a flat supervisor that manages all four workers directly.
-- Which State fields would the research team need privately, and which must be shared with the writing team?
-- Compare with [[collaboration/single-agent]], the live baseline. At what size of problem would you stop using one agent?
+- Which state fields would the research team keep privately, and which must it share with the writing team?
+- Compare with [[collaboration/supervisor]], one level of the same structure.

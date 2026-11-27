@@ -121,6 +121,12 @@ The interface uses the Blueprint design system (`docs/superpowers/specs/2026-11-
 
 The taxonomy lives in `web/catalog.py`. An entry is "live" when its `demo` id is a key of `registry.PATTERNS`; nothing else stores that status.
 
+### The Guide format
+
+Every `agents/<folder>/explanation.md` has the same seven `##` sections, in this order: What it is, When to use it, How it works, Design considerations, Trade-offs, Related patterns, and How this Studio implements it. The first six describe the pattern in general terms and would read the same in any framework. The seventh is specific to this Studio, with four `###` parts: Mapping (which node plays which role), Framework concepts, Key code (one fence of 25 lines or fewer, copied from the folder's `graph.py`) and Try this (inputs that work offline). The page shows that last section collapsed under "How this Studio implements it"; it opens with Enter or Space, and the open state is kept for the browser session across patterns.
+
+The genericity rule: the title and sections 1 to 6 contain no backticks and no framework, protocol or vendor names or code identifiers. Those belong only in section 7. `tests/test_guides.py` enforces this with a denylist, along with the section order, the length (50 to 130 lines), and that Mapping names every node in the pattern's diagram.
+
 ### From skeleton to live demo
 
 Each Guide-only pattern has a skeleton folder under `agents/` whose `graph.py` builds the pattern's real topology with empty nodes (`build_skeleton()`), which is what the diagram draws. To make one live:
@@ -129,7 +135,7 @@ Each Guide-only pattern has a skeleton folder under `agents/` whose `graph.py` b
 2. In `web/registry.py`, add a `_build_<id>(c: BuildContext)` factory that calls `build_graph` with `c.checkpointer` and `c.llm_factory`, and add a `_spec(...)` row to `PATTERNS` whose id equals the catalog entry's `demo` (for example `react`, `reflection` or `plan_execute`). Its arguments are the title, the summary, the mode (`"chat"` or `"trigger"`), the factory, the folder (whose `explanation.md` becomes the Guide) and the sample prompts.
 3. Add an offline `Script` for the new id to `SCRIPTS` in `web/offline/scripts.py`, so the demo runs without an API key. Give it a rule for every backticked input in the Guide's "Try this" section: `tests/test_offline_scripts.py` sends each one to the script and fails if it falls through to the fallback.
 4. Remove the folder's row from `SKELETONS` in `tests/test_skeletons.py`: those tests assert a skeleton has no `graph` export, which the live graph now has.
-5. Rewrite the folder's `explanation.md`: drop the "this is a skeleton / placeholders" text, and replace its Key code with lines copied from the live `graph.py` (`tests/test_guides.py` keeps the fence at 25 lines or fewer).
+5. Update the folder's `explanation.md` section 7: drop the "this is a skeleton / placeholders" text, and replace its Key code with lines copied from the live `graph.py` (`tests/test_guides.py` keeps the fence at 25 lines or fewer).
 
 No edit to `catalog.py` is needed: the entry turns live and the page switches from Guide-only to the workbench.
 
