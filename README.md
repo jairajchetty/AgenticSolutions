@@ -126,11 +126,11 @@ The interface uses the Blueprint design system (`docs/superpowers/specs/2026-11-
 | --- | --- | --- |
 | Cognitive | How should the agent think? | ReAct, Reflection, Planning, Search |
 | Collaboration | How many agents, and who leads? | Single Agent **(live)**, Supervisor, Swarm, Hierarchy |
-| Memory | What must it remember? | Session **(live)**, Episodic, Semantic, Knowledge Graph |
+| Memory | What must it remember? | Session **(live)**, Episodic, Semantic **(live)**, Knowledge Graph |
 | Execution | How does it act and run? | Tool Use (opens ReAct), Routing, Workflow, Event Driven, Autonomous |
 | Governance | How is it kept safe and accountable? | Guardrails **(live)**, Approval **(live)**, Audit, Review |
 
-The taxonomy lives in `web/catalog.py`. An entry is "live" when its `demo` id is a key of `registry.PATTERNS`; nothing else stores that status.
+The taxonomy lives in `web/catalog.yaml`, loaded and checked by `web/catalog.py`. An entry is "live" when its `demo` id is a key of `registry.PATTERNS`; nothing else stores that status.
 
 ### The Guide format
 
@@ -305,6 +305,28 @@ python -m agentic_solutions.agents.approval_agent
 The CLI uses Claude, so it needs `ANTHROPIC_API_KEY`. It runs the ERP in-process unless `ERP_MCP_URL` is set, in which case `ERP_APPROVAL_SECRET` is required too. Larger orders stop and ask you to approve, edit or reject. Type "stop" to quit.
 
 In `langgraph.json`, the `approval_agent` graph connects to a separate ERP server, so `langgraph dev` needs `ERP_MCP_URL` and `ERP_APPROVAL_SECRET` set (for example in `.env`).
+
+## Semantic demo and the library
+
+The Semantic demo answers questions about John Milton's *Paradise Lost* from a vector database. The poem is split into overlapping passages of about 20 lines within each Book and stored in Qdrant (local mode), each with a dense embedding (`BAAI/bge-small-en-v1.5`) and a BM25 keyword vector. Both are computed locally with `fastembed`, so no API key is needed. A `library` MCP server offers two read-only tools, `search_book` (hybrid search) and `read_passage` (lines by position). The agent must search before it answers, answers only from the passages, and cites the Book and lines. Line numbers follow this edition.
+
+### First start
+
+The first start builds the index: about 20 seconds to download the models and 30 to 60 seconds to embed the poem. Later starts reuse it while the text, chunking and models are unchanged; a change to any of them rebuilds it.
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `LIBRARY_DIR` | `./data/library` | The Qdrant index (`qdrant/`), its fingerprint (`meta.json`) and the embedding models (`models/`) |
+| Server address | `127.0.0.1:8766`, path `/mcp` | Where `python -m agentic_solutions.mcp_servers.library` listens (`LIBRARY_HOST`, `LIBRARY_PORT`) |
+
+### The text
+
+The committed text is `mcp_servers/library/texts/paradise-lost.txt`: 12 Books, one verse line per line. It was made once from the Planet eBook PDF, which is not committed:
+
+```bash
+pip install -e '.[prep]'
+python tools/prepare_paradise_lost.py data/books/paradise-lost.pdf
+```
 
 ## Roadmap ideas
 

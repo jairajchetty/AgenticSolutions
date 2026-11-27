@@ -73,3 +73,10 @@ async def test_uncovered_question_says_so(run):  # Review Focus 1
     assert tool_calls(messages)[0]["name"] == "search_book"
     answer = messages[-1].content
     assert "don't cover" in answer and "(Book" not in answer
+
+
+async def test_answer_never_quotes_the_same_line_twice(run):
+    # Overlapping passages can share a line; the answer should quote it once.
+    for sample in PATTERNS["semantic"].samples:
+        quotes = QUOTE.findall((await run(sample))[-1].content)
+        assert len(quotes) == len(set(quotes)), (sample, quotes)

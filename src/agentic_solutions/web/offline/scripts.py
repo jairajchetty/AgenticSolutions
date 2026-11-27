@@ -292,10 +292,20 @@ def _semantic_step(messages: list[BaseMessage]) -> str | AIMessage:
     if not hits:
         return (f"The passages I found don't cover this. I searched for \"{query}\" and none of the "
                 f"passages mentioned it. {OFFLINE_NOTE}")
-    parts = []
-    for h in hits[:2]:
-        line = next((ln for ln in h["text"].splitlines() if wanted & _content_words(ln)), h["text"].splitlines()[0])
-        parts.append(f"“{line.strip()}” {_cite(h)}")
+    parts, quoted = [], set()
+    for h in hits:
+        # Overlapping passages can share a line: quote each line once.
+        lines = [ln.strip() for ln in h["text"].splitlines() if ln.strip() not in quoted]
+        line = next((ln for ln in lines if wanted & _content_words(ln)), None)
+        if line is None:
+            continue
+        quoted.add(line)
+        parts.append(f"“{line}” {_cite(h)}")
+        if len(parts) == 2:
+            break
+    if not parts:
+        return (f"The passages I found don't cover this. I searched for \"{query}\" and none of the "
+                f"passages mentioned it. {OFFLINE_NOTE}")
     return "From the passages I found:\n\n" + "\n\n".join(parts) + f"\n\n{OFFLINE_NOTE}"
 
 
