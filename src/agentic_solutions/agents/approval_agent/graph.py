@@ -155,6 +155,48 @@ def _card(pending: dict, limit: float) -> dict:
     }
 
 
+def edge_labels(auto_limit_zar: float) -> dict:
+    """What the Studio draws on each conditional edge: (short label, full rule)."""
+    limit = order_policy.format_zar(auto_limit_zar)
+    return {
+        ("ask", "__end__"): ("stop", 'You typed "stop": the conversation ends.'),
+        ("ask", "ask"): ("empty", "Empty message: wait for the next one."),
+        ("ask", "agent"): ("message", "Any other message goes to the agent."),
+        ("agent", "tools"): ("tool calls", f"The model asked for ERP tools ({MAX_TOOL_ROUNDS} rounds per request at most)."),
+        ("agent", "policy"): ("propose", "The model proposed an order with propose_order, on its own."),
+        ("agent", "ask"): ("reply", "The model answered in text, or asked you a question."),
+        ("policy", "submit_po"): (f"≤ {limit}", f"At or under the {limit} limit: the policy approves it."),
+        ("policy", "approval"): (f"> {limit}", f"Over the {limit} limit: pause for a person to decide."),
+        ("policy", "agent"): ("can't proceed",
+                              "Requisition missing or already ordered, or an ERP error: the agent is told why."),
+        ("approval", "submit_po"): ("approve", "You approved this exact version, and its quotes are still valid."),
+        ("approval", "policy"): ("edit / re-quote",
+                                 "You changed quantities, or the quotes expired: the order is re-quoted "
+                                 "and needs a fresh decision."),
+        ("approval", "agent"): ("reject", "You rejected the order: your reason goes to the agent."),
+        ("submit_po", "ask"): ("ordered", "The ERP accepted the order: the PO number is shown."),
+        ("submit_po", "agent"): ("refused", "The ERP refused the order: the reason goes to the agent."),
+    }
+
+
+# The Studio draws Approval from fixed positions: an automatic layout packs its
+# 14 conditional edges into one channel and the labels collide. The decision
+# row (policy, approval, submit_po) reads left to right. A bend bows an edge's
+# curve, so the two directions between a pair of nodes stay apart.
+LAYOUT = {
+    "positions": {
+        "__start__": (440, 0), "ask": (440, 100), "__end__": (720, 100),
+        "tools": (160, 260), "agent": (440, 260),
+        "policy": (200, 450), "approval": (460, 450), "submit_po": (740, 450),
+    },
+    "bends": {
+        ("ask", "agent"): 48, ("agent", "ask"): 48, ("agent", "tools"): 26, ("tools", "agent"): 26,
+        ("agent", "policy"): 30, ("policy", "agent"): 30, ("policy", "approval"): 24, ("approval", "policy"): 24,
+        ("submit_po", "agent"): -30, ("policy", "submit_po"): 95, ("submit_po", "ask"): 230,
+    },
+}
+
+
 def build_graph(
     *,
     erp: ErpClient,

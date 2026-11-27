@@ -55,7 +55,7 @@ from agentic_solutions.web.models import (
     MODEL_CHOICE_DENIED, OFFLINE, UNKNOWN_MODEL, credential_set, entry_for, listed_entries, load_entries,
     may_choose_model)
 from agentic_solutions.web.registry import (
-    AGENTS_DIR, PATTERNS, BuildContext, PatternSpec, live_factory, offline_factory)
+    AGENTS_DIR, PATTERNS, BuildContext, PatternSpec, live_factory, offline_factory, pattern_topology)
 from agentic_solutions.web.runner import run_events
 from agentic_solutions.web.serialize import to_jsonable
 from agentic_solutions.web.threads import ThreadRecord, ThreadStore, once
@@ -387,7 +387,9 @@ def create_app(settings: Settings | None = None, *, checkpointer=None, guard=Non
             app.state.build_context = build_context
             app.state.graph_lock = asyncio.Lock()
             app.state.graphs = graphs
-            app.state.topologies = {pid: graph_topology(graphs[(pid, OFFLINE.id)]) for pid in registry}
+            app.state.topologies = {
+                pid: pattern_topology(spec, graphs[(pid, OFFLINE.id)], settings.erp_auto_approve_limit_zar)
+                for pid, spec in registry.items()}
             app.state.catalog_pages = _catalog_pages(registry, app.state.topologies)
             app.state.catalog_listing = _catalog_listing(registry)
             yield
