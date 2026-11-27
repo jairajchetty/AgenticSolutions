@@ -264,8 +264,23 @@ def _content_words(text: str) -> set[str]:
     return {w for w in re.findall(r"[a-z]+", text.lower()) if len(w) >= 5 and w not in _SEMANTIC_STOP}
 
 
-def _cite(p: dict) -> str:
-    return f"(Book {p['book']}, {p['start_line']}–{p['end_line']})"
+# The short answers the script gives for its samples; other questions get a plain lead.
+_SEMANTIC_ANSWERS = {
+    SEMANTIC_SAMPLES[0]: "Satan means he would rather rule in Hell than serve under God in Heaven. "
+                         "Ruling, even in Hell, is worth more to him than obedience.",
+    SEMANTIC_SAMPLES[1]: "Mammon argues against another war with Heaven. He proposes that the fallen angels "
+                         "stay in Hell and build their own kingdom there.",
+}
+_SEMANTIC_LEAD = "These passages come closest to your question."
+
+
+def _source(p: dict, line: str) -> str:
+    return f"- Book {p['book']}, {p['start_line']}–{p['end_line']}: “{line.strip()}”"
+
+
+def _with_sources(answer: str, sources: list[str]) -> str:
+    """The answer the prompt asks for: short and plain, then the sources at the end."""
+    return f"{answer}\n\nSources:\n" + "\n".join(sources) + f"\n\n{OFFLINE_NOTE}"
 
 
 def _semantic_step(messages: list[BaseMessage]) -> str | AIMessage:
@@ -285,15 +300,15 @@ def _semantic_step(messages: list[BaseMessage]) -> str | AIMessage:
         return f"The library could not answer: {text} {OFFLINE_NOTE}"
     if name == "read_passage":
         lines = data["text"].splitlines()
-        return (f"The poem ends as Adam and Eve leave Eden together:\n\n“{lines[-2]}”\n“{lines[-1]}” "
-                f"{_cite(data)}\n\nI read the last lines of Book XII to answer this. {OFFLINE_NOTE}")
+        return _with_sources("The poem ends with Adam and Eve leaving Eden together, hand in hand.",
+                             [_source(data, lines[-2]), _source(data, lines[-1])])
     wanted = _content_words(human)
     unknown = sorted(w for w in wanted if not _in_poem(w))
     hits = [] if unknown else [h for h in data if wanted & _content_words(h["text"])]
     if not hits:
         return (f"The passages I found don't cover this. I searched for \"{query}\" and none of the "
                 f"passages mentioned it. {OFFLINE_NOTE}")
-    parts, quoted = [], set()
+    sources, quoted = [], set()
     for h in hits:
         # Overlapping passages can share a line: quote each line once.
         lines = [ln.strip() for ln in h["text"].splitlines() if ln.strip() not in quoted]
@@ -301,13 +316,13 @@ def _semantic_step(messages: list[BaseMessage]) -> str | AIMessage:
         if line is None:
             continue
         quoted.add(line)
-        parts.append(f"“{line}” {_cite(h)}")
-        if len(parts) == 2:
+        sources.append(_source(h, line))
+        if len(sources) == 2:
             break
-    if not parts:
+    if not sources:
         return (f"The passages I found don't cover this. I searched for \"{query}\" and none of the "
                 f"passages mentioned it. {OFFLINE_NOTE}")
-    return "From the passages I found:\n\n" + "\n\n".join(parts) + f"\n\n{OFFLINE_NOTE}"
+    return _with_sources(_SEMANTIC_ANSWERS.get(human.strip(), _SEMANTIC_LEAD), sources)
 
 
 _BOOK_LENGTHS: dict[str, int] = {}

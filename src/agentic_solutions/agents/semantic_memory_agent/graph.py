@@ -45,10 +45,14 @@ SYSTEM_PROMPT = "\n".join((
     "Search before answering. Search again with different words if the passages don't answer the "
     "question. Use read_passage to read around a passage, or to reach a known place such as the end "
     "of Book XII.",
-    "Cite every claim with its Book and line range, for example (Book I, 271–291). Quote exactly "
-    "when quoting.",
-    "If the passages don't answer the question, say so plainly and say what you searched for. "
-    "Don't fill the gap from memory.",
+    "Answer simply and concisely, in two or three plain sentences. Put no citations, quotations or "
+    "line numbers in the answer itself.",
+    'Then list your sources at the end, under the heading "Sources:", one per line, in this form: '
+    '- Book I, 254–263: “the exact words you relied on”. Quote the text exactly.',
+    "For each source, give the passage's Book, start_line and end_line exactly as the tool returned "
+    "them. Do not count lines within a passage yourself.",
+    "If the passages don't answer the question, say so in one sentence, say what you searched for, "
+    "and list no sources. Don't fill the gap from memory.",
     "Line numbers follow this edition.",
 ))
 
