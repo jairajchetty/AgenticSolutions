@@ -25,7 +25,7 @@ CATALOG_PATH = Path(__file__).with_name("catalog.yaml")
 
 TOP_KEYS = {"categories"}
 CATEGORY_KEYS = {"id", "name", "description", "patterns"}
-PATTERN_KEYS = {"id", "name", "description", "aliases", "demo", "folder", "crosslist_of", "builds_on"}
+PATTERN_KEYS = {"id", "name", "description", "aliases", "demo", "folder", "crosslist_of", "builds_on", "use_case"}
 
 
 class CatalogError(ValueError):
@@ -43,6 +43,7 @@ class CatalogPattern:
     crosslist_of: str | None  # route of the canonical page for cross-lists, else None
     folder: str | None  # agent folder holding explanation.md (+ skeleton); None for cross-lists
     builds_on: tuple[str, ...] = ()  # routes of the patterns this one is built from
+    use_case: str | None = None  # the owner's description of the use case the demo implements
 
     @property
     def route(self) -> str:
@@ -118,7 +119,8 @@ def load_catalog(path: Path) -> tuple[Category, ...]:
                 id=pid, category=cid, name=text(rp, "name", where), description=text(rp, "description", where),
                 aliases=strings(rp, "aliases", where), demo=text(rp, "demo", where, required=False),
                 crosslist_of=text(rp, "crosslist_of", where, required=False),
-                folder=text(rp, "folder", where, required=False), builds_on=strings(rp, "builds_on", where)))
+                folder=text(rp, "folder", where, required=False), builds_on=strings(rp, "builds_on", where),
+                use_case=text(rp, "use_case", where, required=False)))
         categories.append(Category(cid, text(raw, "name", cid), text(raw, "description", cid), tuple(patterns)))
 
     by_route: dict[str, CatalogPattern] = {}

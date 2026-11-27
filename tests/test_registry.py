@@ -106,7 +106,7 @@ def test_titles_match_spec():
         "Loop with conditional routing and memory",
         "Input guardrail (embedding threat screen)",
         "Approval: propose, approve, then act",
-        "Semantic memory: answers from a vector database",
+        "Semantic (RAG): answers from a vector database",
     ]
 
 

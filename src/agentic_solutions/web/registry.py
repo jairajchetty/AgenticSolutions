@@ -163,7 +163,7 @@ PATTERNS: dict[str, PatternSpec] = {
               ("Order 12 laptops for the Cape Town office under CT-OPS", "Order 3 keyboards for CT-OPS",
                "Order 40 monitors for JHB-FIN"),
               edge_labels=approval_graph.edge_labels, layout=approval_graph.LAYOUT),
-        _spec("semantic", "Semantic memory: answers from a vector database",
+        _spec("semantic", "Semantic (RAG): answers from a vector database",
               "The agent searches Paradise Lost through an MCP tool and answers only from the passages it finds.",
               "chat", _build_semantic, "semantic_memory_agent",
               ("What does Satan mean by 'Better to reign in Hell'?",

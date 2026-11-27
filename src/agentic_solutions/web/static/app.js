@@ -11,7 +11,7 @@
 import {
   ApiError, createThread as postThread, getCatalog, getCatalogPage, getPattern, getSession, getState, streamRun,
 } from "./api.js";
-import { renderGuide, renderInlineCode, renderPurpose, splitPurpose } from "./guide.js";
+import { renderGuide, renderInlineCode, renderPurpose, splitPurpose, useCaseParagraphs } from "./guide.js";
 import { renderHome } from "./catalog.js";
 import { ABOUT, bindContact } from "./about.js";
 import { buildHero, playHero } from "./hero.js";
@@ -192,6 +192,13 @@ function renderPageChrome(page) {
   const note = $("page-note");
   note.hidden = page.target === page.route;
   note.textContent = note.hidden ? "" : `${listed} is listed under ${page.category.name}; it opens the ${page.name} page.`;
+  const paragraphs = useCaseParagraphs(page.use_case);
+  $("use-case").hidden = paragraphs.length === 0;
+  $("use-case-text").replaceChildren(...paragraphs.map((text) => {
+    const p = document.createElement("p");
+    p.textContent = text;
+    return p;
+  }));
   renderCrumbs(page);
   document.title = `${listed} · ${page.category.name} · Agentic Patterns Studio`;
 }

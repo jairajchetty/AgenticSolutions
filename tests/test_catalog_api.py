@@ -75,6 +75,22 @@ def test_page_for_live_pattern(client):
     assert (page["prev"], page["next"]) == ("governance/guardrails", "governance/audit")
 
 
+def test_page_carries_the_use_case(client, monkeypatch):
+    from dataclasses import replace as dc_replace
+
+    from agentic_solutions.web import catalog
+
+    page = client.get("/api/catalog/memory/semantic").json()
+    assert "use_case" in page and page["use_case"] == catalog.entry("memory/semantic").use_case
+
+
+def test_crosslist_page_shows_its_targets_use_case(client):
+    from agentic_solutions.web import catalog
+
+    page = client.get("/api/catalog/execution/tool-use").json()
+    assert page["use_case"] == catalog.entry("cognitive/react").use_case
+
+
 def test_page_for_guide_only_pattern(client):
     page = client.get("/api/catalog/memory/episodic").json()
     assert page["status"] == "guide"
