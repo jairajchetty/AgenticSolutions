@@ -81,3 +81,10 @@ def library_fixture_text():
             end = "." if i % 7 == 0 or i == 40 else ","
             out.append(f"Verse {numeral} line {i} of the fixture{extra}{end}")
     return "\n".join(out) + "\n"
+
+
+class NoLibrary:
+    """A library client for building graphs only: any call says the library is unavailable."""
+
+    async def call(self, tool, args):
+        return "Error: the library is unavailable."

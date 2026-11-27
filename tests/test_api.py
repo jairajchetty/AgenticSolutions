@@ -16,7 +16,7 @@ def sse(resp):
 
 
 def test_catalog_and_detail(client):
-    assert [p["id"] for p in client.get("/api/patterns").json()] == ["qa", "chat_loop", "guardrail", "approval"]
+    assert [p["id"] for p in client.get("/api/patterns").json()] == ["qa", "chat_loop", "guardrail", "approval", "semantic"]
     d = client.get("/api/patterns/guardrail").json()
     assert d["mode"] == "chat" and "## What it is" in d["explanation_md"] and d["topology"]["nodes"]
     assert client.get("/api/patterns/nope").status_code == 404

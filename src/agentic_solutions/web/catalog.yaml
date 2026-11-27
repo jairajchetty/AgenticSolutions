@@ -103,8 +103,9 @@ categories:
         name: Semantic
         description: Look up facts from a document store
         aliases: [RAG, retrieval, vector search, knowledge base]
+        demo: semantic
         folder: semantic_memory_agent
-        builds_on: [cognitive/react, execution/tool-use]
+        builds_on: [memory/session, cognitive/react, execution/tool-use]
 
       - id: knowledge-graph
         name: Knowledge Graph

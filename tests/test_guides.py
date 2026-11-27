@@ -85,7 +85,7 @@ def node_topology(folder):
 
     from agentic_solutions.web.registry import PATTERNS, BuildContext, offline_factory
     from agentic_solutions.web.topology import graph_topology
-    from fakes import UnreachableErp, make_guard, no_token
+    from fakes import NoLibrary, UnreachableErp, make_guard, no_token
 
     if folder in SKELETONS:
         mod = importlib.import_module(f"agentic_solutions.agents.{folder}.graph")
@@ -93,7 +93,7 @@ def node_topology(folder):
     for pid, spec in PATTERNS.items():
         if spec.explanation_path.parent.name == folder:
             ctx = BuildContext(offline_factory(pid, 0), InMemorySaver(), make_guard(),
-                               erp=UnreachableErp(), issue_token=no_token)
+                               erp=UnreachableErp(), issue_token=no_token, library=NoLibrary())
             return graph_topology(spec.build(ctx))
     raise AssertionError(f"no graph for {folder}")
 

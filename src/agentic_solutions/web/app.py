@@ -60,6 +60,9 @@ from agentic_solutions.web.runner import run_events
 from agentic_solutions.web.serialize import to_jsonable
 from agentic_solutions.web.threads import ThreadRecord, ThreadStore, once
 from agentic_solutions.web.topology import graph_topology
+from agentic_solutions.agents.semantic_memory_agent.library import InProcessLibraryClient
+from agentic_solutions.mcp_servers.library.index import LibraryIndex
+from agentic_solutions.mcp_servers.library.server import build_server as build_library_server
 
 log = logging.getLogger(__name__)
 
@@ -158,6 +161,25 @@ async def _open_erp(settings: Settings, stack: AsyncExitStack, app: FastAPI,
     app.state.erp_store = store
     client = await stack.enter_async_context(InProcessErpClient(build_server(store, erp_settings)))
     return client, secret
+
+
+def _open_library_index(settings: Settings, stack: AsyncExitStack) -> LibraryIndex:
+    """The Semantic demo's index, built first if the text, chunking or models changed.
+
+    The first build downloads the embedding models and embeds the poem: about a minute.
+    """
+    from agentic_solutions.mcp_servers.library.config import LibrarySettings, open_index
+
+    index = open_index(LibrarySettings(dir=Path(settings.library_dir)))
+    stack.callback(index.close)
+    return index
+
+
+async def _open_library(settings: Settings, stack: AsyncExitStack, app: FastAPI) -> InProcessLibraryClient:
+    """The library MCP server, in-process over the in-memory transport, for the app's lifetime."""
+    index = _open_library_index(settings, stack)
+    app.state.library_index = index
+    return await stack.enter_async_context(InProcessLibraryClient(build_library_server(index)))
 
 
 def _approver(session_id: str) -> str:
@@ -375,6 +397,7 @@ def create_app(settings: Settings | None = None, *, checkpointer=None, guard=Non
                 saver, conn = await _open_sqlite_saver(settings.checkpoint_db)
                 stack.push_async_callback(conn.close)
             erp_client, erp_secret = await _open_erp(settings, stack, app, erp)
+            library_client = await _open_library(settings, stack, app)
             threat_guard = guard if guard is not None else _build_guard()
             entries = load_entries(settings.studio_models)  # a bad STUDIO_MODELS fails startup here
             for entry in listed_entries(entries, os.environ):
@@ -387,7 +410,7 @@ def create_app(settings: Settings | None = None, *, checkpointer=None, guard=Non
             def build_context(llm_factory) -> BuildContext:
                 # Every graph, offline or live, shares these.
                 return BuildContext(llm_factory, saver, threat_guard, erp=erp_client, issue_token=issue_token,
-                                    auto_limit_zar=settings.erp_auto_approve_limit_zar)
+                                    auto_limit_zar=settings.erp_auto_approve_limit_zar, library=library_client)
 
             graphs = {
                 (pid, OFFLINE.id): spec.build(build_context(offline_factory(pid, settings.offline_latency_scale)))
