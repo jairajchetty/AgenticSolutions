@@ -33,7 +33,7 @@ from langgraph.graph.message import add_messages
 
 from agentic_solutions.agents.chat_agent.graph import STOP_WORD, ask
 from agentic_solutions.agents.secure_chat_agent.guard import ThreatGuard
-from agentic_solutions.common.llm import get_llm
+from agentic_solutions.common.llm import LLMFactory, get_llm
 
 SYSTEM_PROMPT = "You are a helpful assistant. Answer concisely and accurately."
 
@@ -59,7 +59,12 @@ class State(TypedDict):
     refusal: str | None  # the refusal text to show the user, None if not refused
 
 
-def build_graph(guard: ThreatGuard | None = None):
+def build_graph(
+    guard: ThreatGuard | None = None,
+    ask_node=ask,
+    checkpointer=None,
+    llm_factory: LLMFactory | None = None,
+):
     """Build and compile the graph.
 
     This is where the startup work happens: with no `guard` given, creating a
@@ -93,7 +98,7 @@ def build_graph(guard: ThreatGuard | None = None):
 
     def answer(state: State) -> dict:
         """Node: ask Claude (same as agent 2). Only clean prompts get here."""
-        llm = get_llm()
+        llm = (llm_factory or get_llm)()  # resolved at call time
         reply = llm.invoke([SystemMessage(SYSTEM_PROMPT), *state["messages"]])
         return {"messages": [reply], "refusal": None}
 
@@ -113,7 +118,7 @@ def build_graph(guard: ThreatGuard | None = None):
 
     # ---- Wiring ---------------------------------------------------------
     builder = StateGraph(State)
-    builder.add_node("ask", ask)  # reused from agent 2
+    builder.add_node("ask", ask_node)  # agent 2's `ask` by default
     builder.add_node("guard", guard_prompt)
     builder.add_node("refuse", refuse)
     builder.add_node("answer", answer)
@@ -124,4 +129,4 @@ def build_graph(guard: ThreatGuard | None = None):
     builder.add_edge("refuse", "ask")
     builder.add_edge("answer", "ask")
 
-    return builder.compile()
+    return builder.compile(checkpointer=checkpointer)

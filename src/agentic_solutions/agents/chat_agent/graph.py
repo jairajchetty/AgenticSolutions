@@ -33,7 +33,7 @@ from langchain_core.messages import SystemMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 
-from agentic_solutions.common.llm import get_llm
+from agentic_solutions.common.llm import LLMFactory, get_llm
 
 SYSTEM_PROMPT = "You are a helpful assistant. Answer concisely and accurately."
 
@@ -74,13 +74,6 @@ def ask(state: State) -> dict:
     return {"messages": [("user", text)]}
 
 
-def answer(state: State) -> dict:
-    """Node: call Claude with the conversation so far and store its reply."""
-    llm = get_llm()
-    reply = llm.invoke([SystemMessage(SYSTEM_PROMPT), *state["messages"]])
-    return {"messages": [reply]}
-
-
 # --------------------------------------------------------------------------
 # Router: the function behind the conditional edge.
 # --------------------------------------------------------------------------
@@ -100,18 +93,29 @@ def route_after_ask(state: State) -> Literal["answer", "ask", "__end__"]:
     return "answer"
 
 
-def build_graph():
-    """Wire the nodes and edges together and compile them into a runnable."""
+def build_graph(ask_node=ask, checkpointer=None, llm_factory: LLMFactory | None = None):
+    """Wire the nodes and edges together and compile them into a runnable.
+
+    `ask_node` swaps how the user is asked (e.g. the interrupt-based `ask`),
+    `checkpointer` enables pause/resume, and `llm_factory` supplies the model.
+    """
+
+    def answer_node(state: State) -> dict:
+        # Resolved at call time so patching the module-level `get_llm` works.
+        llm = (llm_factory or get_llm)()
+        reply = llm.invoke([SystemMessage(SYSTEM_PROMPT), *state["messages"]])
+        return {"messages": [reply]}
+
     builder = StateGraph(State)
 
-    builder.add_node("ask", ask)
-    builder.add_node("answer", answer)
+    builder.add_node("ask", ask_node)
+    builder.add_node("answer", answer_node)
 
     builder.add_edge(START, "ask")  # always begin by asking
     builder.add_conditional_edges("ask", route_after_ask)  # router picks next
     builder.add_edge("answer", "ask")  # after answering, loop back
 
-    return builder.compile()
+    return builder.compile(checkpointer=checkpointer)
 
 
 graph = build_graph()

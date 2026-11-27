@@ -1,0 +1,91 @@
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.types import Command
+from agentic_solutions.web.registry import PATTERNS, BuildContext, offline_factory
+from agentic_solutions.web.offline.model import ScriptedChatModel
+from agentic_solutions.web.offline.scripts import SCRIPTS
+from agentic_solutions.web.topology import graph_topology
+from fakes import make_guard
+from pathlib import Path
+import re
+
+AGENTS = Path("src/agentic_solutions/agents")
+REQUIRED = ["What it is", "When to use it", "How this graph works", "LangGraph concepts",
+            "Trade-offs", "Key code", "Try this"]
+
+def test_every_explanation_has_required_sections():
+    files = sorted(AGENTS.glob("*/explanation.md"))
+    assert len(files) >= 4
+    for f in files:
+        assert re.findall(r"^## (.+)$", f.read_text(), re.M) == REQUIRED, f
+
+EXPECTED_EDGES = {
+    "qa": {("__start__", "answer"), ("answer", "__end__")},
+    "chat_loop": {("__start__", "ask"), ("answer", "ask"), ("ask", "__end__"), ("ask", "answer"), ("ask", "ask")},
+    "guardrail": {("__start__", "ask"), ("ask", "__end__"), ("ask", "ask"), ("ask", "guard"),
+                  ("guard", "answer"), ("guard", "refuse"), ("answer", "ask"), ("refuse", "ask")},
+    "human_in_loop": {("__start__", "ask"), ("answer", "ask"), ("ask", "__end__"), ("ask", "answer"), ("ask", "ask")},
+}
+
+def ctx(pid):
+    return BuildContext(llm_factory=offline_factory(pid, latency_scale=0), checkpointer=InMemorySaver(), guard=make_guard())
+
+def test_catalog_order_and_modes():
+    assert [(p.id, p.mode) for p in PATTERNS.values()] == [
+        ("qa", "trigger"), ("chat_loop", "chat"), ("guardrail", "chat"), ("human_in_loop", "chat")]
+
+def test_topology_matches_expected_edges_for_every_pattern():
+    for pid, spec in PATTERNS.items():
+        t = graph_topology(spec.build(ctx(pid)))
+        assert {(e["source"], e["target"]) for e in t["edges"]} == EXPECTED_EDGES[pid], pid
+
+def test_every_sample_hits_a_specific_rule():
+    for pid, spec in PATTERNS.items():
+        script = SCRIPTS[pid]
+        for sample in spec.samples:
+            if pid == "guardrail" and "ignore previous instructions" in sample.lower():
+                continue  # refused by the guard; the LLM is never called
+            m = ScriptedChatModel(script=script, latency=(0, 0), tokens_per_second=0)
+            m.invoke([("user", sample)])
+            assert m.matched_rule is not None, (pid, sample)
+
+def test_chat_pattern_ignores_whitespace_without_calling_llm():
+    spec = PATTERNS["chat_loop"]
+    calls = []
+    def counting_factory():
+        calls.append(1)
+        return offline_factory("chat_loop", 0)()
+    g = spec.build(BuildContext(counting_factory, InMemorySaver(), None))
+    cfg = {"configurable": {"thread_id": "w"}}
+    g.invoke(spec.start_input(), cfg)
+    g.invoke(spec.make_input("   "), cfg)
+    assert g.get_state(cfg).next == ("ask",) and calls == []
+
+def test_trigger_output_is_last_assistant_text():
+    spec = PATTERNS["qa"]
+    g = spec.build(ctx("qa"))
+    values = g.invoke(spec.make_input(spec.samples[0]), {"configurable": {"thread_id": "q"}})
+    assert spec.output(values)
+
+def test_offline_factory_builds_a_new_model_each_call():
+    f = offline_factory("qa", latency_scale=2)
+    a, b = f(), f()
+    assert a is not b and a.latency == (0.6, 1.8) and a.tokens_per_second == 20
+    assert offline_factory("qa", 0)().tokens_per_second == 0
+
+def test_guardrail_refuses_attack_sample_and_answers_harmless_ones():
+    spec = PATTERNS["guardrail"]
+    g = spec.build(ctx("guardrail"))
+    cfg = {"configurable": {"thread_id": "g"}}
+    g.invoke(spec.start_input(), cfg)
+    for sample in spec.samples:
+        v = g.invoke(spec.make_input(sample), cfg)
+        attack = "ignore previous instructions" in sample.lower()
+        assert bool(v["refusal"]) == attack, sample
+
+def test_titles_match_spec():
+    assert [p.title for p in PATTERNS.values()] == [
+        "Single LLM call",
+        "Loop with conditional routing and memory",
+        "Input guardrail (embedding threat screen)",
+        "Human-in-the-loop: `interrupt()` + checkpointer",
+    ]

@@ -51,7 +51,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.types import interrupt
 
-from agentic_solutions.common.llm import get_llm
+from agentic_solutions.common.llm import LLMFactory, get_llm
 
 SYSTEM_PROMPT = "You are a helpful assistant. Answer concisely and accurately."
 
@@ -79,13 +79,6 @@ def ask(state: State) -> dict:
     return {"messages": [("user", text)]}
 
 
-def answer(state: State) -> dict:
-    """Node: call Claude with the conversation so far and store its reply."""
-    llm = get_llm()
-    reply = llm.invoke([SystemMessage(SYSTEM_PROMPT), *state["messages"]])
-    return {"messages": [reply]}
-
-
 def route_after_ask(state: State) -> Literal["answer", "ask", "__end__"]:
     """Same router as agent 2: stop -> END, empty -> ask again, else answer."""
     text = state["messages"][-1].content.strip().lower()
@@ -96,14 +89,24 @@ def route_after_ask(state: State) -> Literal["answer", "ask", "__end__"]:
     return "answer"
 
 
-def build_graph(checkpointer=None):
+def build_graph(checkpointer=None, llm_factory: LLMFactory | None = None):
     """Wire the graph. Pass a checkpointer to make `interrupt()` usable.
+
+    `llm_factory` (default `get_llm`) supplies the model.
 
     The checkpointer is a parameter because different callers need different
     ones: the command-line app passes an in-memory saver, while LangGraph
     Studio / `langgraph dev` supplies its own persistence and REJECTS a graph
     that brings its own. So the module-level `graph` below has none.
     """
+
+    def answer(state: State) -> dict:
+        """Node: call Claude with the conversation so far and store its reply."""
+        # Resolved at call time so patching the module-level `get_llm` works.
+        llm = (llm_factory or get_llm)()
+        reply = llm.invoke([SystemMessage(SYSTEM_PROMPT), *state["messages"]])
+        return {"messages": [reply]}
+
     builder = StateGraph(State)
     builder.add_node("ask", ask)
     builder.add_node("answer", answer)
