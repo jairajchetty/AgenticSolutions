@@ -15,6 +15,7 @@ dependencies = [
     "aiosqlite>=0.20",
     "itsdangerous>=2.2",
     "mcp>=1.30,<2",
+    "pyyaml>=6",  # the pattern catalog (web/catalog.yaml)
 ]
 
 [project.optional-dependencies]
@@ -29,4 +30,4 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.setuptools.package-data]
-"agentic_solutions" = ["agents/*/explanation.md", "web/static/*", "mcp_servers/erp/fixtures.json"]
+"agentic_solutions" = ["agents/*/explanation.md", "web/static/*", "web/catalog.yaml", "mcp_servers/erp/fixtures.json"]

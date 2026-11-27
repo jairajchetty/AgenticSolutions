@@ -1,3 +1,5 @@
+import pytest
+
 from agentic_solutions.web import catalog as c
 from agentic_solutions.web.registry import PATTERNS
 
@@ -26,8 +28,8 @@ EXPECTED = {
 }
 
 
-def test_categories_in_order_with_questions():
-    assert [(k.id, k.name, k.question) for k in c.CATALOG] == [
+def test_categories_in_order_with_descriptions():
+    assert [(k.id, k.name, k.description) for k in c.CATALOG] == [
         ("cognitive", "Cognitive", "How should the agent think?"),
         ("collaboration", "Collaboration", "How many agents, and who leads?"),
         ("memory", "Memory", "What must it remember?"),
@@ -44,10 +46,10 @@ def test_twenty_one_patterns_in_spec_order():
         "governance/guardrails", "governance/approval", "governance/audit", "governance/review"]
 
 
-def test_hints_and_aliases_match_spec():
+def test_descriptions_and_aliases_match_spec():
     for k in c.CATALOG:
         for p in k.patterns:
-            assert (p.name, p.hint, p.aliases) == EXPECTED[p.route], p.route
+            assert (p.name, p.description, p.aliases) == EXPECTED[p.route], p.route
 
 
 def test_every_registered_demo_is_reachable_exactly_once():
@@ -92,3 +94,119 @@ def test_catalog_approval_points_at_approval_demo():
     assert approval.aliases == ('human-in-the-loop', 'HITL', 'interrupt', 'sign-off')
     assert c.status(approval, PATTERNS) == "live"
     assert "human_in_loop" not in PATTERNS
+
+
+SIMPLE = {"cognitive/react", "collaboration/single-agent", "memory/session", "execution/tool-use",
+          "execution/routing", "execution/workflow", "governance/audit"}
+
+
+def test_composite_is_derived_from_builds_on():
+    routes = {p.route: p for k in c.CATALOG for p in k.patterns}
+    assert {r for r, p in routes.items() if not p.composite} == SIMPLE
+    assert routes["governance/approval"].builds_on == (
+        "memory/session", "cognitive/react", "execution/tool-use", "execution/routing", "governance/audit")
+    assert routes["collaboration/hierarchy"].builds_on == ("collaboration/supervisor",)
+
+
+# ---- the loader's startup checks, on small files ----------------------------
+
+MINI = """\
+categories:
+  - id: gov
+    name: Governance
+    description: Kept safe?
+    patterns:
+      - id: log
+        name: Log
+        description: Keep records
+        folder: log_agent
+      - id: ok
+        name: OK
+        description: Approve things
+        aliases: [sign-off]
+        folder: ok_agent
+        builds_on: [gov/log]
+"""
+
+
+def write(tmp_path, text):
+    p = tmp_path / "catalog.yaml"
+    p.write_text(text, encoding="utf-8")
+    return p
+
+
+def fails(tmp_path, text, match):
+    with pytest.raises(c.CatalogError, match=match):
+        c.load_catalog(write(tmp_path, text))
+
+
+def test_loads_minimal_file(tmp_path):
+    (cat,) = c.load_catalog(write(tmp_path, MINI))
+    assert cat.description == "Kept safe?"
+    assert [p.composite for p in cat.patterns] == [False, True]
+    assert cat.patterns[1].aliases == ("sign-off",) and cat.patterns[0].aliases == ()
+
+
+def test_unknown_builds_on_route_fails(tmp_path):  # Review Focus 1
+    fails(tmp_path, MINI.replace("builds_on: [gov/log]", "builds_on: [log]"), r"gov/ok.*log")
+
+
+def test_duplicate_builds_on_fails(tmp_path):  # Review Focus 2
+    fails(tmp_path, MINI.replace("builds_on: [gov/log]", "builds_on: [gov/log, gov/log]"), r"gov/ok.*gov/log")
+
+
+def test_builds_on_and_aliases_must_be_lists(tmp_path):  # Review Focus 3
+    fails(tmp_path, MINI.replace("builds_on: [gov/log]", "builds_on: gov/log"), "builds_on")
+    fails(tmp_path, MINI.replace("aliases: [sign-off]", "aliases: a, b"), "aliases")
+
+
+def test_self_and_cycle_fail(tmp_path):
+    fails(tmp_path, MINI.replace("builds_on: [gov/log]", "builds_on: [gov/ok]"), "cycle")
+    looped = MINI.replace("        folder: log_agent\n", "        folder: log_agent\n        builds_on: [gov/ok]\n")
+    fails(tmp_path, looped, "cycle")
+
+
+def test_duplicate_route_fails(tmp_path):
+    fails(tmp_path, MINI.replace("- id: ok", "- id: log"), "gov/log")
+
+
+def test_missing_or_empty_required_field_fails(tmp_path):
+    fails(tmp_path, MINI.replace("description: Approve things", "description: ''"), "description")
+    fails(tmp_path, MINI.replace("        name: OK\n", ""), "name")
+
+
+def test_folder_xor_crosslist(tmp_path):
+    fails(tmp_path, MINI.replace("folder: ok_agent", "folder: ok_agent\n        crosslist_of: gov/log"), "gov/ok")
+    fails(tmp_path, MINI.replace("        folder: ok_agent\n", ""), "gov/ok")
+
+
+def test_unknown_crosslist_target_fails(tmp_path):
+    fails(tmp_path, MINI.replace("folder: log_agent", "crosslist_of: gov/nope"), "gov/nope")
+
+
+def test_category_without_composite_fails(tmp_path):
+    fails(tmp_path, MINI.replace("        builds_on: [gov/log]\n", ""), "gov")
+
+
+def test_invalid_yaml_fails_with_file_name(tmp_path):
+    fails(tmp_path, MINI.replace("      - id: log", "\t- id: log"), "catalog.yaml")
+
+
+def test_unknown_keys_fail(tmp_path):  # review: a misspelt builds_on would turn a composite simple
+    fails(tmp_path, MINI.replace("builds_on: [gov/log]", "buildson: [gov/log]"), r"gov/ok.*buildson")
+    fails(tmp_path, MINI.replace("    description: Kept safe?", "    descrption: x\n    description: Kept safe?"), r"gov.*descrption")
+    fails(tmp_path, "colours: []\n" + MINI, "colours")
+
+
+def test_crosslist_must_point_at_a_page(tmp_path):  # review: chains crashed startup without naming the entry
+    chained = MINI.replace("      - id: ok", """      - id: x
+        name: X
+        description: Cross-list
+        crosslist_of: gov/y
+      - id: y
+        name: Y
+        description: Cross-list
+        crosslist_of: gov/log
+      - id: ok""")
+    fails(tmp_path, chained, r"gov/x.*gov/y")
+    fails(tmp_path, MINI.replace("folder: log_agent", "crosslist_of: gov/log"), "gov/log")

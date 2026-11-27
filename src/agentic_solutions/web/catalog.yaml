@@ -1,0 +1,185 @@
+# The Studio's pattern catalog. Edit this file to change the main page.
+#
+# A pattern with `builds_on` is composite: it gets a card on the main page.
+# A pattern without it is simple: it appears in the building-blocks strip.
+# `builds_on` names other patterns by route, written category/id.
+#
+# Per pattern: id, name, description (required); aliases, demo (registry id of
+# a live demo), folder (agent folder holding explanation.md and the skeleton),
+# crosslist_of (route whose page this pattern opens), builds_on (optional).
+# A pattern has exactly one of folder and crosslist_of.
+# The app checks this file at startup and refuses to start if it is invalid.
+
+categories:
+
+  - id: cognitive
+    name: Cognitive
+    description: How should the agent think?
+    patterns:
+
+      - id: react
+        name: ReAct
+        description: Reason and call tools in a loop
+        aliases: [reason act, tool loop, agent loop]
+        demo: react
+        folder: react_agent
+
+      - id: reflection
+        name: Reflection
+        description: Critique and revise its own output
+        aliases: [self-critique, evaluator-optimizer, self-refine]
+        demo: reflection
+        folder: reflection_agent
+        builds_on: [collaboration/single-agent, execution/workflow]
+
+      - id: planning
+        name: Planning
+        description: Break a goal into steps before acting
+        aliases: [plan-and-execute, task decomposition]
+        demo: plan_execute
+        folder: plan_execute_agent
+        builds_on: [cognitive/react, execution/workflow]
+
+      - id: search
+        name: Search
+        description: Explore several paths and keep the best
+        aliases: [tree of thoughts, LATS, beam search, MCTS]
+        folder: search_agent
+        builds_on: [cognitive/planning, cognitive/reflection]
+
+  - id: collaboration
+    name: Collaboration
+    description: "How many agents, and who leads?"
+    patterns:
+
+      - id: single-agent
+        name: Single Agent
+        description: One model handles the whole task
+        aliases: [single LLM call, baseline, one-shot]
+        demo: qa
+        folder: qa_agent
+
+      - id: supervisor
+        name: Supervisor
+        description: A coordinator delegates to specialists
+        aliases: [orchestrator-workers, manager, delegation]
+        folder: supervisor_agent
+        builds_on: [execution/routing, cognitive/react, execution/tool-use]
+
+      - id: swarm
+        name: Swarm
+        description: Peers hand work to each other directly
+        aliases: [handoffs, peer-to-peer, network]
+        folder: swarm_agent
+        builds_on: [cognitive/react, execution/tool-use, memory/session]
+
+      - id: hierarchy
+        name: Hierarchy
+        description: Teams of agents led by supervisors
+        aliases: [hierarchical teams, nested supervisors]
+        folder: hierarchy_agent
+        builds_on: [collaboration/supervisor]
+
+  - id: memory
+    name: Memory
+    description: What must it remember?
+    patterns:
+
+      - id: session
+        name: Session
+        description: Remember the current conversation
+        aliases: [short-term memory, thread, conversation history, checkpointer]
+        demo: chat_loop
+        folder: chat_agent
+
+      - id: episodic
+        name: Episodic
+        description: Recall past interactions with this user
+        aliases: [long-term memory, user memory, experiences]
+        folder: episodic_memory_agent
+        builds_on: [memory/session, execution/tool-use]
+
+      - id: semantic
+        name: Semantic
+        description: Look up facts from a document store
+        aliases: [RAG, retrieval, vector search, knowledge base]
+        folder: semantic_memory_agent
+        builds_on: [cognitive/react, execution/tool-use]
+
+      - id: knowledge-graph
+        name: Knowledge Graph
+        description: Reason over entities and relationships
+        aliases: [graph RAG, entity memory, ontology]
+        folder: knowledge_graph_agent
+        builds_on: [memory/semantic, execution/tool-use]
+
+  - id: execution
+    name: Execution
+    description: How does it act and run?
+    patterns:
+
+      - id: tool-use
+        name: Tool Use
+        description: Call functions and APIs
+        aliases: [function calling, tools, actions]
+        crosslist_of: cognitive/react
+
+      - id: routing
+        name: Routing
+        description: Send each request to the right specialist
+        aliases: [router, classifier, intent routing, dispatch]
+        folder: routing_agent
+
+      - id: workflow
+        name: Workflow
+        description: Run fixed steps defined in code
+        aliases: [pipeline, prompt chaining, DAG]
+        folder: workflow_agent
+
+      - id: event-driven
+        name: Event Driven
+        description: "Start agents from events, queues or schedules"
+        aliases: [triggers, webhooks, background agents, cron]
+        folder: event_driven_agent
+        builds_on: [execution/workflow, governance/audit]
+
+      - id: autonomous
+        name: Autonomous
+        description: Work on its own for a long time until a goal is met
+        aliases: [long-running, self-directed, background agent]
+        folder: autonomous_agent
+        builds_on: [cognitive/planning, cognitive/reflection, memory/episodic, cognitive/react]
+
+  - id: governance
+    name: Governance
+    description: How is it kept safe and accountable?
+    patterns:
+
+      - id: guardrails
+        name: Guardrails
+        description: Screen inputs and outputs for unsafe content
+        aliases: [input filter, prompt injection, safety screen]
+        demo: guardrail
+        folder: secure_chat_agent
+        builds_on: [memory/session, execution/routing]
+
+      - id: approval
+        name: Approval
+        description: Pause for a human to sign off
+        aliases: [human-in-the-loop, HITL, interrupt, sign-off]
+        demo: approval
+        folder: approval_agent
+        builds_on: [memory/session, cognitive/react, execution/tool-use, execution/routing, governance/audit]
+
+      - id: audit
+        name: Audit
+        description: "Keep persistent, queryable records of every run"
+        aliases: [logging, traceability, run history, compliance]
+        folder: audit_agent
+
+      - id: review
+        name: Review
+        description: Have a separate agent or a person check the result
+        aliases: [peer review, critic agent, second opinion]
+        folder: review_agent
+        builds_on: [cognitive/reflection, collaboration/single-agent]

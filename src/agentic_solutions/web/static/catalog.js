@@ -1,5 +1,7 @@
-// The catalog home (Catalog spec §4.2, Blueprint spec §4.1): a search box in
-// the hero and the five categories as columns on one paper sheet.
+// The catalog home (composite patterns spec §5): a search box in the hero,
+// then one band per category holding cards for its composite patterns, each
+// listing the patterns it builds on, and a strip of the simple patterns
+// (building blocks) at the foot of the sheet.
 //
 // `matches()` is the search rule and is pure, so Node's test runner imports
 // this module directly (tests/js/search.test.mjs): nothing here touches the
@@ -7,17 +9,20 @@
 //
 // Search is word-wise. The query is split on whitespace and punctuation other
 // than "-", and a pattern matches when EVERY word is a case-insensitive
-// substring of its text: name, hint, aliases, category name and category
-// question. A word of 4+ characters ending in "s" also matches without it, so
-// "remember users" finds Episodic: "remember" from Memory's question, "user"
-// from its hint. Shorter words get no fallback, or "is" would match every "i".
+// substring of its text: name, description, aliases, category name and
+// category description, plus the names and aliases of the patterns it builds
+// on, so "tool use" finds Approval. A word of 4+ characters ending in "s" also
+// matches without it, so "remember users" finds Episodic: "remember" from
+// Memory's description, "user" from its own. Shorter words get no fallback,
+// or "is" would match every "i".
 
 export const queryWords = (query) =>
   String(query ?? "").toLowerCase().split(/[^\p{L}\p{N}-]+/u).filter(Boolean);
 
 export function matches(query, pattern, category) {
-  const haystack = [pattern.name, pattern.hint, ...(pattern.aliases ?? []), category.name, category.question]
-    .join("\n").toLowerCase();
+  const blocks = (pattern.builds_on ?? []).flatMap((b) => [b.name, ...(b.aliases ?? [])]);
+  const haystack = [pattern.name, pattern.description, ...(pattern.aliases ?? []),
+    category.name, category.description, ...blocks].join("\n").toLowerCase();
   return queryWords(query).every((w) =>
     haystack.includes(w) || (w.length >= 4 && w.endsWith("s") && haystack.includes(w.slice(0, -1))));
 }
@@ -45,55 +50,96 @@ function statusMark(status) {
   return mark;
 }
 
-function patternRow(p, names) {
-  const li = make("li", "cat-row");
-  const a = make("a", "cat-link");
-  a.href = `#/${p.route}`;
-  const title = make("span", "cat-name");
-  title.append(statusMark(p.status), make("span", "cat-label", p.name));
-  if (p.target !== p.route) {
+// Where the main page's links go: always the pattern's own route. A cross-list
+// (Tool Use) has its own page, which shows its target's Guide under its own
+// category, breadcrumb and arrows, so linking the route keeps that page reachable.
+export const cardHref = (p) => `#/${p.route}`;
+export const blockHref = (b) => `#/${b.route}`;
+
+// A link to a building block. `b` is either a resolved `builds_on` item or a
+// simple pattern from the listing (both carry name, target and route).
+function blockLink(b, { categoryName, names }) {
+  const a = make("a", `cat-block${b.composite ? " is-composite" : ""}`);
+  a.href = blockHref(b);
+  a.title = `${categoryName}: ${b.description}`;
+  a.append(make("span", "cat-block-name", b.name));
+  if (b.target !== b.route) {
     // A cross-list (Tool Use) opens another pattern's page: say whose.
-    const xref = make("span", "cat-xref");
-    xref.append(make("span", null, `↗ ${names.get(p.target)}`));
-    xref.firstChild.setAttribute("aria-hidden", "true");
-    xref.append(make("span", "visually-hidden", ` (opens the ${names.get(p.target)} page)`));
-    title.append(xref);
+    const xref = make("span", "cat-xref", ` ↗ ${names.get(b.target)}`);
+    xref.setAttribute("aria-hidden", "true");
+    a.append(xref, make("span", "visually-hidden", ` (opens the ${names.get(b.target)} page)`));
   }
-  a.append(title, make("span", "cat-hint", p.hint));
-  li.append(a);
+  return a;
+}
+
+function patternCard(p, names) {
+  const li = make("li", "cat-card");
+  const a = make("a", "cat-card-link");
+  a.href = cardHref(p);
+  a.append(statusMark(p.status), make("span", "cat-label", p.name));
+  li.append(a, make("p", "cat-card-description", p.description));
+  if (p.builds_on.length) {
+    const row = make("div", "cat-builds");
+    row.append(make("span", "cat-builds-label", "Builds on"));
+    for (const b of p.builds_on) row.append(blockLink(b, { categoryName: b.category, names }));
+    li.append(row);
+  }
   return li;
 }
 
-function categoryColumn(c, names) {
-  const card = make("section", "cat-col");
+function categoryBand(c, names) {
+  const band = make("section", "cat-band");
   const h = make("h2", "cat-title", c.name);
   h.id = `cat-${c.id}`;
   h.tabIndex = -1;  // the breadcrumb's category link lands here
-  card.setAttribute("aria-labelledby", h.id);
-  card.dataset.category = c.id;
-  const list = make("ul", "cat-list");
+  band.setAttribute("aria-labelledby", h.id);
+  band.dataset.category = c.id;
+  const head = make("div", "cat-band-head");
+  head.append(h, make("p", "cat-description", c.description));
+  const list = make("ul", "cat-cards");
   list.setAttribute("aria-labelledby", h.id);
-  const rows = c.patterns.map((p) => {
-    const li = patternRow(p, names);
+  const rows = c.patterns.filter((p) => p.composite).map((p) => {
+    const li = patternCard(p, names);
     list.append(li);
     return { li, p };
   });
-  const none = make("p", "cat-none", "no matches");
-  none.hidden = true;
-  card.append(h, make("p", "cat-question", c.question), list, none);
-  return { card, list, none, rows, category: c };
+  band.append(head, list);
+  return { band, rows, category: c };
+}
+
+function blockStrip(catalog, names) {
+  const strip = make("section", "cat-strip");
+  const h = make("h2", "cat-strip-title", "Building blocks");
+  h.id = "cat-building-blocks";
+  strip.setAttribute("aria-labelledby", h.id);
+  const list = make("ul", "cat-strip-list");
+  const rows = [];
+  for (const c of catalog.categories) {
+    for (const p of c.patterns.filter((x) => !x.composite)) {
+      const li = make("li");
+      const a = blockLink(p, { categoryName: c.name, names });
+      a.append(make("small", "cat-block-category", c.name));
+      li.append(a);
+      list.append(li);
+      rows.push({ li, p, category: c });
+    }
+  }
+  strip.append(h, list);
+  return { strip, rows };
 }
 
 function legend() {
   const ul = make("ul", "cat-legend");
   ul.setAttribute("aria-label", "Legend");
   for (const [glyph, cls, text] of [
-    ["●", "mark-live", "live demo"],
-    ["○", "mark-guide", "guide only (demo coming)"],
-    ["↗", "cat-xref", "opens another pattern's page"],
+    ["●", "mark mark-live", "live demo"],
+    ["○", "mark mark-guide", "guide only (demo coming)"],
+    ["", "lg-block", "simple pattern"],
+    ["", "lg-block is-composite", "composite pattern"],
+    ["↗", "mark cat-xref", "opens another pattern's page"],
   ]) {
     const li = make("li");
-    const g = make("span", `mark ${cls}`, glyph);
+    const g = make("span", cls, glyph);
     g.setAttribute("aria-hidden", "true");
     li.append(g, text);
     ul.append(li);
@@ -154,29 +200,41 @@ export function renderHome(el, catalog, { onOpen, searchEl = null } = {}) {
   const nav = make("nav", "cat-sheet");
   nav.id = "cat-cards";
   nav.setAttribute("aria-label", "Patterns by category");
-  const cards = catalog.categories.map((c) => categoryColumn(c, names));
-  nav.append(...cards.map((x) => x.card));
+  const bands = catalog.categories.map((c) => categoryBand(c, names));
+  const strip = blockStrip(catalog, names);
+  nav.append(...bands.map((x) => x.band), strip.strip);
 
   let first = null;
   function filter() {
     const q = input.value.trim();
     let count = 0;
-    first = null;
-    for (const card of cards) {
+    let firstCard = null;
+    let firstBlock = null;
+    for (const band of bands) {
       let shown = 0;
-      for (const { li, p } of card.rows) {
-        const hit = matches(q, p, card.category);
+      for (const { li, p } of band.rows) {
+        const hit = matches(q, p, band.category);
         li.hidden = !hit;
         if (hit) {
           shown++;
-          first ??= p.route;
+          firstCard ??= p.route;
         }
       }
       count += shown;
-      card.list.hidden = shown === 0;
-      card.none.hidden = shown !== 0;
-      card.card.classList.toggle("is-empty", shown === 0);
+      band.band.hidden = shown === 0;
     }
+    let blocks = 0;
+    for (const { li, p, category } of strip.rows) {
+      const hit = matches(q, p, category);
+      li.hidden = !hit;
+      if (hit) {
+        blocks++;
+        firstBlock ??= p.route;
+      }
+    }
+    strip.strip.hidden = blocks === 0;
+    count += blocks;
+    first = firstCard ?? firstBlock;
     status.textContent = q ? countText(count) : "";
     empty.hidden = !q || count > 0;
     empty.textContent = empty.hidden ? "" : emptyText(q);
