@@ -85,18 +85,13 @@
          rest of the Guide. Paper sheets carry `.sheet`; the graph sits on navy. -->
     <div class="pattern-view" id="pattern-view" hidden>
       <section class="sheet purpose" id="purpose" aria-labelledby="page-title">
-        <div class="purpose-head">
-          <div class="purpose-name">
-            <h1 class="view-title" id="page-title" tabindex="-1"></h1>
-            <p class="page-note" id="page-note" hidden></p>
-          </div>
-          <!-- The owner's description of the use case the demo implements:
-               catalog.yaml `use_case`. Hidden when the pattern has none. -->
-          <aside class="use-case" id="use-case" aria-labelledby="use-case-label" hidden>
-            <p class="use-case-label" id="use-case-label">Use case</p>
-            <div class="use-case-text" id="use-case-text"></div>
-          </aside>
-        </div>
+        <h1 class="view-title" id="page-title" tabindex="-1"></h1>
+        <p class="page-note" id="page-note" hidden></p>
+        <!-- The owner's description of the use case the demo implements:
+             catalog.yaml `use_case`. Hidden when the pattern has none. -->
+        <section class="use-case" id="use-case" aria-label="Use case" hidden>
+          <div class="use-case-text" id="use-case-text"></div>
+        </section>
         <!-- guide.js renderPurpose: .purpose-what and .purpose-when -->
         <div class="purpose-body" id="purpose-body" hidden></div>
       </section>
