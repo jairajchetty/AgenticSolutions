@@ -1,66 +1,70 @@
 # Semantic
 
 ## What it is
-The agent looks things up in a trusted source before answering, instead of relying on what the model remembers from training. Documents are indexed in advance; when a question comes in, the agent fetches the passages that match it best and answers from them, which is often called retrieval-augmented generation (RAG). Because the knowledge lives outside the model, it can be kept up to date, limited to what each person may see, and cited.
+The Semantic pattern answers questions from a trusted set of documents, not from what the model learned in training.
+
+The documents are prepared in advance: split into passages and stored in a searchable index. For each question, the agent searches the index, answers only from the passages it finds, and cites them. This is often called retrieval-augmented generation (RAG).
+
+Because the knowledge is held outside the model, it can be updated without retraining, restricted to what each user is allowed to see, and checked against its source.
 
 ## When to use it
 - Answers must come from your own documents, such as manuals, policies or articles.
-- The knowledge is too large, or changes too often, to put in the prompt.
-- Answers should point back to a source passage a reader can check.
-- Not when the question is about how things connect across many facts, such as a chain of who reports to whom. Passage search finds text that resembles the question, not paths between entities.
+- The knowledge is too large, or changes too often, to include in the prompt.
+- Readers need to check each answer against its source.
+- Not when the answer depends on how facts connect, such as a chain of who reports to whom. Passage search finds text that resembles the question; it does not follow relationships between entities.
 
 ## How it works
 Roles:
-- **Index**: the documents, split into passages and stored with whatever the search method needs.
-- **Retriever**: turns the question into a query and returns the top passages.
-- **Grader** (optional): judges whether the passages are relevant to the question.
-- **Query rewriter** (optional): rephrases the query when the passages miss.
-- **Agent**: answers from the passages, citing them where it can.
+- **Index**: the documents, split into passages and stored for search.
+- **Retriever**: searches the index for the question and returns the best-matching passages.
+- **Grader** (optional): checks that the passages are relevant to the question.
+- **Query rewriter** (optional): rephrases the search when the passages miss.
+- **Agent**: answers from the passages and cites them.
 
 Flow:
-1. Ahead of time, documents are split into passages and indexed.
-2. The question becomes a query, and the retriever fetches the best-matching passages.
-3. If a grader is used and the passages are poor, the query is rewritten and retrieval runs again, up to a retry limit.
-4. The agent answers from the passages, and says so when they do not contain the answer.
+1. In advance, the documents are split into passages and indexed.
+2. The retriever searches the index for the question and returns the best-matching passages.
+3. If a grader is used and the passages are not relevant, the search is rephrased and run again, up to a set limit.
+4. The agent answers from the passages. If they do not contain the answer, it says so.
 
 ## Design considerations
-- **Retrieval method:** keyword search matches exact terms, names and codes; similarity search over embeddings matches meaning and paraphrase but can miss exact identifiers; hybrid search with a re-ranking step combines both at more cost.
-- **Chunking:** small passages match precisely but lose surrounding context; large ones keep context but dilute the match and cost more tokens. Keep source and position with each passage so answers can cite it.
-- **How many passages:** fetching more raises the chance the answer is there, and also the cost and the noise the model must ignore.
-- **Check before answering:** a single retrieve-then-answer pass is cheapest; a grading step that rewrites the query and retries rescues poor first searches, at the cost of more model calls. Cap the retries.
-- **Who decides to retrieve:** retrieving on every request is simple and predictable; giving the agent search as a tool lets it skip retrieval or search several times, but its choices are harder to predict.
-- **Freshness:** re-index when sources change. A stale index gives confident, outdated answers.
-- **Access control:** filter passages by what the asker may see before they reach the prompt, not after.
+- **Search method:** Keyword search matches exact terms, names and codes. Similarity search matches meaning and paraphrase, but can miss exact identifiers. Hybrid search combines both, at more cost.
+- **Passage size:** Small passages match precisely but lose context. Large passages keep context but match less precisely and cost more to process. Store each passage's source and position, so answers can cite it.
+- **Number of passages:** Returning more passages raises the chance that the answer is included, but adds cost and irrelevant text.
+- **Checking the passages:** One search followed by an answer is the cheapest option. A grading step that rephrases and searches again rescues poor first searches, at the cost of more model calls. Limit the retries.
+- **Who decides to search:** Searching on every request is simple and predictable. Letting the agent decide allows it to search several times, but its behaviour is harder to predict.
+- **Freshness:** Re-index when the sources change. A stale index produces confident but outdated answers.
+- **Access control:** Filter passages by what the user is allowed to see before they reach the model, not after.
 
 ## Trade-offs
-- Answers are grounded in sources and can be updated without retraining the model.
-- Quality is bounded by retrieval: a passage that is not found cannot be used.
-- Retrieval, and any grading or retries, add latency and cost to every question.
-- The index needs building, re-indexing and monitoring.
-- Retrieved text is untrusted input to the prompt and can carry injected instructions.
+- Answers are grounded in sources, which can be updated without retraining the model.
+- Answer quality is limited by search: a passage that is not found cannot be used.
+- Each search adds time and cost to every question, and grading or retries add more.
+- The index must be built, kept up to date and monitored.
+- Retrieved text is untrusted input to the model and can carry injected instructions.
 
 ## Related patterns
-- The dividing line with [[memory/knowledge-graph]]: Semantic retrieves passages of text that resemble the query. Knowledge Graph retrieves entities and the relations between them, so it can follow a chain of facts that no single passage states.
-- [[memory/episodic]] recalls one user's own history; Semantic looks up shared knowledge, not tied to one user's history.
-- [[cognitive/reflection]] critiques a draft; the grading step here judges the evidence before any draft exists.
-- [[cognitive/react]] is the loop to use when search is one tool among several that the agent calls as needed.
+- The dividing line with [[memory/knowledge-graph]]: Semantic retrieves passages of text that resemble the question. Knowledge Graph retrieves entities and the relationships between them, so it can follow a chain of facts that no single passage states.
+- [[memory/episodic]] recalls one user's past interactions. Semantic looks up knowledge shared by all users.
+- [[cognitive/reflection]] critiques a draft answer. The grading step here checks the evidence before any answer is drafted.
+- [[cognitive/react]] is the loop to use when search is one of several tools the agent calls as needed. This Studio's demo is built on it.
 
 ## How this Studio implements it
 
 ### Mapping
-- **Index** → the `library` MCP server: John Milton's *Paradise Lost*, split into overlapping passages of about 20 lines within each Book. Each passage is stored in Qdrant with a dense embedding (`bge-small-en-v1.5`) and a BM25 keyword vector, both computed locally.
-- **Retriever** → the `search_book` tool: hybrid search that fuses the dense and keyword results with reciprocal rank fusion. `read_passage` reads lines by position, for questions such as how the poem ends.
+- **Index** → the `library` MCP server: John Milton's *Paradise Lost*, split into overlapping passages of about 20 lines within each Book. Each passage is stored in Qdrant with a meaning vector (`bge-small-en-v1.5`) and a keyword vector (BM25), both computed locally.
+- **Retriever** → the `search_book` tool: hybrid search, which combines the meaning and keyword matches by reciprocal rank fusion. `read_passage` reads lines by position, for questions such as how the poem ends.
 - **Agent** → `agent`: the model. It is told to answer only from the passages and to cite each claim's Book and line range. Line numbers follow this edition.
 - **Tools** → `tools`: runs the model's calls on the library server over MCP.
 - **Between questions** → `ask`: waits for your next message.
-- **Grader and query rewriter** → not separate nodes. The agent searches again with other words when the passages miss, up to 6 tool rounds per question.
+- **Grader and query rewriter** → not separate nodes. When the passages miss, the agent searches again with other words, up to 6 tool rounds per question.
 
 ### Framework concepts
 - **Forced first search:** the first model call of each question is bound with `tool_choice="search_book"`. If a model answers in text or calls another tool instead, `agent` replaces that reply with the search.
 - **Prebuilt tool node:** `tools` is LangGraph's `ToolNode`. It runs the model's tool calls and returns each result as a message.
 - **`Command(goto=...)` routing:** `ask` and `agent` return a `Command` that names the next node.
 - **MCP client:** the library server runs in-process over MCP's in-memory transport. The same server runs on its own with `python -m agentic_solutions.mcp_servers.library`.
-- **Index lifecycle:** the index is built on the first start (about a minute, including the model download) and reused while the text, chunking and models are unchanged.
+- **Index lifecycle:** the index is built on the first start (about a minute, including the model download). It is reused until the text, the passage settings or the models change.
 
 ### Key code
 How `agent` makes the first step of every question a search:
