@@ -36,8 +36,9 @@ function postJson(body) {
 export const getPatterns = () => request("/api/patterns");
 export const getPattern = (id) => request(`/api/patterns/${encodeURIComponent(id)}`);
 export const getSession = () => request("/api/session");
-export const createThread = (patternId) =>
-  request(`/api/patterns/${encodeURIComponent(patternId)}/threads`, postJson({}));
+// `model` is a menu id; leave it out for the default (Offline).
+export const createThread = (patternId, { model } = {}) =>
+  request(`/api/patterns/${encodeURIComponent(patternId)}/threads`, postJson(model ? { model } : {}));
 export const getState = (threadId) =>
   request(`/api/threads/${encodeURIComponent(threadId)}/state`);
 

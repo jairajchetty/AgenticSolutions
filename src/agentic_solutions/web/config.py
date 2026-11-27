@@ -25,6 +25,16 @@ class Settings:
     erp_auto_approve_limit_zar: float = 5000
     erp_db: str = "./data/erp.sqlite"
     erp_tenant_ttl_hours: float = 168
+    # Where the server listens (also read by ``python -m agentic_solutions.web``).
+    host: str = "127.0.0.1"
+    port: int = 8000
+    # Model menu (model picker spec §3). STUDIO_MODELS is a JSON array that
+    # replaces the default entries; the OpenRouter site URL and app title are
+    # sent as HTTP-Referer and X-Title only when set.
+    openrouter_zdr: bool = False
+    studio_models: str | None = None
+    openrouter_site_url: str | None = None
+    openrouter_app_title: str | None = None
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -41,4 +51,10 @@ class Settings:
                 env.get("ERP_AUTO_APPROVE_LIMIT_ZAR") or cls.erp_auto_approve_limit_zar),
             erp_db=env.get("ERP_DB") or cls.erp_db,
             erp_tenant_ttl_hours=float(env.get("ERP_TENANT_TTL_HOURS") or cls.erp_tenant_ttl_hours),
+            host=env.get("HOST") or cls.host,
+            port=int(env.get("PORT") or cls.port),
+            openrouter_zdr=(env.get("OPENROUTER_ZDR") or "").strip().lower() in ("1", "true", "yes"),
+            studio_models=env.get("STUDIO_MODELS") or None,
+            openrouter_site_url=env.get("OPENROUTER_SITE_URL") or None,
+            openrouter_app_title=env.get("OPENROUTER_APP_TITLE") or None,
         )

@@ -128,3 +128,34 @@ async def test_other_errors_stay_generic():
                                       thread_id="v", mode="offline", resumed=False)]
     assert ev[-2] == {"type": "error", "message": "The run failed."}
     assert "secret-detail" not in str(ev)
+
+
+@pytest.mark.anyio
+async def test_refusal_after_streamed_text_finishes_with_the_declined_reply():
+    """A model that streams some text and then refuses (finding 5).
+
+    The tokens carry both the partial text and the declined copy, so the
+    console must take the reply from ``node_finished``: it holds only the
+    declined copy, never the partial text.
+    """
+    from langchain_core.language_models.fake_chat_models import FakeListChatModel
+    from langchain_core.messages import AIMessageChunk
+    from langchain_core.outputs import ChatGenerationChunk
+    from agentic_solutions.common.llm import DECLINED
+
+    class StreamThenRefuse(FakeListChatModel):
+        def _stream(self, *a, **k):
+            yield ChatGenerationChunk(message=AIMessageChunk("partial secret "))
+            yield ChatGenerationChunk(message=AIMessageChunk("", response_metadata={"stop_reason": "refusal"}))
+
+    spec = PATTERNS["chat_loop"]
+    g = spec.build(BuildContext(lambda: StreamThenRefuse(responses=["x"]), InMemorySaver(), None))
+    cfg = {"configurable": {"thread_id": "refusal"}}
+    async for _ in run_events(g, spec.start_input(), cfg, thread_id="refusal", mode="live", resumed=False):
+        pass
+    ev = [e async for e in run_events(g, spec.make_input("hi"), cfg, thread_id="refusal", mode="live",
+                                      resumed=True)]
+    streamed = "".join(e["text"] for e in ev if e["type"] == "token" and e["node"] == "answer")
+    assert streamed.startswith("partial secret ")                     # what the bubble showed while streaming
+    finished = next(e for e in ev if e["type"] == "node_finished" and e["node"] == "answer")
+    assert [m["content"] for m in finished["update"]["messages"]] == [DECLINED]

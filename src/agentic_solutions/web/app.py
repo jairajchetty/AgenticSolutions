@@ -10,8 +10,12 @@ How a conversation flows:
 3. ``GET /api/threads/{tid}/state`` returns the checkpointed state (and how
    many checkpoints the thread has), so a page reload can rebuild the console.
 
-Graphs are compiled once per pattern at startup and share one checkpointer;
-each thread id is its own checkpoint thread.
+A thread runs on the model it was created with (model picker spec §4): the
+record's ``mode`` holds the menu id. Graphs are keyed by (pattern, model): the
+offline graphs are compiled at startup, a live one on first use (``graph_for``).
+All share one checkpointer, guard and ERP client; each thread id is its own
+checkpoint thread. Choosing a real model, and every run on one, must pass
+``may_choose_model``.
 
 The catalog menu (Catalog spec §5.2) is read-only: ``GET /api/catalog`` lists
 all 21 patterns, and ``GET /api/catalog/{category}/{pattern}`` returns one
@@ -22,6 +26,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import os
 import secrets
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import AsyncExitStack, asynccontextmanager
@@ -40,12 +45,17 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from agentic_solutions.agents.approval_agent.erp import ErpClient, HttpErpClient, InProcessErpClient
 from agentic_solutions.common import approval_tokens
+from agentic_solutions.common.llm import check_provider_available
 from agentic_solutions.mcp_servers.erp.config import ErpSettings
 from agentic_solutions.mcp_servers.erp.server import build_server
 from agentic_solutions.mcp_servers.erp.store import ErpStore
 from agentic_solutions.web import catalog
 from agentic_solutions.web.config import Settings
-from agentic_solutions.web.registry import AGENTS_DIR, PATTERNS, BuildContext, PatternSpec, offline_factory
+from agentic_solutions.web.models import (
+    MODEL_CHOICE_DENIED, OFFLINE, UNKNOWN_MODEL, credential_set, entry_for, listed_entries, load_entries,
+    may_choose_model)
+from agentic_solutions.web.registry import (
+    AGENTS_DIR, PATTERNS, BuildContext, PatternSpec, live_factory, offline_factory)
 from agentic_solutions.web.runner import run_events
 from agentic_solutions.web.serialize import to_jsonable
 from agentic_solutions.web.threads import ThreadRecord, ThreadStore, once
@@ -54,7 +64,8 @@ from agentic_solutions.web.topology import graph_topology
 log = logging.getLogger(__name__)
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
-MODE = "offline"  # M1 has no Live mode yet
+MODE = "offline"  # the session default; a thread may run on a chosen model
+PROVIDER_NAMES = {"anthropic": "Anthropic", "openrouter": "OpenRouter"}  # for the safe error copy
 NOT_FOUND = "not found"  # same text for unknown and unowned, so ownership isn't leaked
 NO_ERP_SECRET = "ERP_APPROVAL_SECRET must be set when ERP_MCP_URL is set"
 NO_CLIENT_SECRET = "ERP_APPROVAL_SECRET must be set when an ERP client is passed in"
@@ -67,6 +78,12 @@ EDITS_ONLY_WITH_EDIT = "Edits are only allowed with the edit decision"
 DUPLICATE_EDIT = "Each item can be edited once"
 OUT_OF_DATE = "This card is out of date. Showing the latest version."
 APPROVAL_NODE = "approval"
+
+
+class ThreadRequest(BaseModel):
+    """The optional body of a new thread: which menu model it runs on."""
+    model_config = ConfigDict(extra="forbid")
+    model: str = Field(OFFLINE.id, min_length=1, max_length=64)
 
 
 class Edit(BaseModel):
@@ -198,6 +215,46 @@ async def _checked_input(spec: PatternSpec, graph, config: dict, body) -> object
     return Command(resume=decision.model_dump(exclude_none=True, exclude={"version", "short_hash"}))
 
 
+def _entry(app: FastAPI, model_id: str):
+    """The menu entry for a model id (Offline included), or None."""
+    if model_id == OFFLINE.id:
+        return OFFLINE
+    return entry_for(app.state.model_entries, model_id)
+
+
+def _model_kwargs(app: FastAPI, model_id: str) -> dict:
+    """The run_events arguments that name the thread's model."""
+    if model_id == OFFLINE.id:
+        return {"mode": "offline", "model": OFFLINE.id}
+    entry = _entry(app, model_id)
+    return {"mode": "live", "model": model_id, "label": entry.label,
+            "provider": PROVIDER_NAMES.get(entry.provider)}
+
+
+async def graph_for(app: FastAPI, pattern_id: str, model_id: str):
+    """The compiled graph for a (pattern, model) pair.
+
+    Offline graphs exist from startup. A live graph is compiled on first use,
+    with the startup checkpointer, guard, ERP client and token issuer, and
+    cached. The lock makes concurrent first requests build it once; the
+    compile runs in a worker thread so the loop stays free meanwhile.
+    """
+    key = (pattern_id, model_id)
+    graph = app.state.graphs.get(key)
+    if graph is not None:
+        return graph
+    async with app.state.graph_lock:
+        graph = app.state.graphs.get(key)
+        if graph is None:
+            entry = entry_for(app.state.model_entries, model_id)
+            if entry is None:
+                raise KeyError(model_id)
+            ctx = app.state.build_context(live_factory(entry, app.state.settings))
+            graph = await asyncio.to_thread(app.state.registry[pattern_id].build, ctx)
+            app.state.graphs[key] = graph
+    return graph
+
+
 def _sse(event: dict) -> str:
     return f"data: {json.dumps(event)}\n\n"
 
@@ -309,22 +366,36 @@ def create_app(settings: Settings | None = None, *, checkpointer=None, guard=Non
                 stack.push_async_callback(conn.close)
             erp_client, erp_secret = await _open_erp(settings, stack, app, erp)
             threat_guard = guard if guard is not None else _build_guard()
+            entries = load_entries(settings.studio_models)  # a bad STUDIO_MODELS fails startup here
+            for entry in listed_entries(entries, os.environ):
+                if entry is not OFFLINE:
+                    check_provider_available(entry)  # a missing provider package fails startup too
+
+            def issue_token(claims):
+                return approval_tokens.issue(claims, erp_secret)
+
+            def build_context(llm_factory) -> BuildContext:
+                # Every graph, offline or live, shares these.
+                return BuildContext(llm_factory, saver, threat_guard, erp=erp_client, issue_token=issue_token,
+                                    auto_limit_zar=settings.erp_auto_approve_limit_zar)
+
             graphs = {
-                pid: spec.build(BuildContext(
-                    offline_factory(pid, settings.offline_latency_scale), saver, threat_guard,
-                    erp=erp_client,
-                    issue_token=lambda claims: approval_tokens.issue(claims, erp_secret),
-                    auto_limit_zar=settings.erp_auto_approve_limit_zar))
+                (pid, OFFLINE.id): spec.build(build_context(offline_factory(pid, settings.offline_latency_scale)))
                 for pid, spec in registry.items()
             }
+            app.state.model_entries = entries
+            app.state.build_context = build_context
+            app.state.graph_lock = asyncio.Lock()
             app.state.graphs = graphs
-            app.state.topologies = {pid: graph_topology(g) for pid, g in graphs.items()}
+            app.state.topologies = {pid: graph_topology(graphs[(pid, OFFLINE.id)]) for pid in registry}
             app.state.catalog_pages = _catalog_pages(registry, app.state.topologies)
             app.state.catalog_listing = _catalog_listing(registry)
             yield
 
     app = FastAPI(title="Agentic Patterns Studio", lifespan=lifespan)
     app.state.store = store
+    app.state.settings = settings
+    app.state.registry = registry
     app.add_middleware(SessionMiddleware, secret_key=settings.session_secret,
                        same_site="lax", https_only=False)  # M3 turns https_only on in production
 
@@ -369,22 +440,36 @@ def create_app(settings: Settings | None = None, *, checkpointer=None, guard=Non
             raise HTTPException(404, NOT_FOUND)
         return page
 
+    def models_for(request: Request) -> tuple:
+        """The menu this request may choose from: Offline, plus keyed models when the check holds."""
+        entries = request.app.state.model_entries if may_choose_model(request, settings) else ()
+        return listed_entries(entries, os.environ)
+
     @app.get("/api/session")
     def get_session(request: Request):
         session_id(request)
         # The UI sets its textarea's maxlength from this, so the two never drift.
-        return {"mode": MODE, "live_available": False, "max_input_chars": settings.max_input_chars}
+        return {"mode": MODE, "models": [{"id": e.id, "label": e.label} for e in models_for(request)],
+                "max_input_chars": settings.max_input_chars}
 
     @app.post("/api/patterns/{pattern_id}/threads")
-    async def create_thread(pattern_id: str, request: Request):
+    async def create_thread(pattern_id: str, request: Request, body: ThreadRequest | None = None):
         spec = pattern(pattern_id)
-        record = store.create(session_id(request), spec.id, MODE)
+        model_id = body.model if body is not None else OFFLINE.id
+        if model_id != OFFLINE.id:
+            entry = entry_for(request.app.state.model_entries, model_id)
+            if entry is None:
+                raise HTTPException(422, UNKNOWN_MODEL)
+            if not may_choose_model(request, settings) or not credential_set(entry, os.environ):
+                raise HTTPException(403, MODEL_CHOICE_DENIED)
+        graph = await graph_for(request.app, spec.id, model_id)
+        record = store.create(session_id(request), spec.id, model_id)
         if spec.mode == "chat":
             # Prime: run to the first pause at `ask`, so every message is a resume.
-            graph = request.app.state.graphs[spec.id]
             last = None
             async for event in run_events(graph, spec.start_input(), _config(record.id, record.session_id),
-                                          thread_id=record.id, mode=MODE, resumed=False):
+                                          thread_id=record.id, resumed=False,
+                                          **_model_kwargs(request.app, model_id)):
                 last = event
             if last is None or last.get("status") != "paused":
                 record.closed = True
@@ -397,9 +482,13 @@ def create_app(settings: Settings | None = None, *, checkpointer=None, guard=Non
         record = owned_thread(request, thread_id)
         if record.ended or record.closed:
             raise HTTPException(409, "conversation ended")
+        # Every run on a real model repeats the check, before the slot is taken:
+        # a refusal leaves the thread open and the slot free.
+        if record.mode != OFFLINE.id and not may_choose_model(request, settings):
+            raise HTTPException(403, MODEL_CHOICE_DENIED)
         spec = registry[record.pattern_id]
         chat = spec.mode == "chat"
-        graph = request.app.state.graphs[spec.id]
+        graph = await graph_for(request.app, spec.id, record.mode)
         config = _config(record.id, record.session_id)
         sid = record.session_id
         # Claim the run slot first, then check which pause the thread is in.
@@ -432,9 +521,9 @@ def create_app(settings: Settings | None = None, *, checkpointer=None, guard=Non
             nonlocal finished
             events = run_events(
                 graph, graph_input, config,
-                thread_id=record.id, mode=record.mode,
+                thread_id=record.id,
                 resumed=chat,  # a chat thread was primed to a pause; a trigger starts fresh
-                output=spec.output)
+                output=spec.output, **_model_kwargs(request.app, record.mode))
             try:
                 async for event in events:
                     if event["type"] == "run_finished":
@@ -457,7 +546,7 @@ def create_app(settings: Settings | None = None, *, checkpointer=None, guard=Non
     @app.get("/api/threads/{thread_id}/state")
     async def thread_state(thread_id: str, request: Request):
         record = owned_thread(request, thread_id)
-        graph = request.app.state.graphs[record.pattern_id]
+        graph = await graph_for(request.app, record.pattern_id, record.mode)
         config = _config(record.id, record.session_id)
         state = await graph.aget_state(config)
         # One checkpoint per saved step (spec §4.6): the trace shows this count.
@@ -468,7 +557,8 @@ def create_app(settings: Settings | None = None, *, checkpointer=None, guard=Non
         paused = None if found is None else {"node": found[0], "payload": to_jsonable(found[1])}
         return {"values": to_jsonable(state.values), "next": list(state.next),
                 "paused": paused, "ended": record.ended, "closed": record.closed,
-                "checkpoints": checkpoints}
+                "checkpoints": checkpoints,
+                "model": {"id": record.mode, "label": _entry(request.app, record.mode).label}}
 
     @app.get("/", include_in_schema=False)
     def index():

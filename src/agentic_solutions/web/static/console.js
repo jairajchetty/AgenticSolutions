@@ -21,6 +21,19 @@ const REQUOTED_LATER = "Re-quoted after you submit changes";
 const QTY_MIN = 1;
 const QTY_MAX = 999;
 
+// The text a streamed bubble should end with, once its node has finished, or
+// null to keep what streamed. A refusal after some text streams that text and
+// then the declined copy; the node's final reply holds only the declined copy.
+// A reply over 4096 characters arrives cut (ending "…"), so a bubble that
+// starts with the cut text is kept.
+export function settledReply(streamed, update) {
+  const msgs = Array.isArray(update?.messages) ? update.messages : [];
+  const final = msgs.filter((m) => m && m.role === "assistant" && m.content).map((m) => m.content).at(-1);
+  if (typeof final !== "string" || final === streamed) return null;
+  if (final.endsWith("…") && streamed.startsWith(final.slice(0, -1))) return null;
+  return final;
+}
+
 const isApproval = (payload) => payload !== null && typeof payload === "object" && payload.kind === "approval_request";
 
 // createConsole(el, {mode, samples, onSend, onDecide, onNewChat})
@@ -407,8 +420,11 @@ export function createConsole(el, { mode, samples = [], onSend, onDecide, onNewC
     if (!trigger) {
       // A node that produced a reply without streaming tokens still gets a bubble.
       const streamed = stream && stream.node === evt.node;
-      if (streamed) stream.box.classList.remove("streaming");
-      else for (const text of assistantFrom(update)) bubble("assistant", text, "Agent");
+      if (streamed) {
+        stream.box.classList.remove("streaming");
+        const final = settledReply(stream.text.data, update);
+        if (final !== null) stream.text.data = final;
+      } else for (const text of assistantFrom(update)) bubble("assistant", text, "Agent");
       stream = null;
     }
   }

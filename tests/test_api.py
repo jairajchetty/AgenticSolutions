@@ -88,8 +88,8 @@ def test_thread_disconnected_mid_run_is_closed(client):
 
 
 def test_session_reports_offline(client):
-    assert client.get("/api/session").json() == {"mode": "offline", "live_available": False,
-                                                 "max_input_chars": 2000}
+    assert client.get("/api/session").json() == {
+        "mode": "offline", "models": [{"id": "offline", "label": "Offline (scripted)"}], "max_input_chars": 2000}
 
 
 def test_state_counts_checkpoints_and_the_count_grows(client):      # spec §4.6
@@ -154,7 +154,7 @@ def test_priming_failure_is_a_safe_500(client, app):
                 yield  # pragma: no cover  (makes this an async generator)
             return gen()
 
-    app.state.graphs["chat_loop"] = BrokenGraph()
+    app.state.graphs[("chat_loop", "offline")] = BrokenGraph()
     r = client.post("/api/patterns/chat_loop/threads")
     assert r.status_code == 500
     assert r.json() == {"detail": "could not start the conversation"}

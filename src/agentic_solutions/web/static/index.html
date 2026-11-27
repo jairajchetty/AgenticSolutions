@@ -32,6 +32,13 @@
       <span class="mode-led" aria-hidden="true"></span>
       <span class="mode-text">Offline (scripted)</span>
     </div>
+    <!-- The model menu (model picker spec §7): app.js fills and shows it only
+         when the server lists more than Offline. -->
+    <div class="model-menu" id="model-menu" hidden>
+      <label for="model-select">Model</label>
+      <select id="model-select"></select>
+      <p class="model-note" id="model-note" aria-live="polite"></p>
+    </div>
   </header>
 
   <main id="main">
