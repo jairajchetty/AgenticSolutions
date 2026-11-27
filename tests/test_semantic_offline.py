@@ -31,11 +31,14 @@ async def run(library_index):
         graph = spec.build(BuildContext(offline_factory("semantic", 0), InMemorySaver(), make_guard(),
                                         library=client))
 
-        async def ask(question):
+        async def ask(question, with_nodes=False):
             cfg = {"configurable": {"thread_id": question[:40]}}
             await graph.ainvoke(spec.start_input(), cfg)
-            await graph.ainvoke(Command(resume=question), cfg)
-            return (await graph.aget_state(cfg)).values["messages"]
+            nodes = []
+            async for update in graph.astream(Command(resume=question), cfg, stream_mode="updates"):
+                nodes += [name for name in update if not name.startswith("__")]
+            messages = (await graph.aget_state(cfg)).values["messages"]
+            return (messages, nodes) if with_nodes else messages
 
         yield ask
 
@@ -98,3 +101,53 @@ async def test_question_about_something_the_poem_never_mentions_is_not_covered(r
     # "Satan" and "think" are in the poem; "smartphones" is not, so no passage can answer it.
     answer = (await run("What does Satan think about smartphones?"))[-1].content
     assert "don't cover" in answer and "(Book" not in answer
+
+
+
+async def test_breakfast_shows_the_corrective_loop(run):
+    messages, nodes = await run("What did Milton eat for breakfast?", with_nodes=True)
+    assert nodes == ["ask", "agent", "tools", "grade", "rewrite_query", "tools", "grade", "rewrite_query",
+                     "tools", "grade", "agent"], nodes
+    answer = messages[-1].content
+    assert "don't cover" in answer and "Sources:" not in answer
+
+
+async def test_samples_grade_relevant_first_time(run):
+    for sample in PATTERNS["semantic"].samples:
+        messages, nodes = await run(sample, with_nodes=True)
+        assert "rewrite_query" not in nodes, (sample, nodes)
+        assert nodes[nodes.index("grade") + 1] == "agent", (sample, nodes)
+        check_citations(messages[-1].content)
+
+
+def graded_passages(messages):
+    """(Book, start_line) of every passage that survived grading in this run."""
+    import json
+
+    kept = set()
+    for m in messages:
+        if m.type == "tool":
+            try:
+                data = json.loads(m.content)
+            except ValueError:
+                continue
+            passages = data["passages"] if isinstance(data, dict) and "passages" in data else (
+                [data] if isinstance(data, dict) else data)
+            kept |= {(p["book"], p["start_line"]) for p in passages}
+    return kept
+
+
+async def test_sources_never_cite_a_dropped_passage(run):
+    for sample in PATTERNS["semantic"].samples:
+        messages = await run(sample)
+        _, sources = split_answer(messages[-1].content)
+        kept = graded_passages(messages)
+        for book, a, _b, _quote in SOURCE.findall(sources):
+            assert (book, int(a)) in kept, (sample, book, a)
+
+
+async def test_agent_reads_graded_form(run):  # Review Focus 5
+    messages = await run(PATTERNS["semantic"].samples[0])
+    tool_texts = [m.content for m in messages if m.type == "tool"]
+    assert any('"passages":' in t for t in tool_texts)
+    check_citations(messages[-1].content)
