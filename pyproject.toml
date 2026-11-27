@@ -21,6 +21,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8", "httpx>=0.27"]
 providers = ["langchain-openai>=1.8"]
+prep = ["pypdf>=5"]  # tools/prepare_paradise_lost.py only
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -30,4 +31,4 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.setuptools.package-data]
-"agentic_solutions" = ["agents/*/explanation.md", "web/static/*", "web/catalog.yaml", "mcp_servers/erp/fixtures.json"]
+"agentic_solutions" = ["agents/*/explanation.md", "web/static/*", "web/catalog.yaml", "mcp_servers/library/texts/*.txt", "mcp_servers/erp/fixtures.json"]
