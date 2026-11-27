@@ -69,8 +69,8 @@ The existing labels stay as they are. The `agent` → `tools` rule still reads "
 > Decide which passages help answer the question. A passage is relevant if it contains information the answer needs. It is not relevant if it only shares words or names with the question. Call grade_passages with the numbers of the relevant passages; an empty list if none are.
 
 **Result:**
-- **Some passages survive:** each graded `ToolMessage` is replaced (same `id`, so `add_messages` updates it in place) with JSON of only the relevant passages, plus a final field `"dropped": n` when any were removed.
-- **None survive:** the `ToolMessage` content becomes `[]` with `"dropped": n`. The agent therefore sees that the search found nothing relevant.
+- Each graded `ToolMessage` is replaced (same `id`, so `add_messages` updates it in place) with `{"passages": [the relevant passages], "not_relevant": n}`, where n is how many were removed.
+- **None survive:** `"passages"` is `[]`, so the agent sees that the search found nothing relevant.
 
 **When grading fails:** a missing or malformed `grade_passages` call, numbers out of range, or a tool-error result. The passages pass through unchanged and the run goes to `agent`. There is no retry.
 
