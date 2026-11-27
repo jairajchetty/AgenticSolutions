@@ -57,7 +57,8 @@ Flow:
 - **Agent** → `agent`: the model. It is told to answer only from the passages, simply and concisely, and to list its sources at the end, each with its Book, lines and the words it relied on. Line numbers follow this edition.
 - **Tools** → `tools`: runs the model's calls on the library server over MCP.
 - **Between questions** → `ask`: waits for your next message.
-- **Grader and query rewriter** → not separate nodes. When the passages miss, the agent searches again with other words, up to 6 tool rounds per question.
+- **Grader** → `grade`: checks each passage from `search_book` against the question and drops the ones that don't help, before the agent sees them.
+- **Query rewriter** → `rewrite_query`: when no passage is relevant, writes a new query in different words and searches again, 2 times per question at most.
 
 ### Framework concepts
 - **Forced first search:** the first model call of each question is bound with `tool_choice="search_book"`. If a model answers in text or calls another tool instead, `agent` replaces that reply with the search.

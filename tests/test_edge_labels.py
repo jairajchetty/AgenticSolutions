@@ -76,7 +76,7 @@ def test_semantic_layout_places_every_node_and_bends_both_pairs():
     t = topology("semantic")
     assert all(n["position"] for n in t["nodes"]), [n["id"] for n in t["nodes"] if not n["position"]]
     edges = by_edge(t)
-    for pair in (("ask", "agent"), ("agent", "ask"), ("agent", "tools"), ("tools", "agent")):
+    for pair in (("ask", "agent"), ("agent", "ask")):
         assert edges[pair]["bend"], pair  # the two directions curve apart, so their labels separate
 
 

@@ -33,7 +33,8 @@ EXPECTED_EDGES = {
         ("submit_po", "ask"), ("submit_po", "agent"),
     },
     "semantic": {("__start__", "ask"), ("ask", "agent"), ("ask", "ask"), ("ask", "__end__"),
-                 ("agent", "tools"), ("agent", "ask"), ("tools", "agent")},
+                 ("agent", "tools"), ("agent", "ask"), ("tools", "grade"), ("grade", "agent"),
+                 ("grade", "rewrite_query"), ("rewrite_query", "tools"), ("rewrite_query", "agent")},
 }
 
 APPROVAL_SAMPLES = ("Order 12 laptops for the Cape Town office under CT-OPS",
