@@ -111,3 +111,14 @@ async def test_forced_search_ids_are_unique_per_question():  # review: repeated 
     await g.ainvoke(Command(resume="Second question?"), cfg)
     ids = [c["id"] for m in (await g.aget_state(cfg)).values["messages"] if m.type == "ai" for c in m.tool_calls]
     assert len(ids) == 2 and len(set(ids)) == 2
+
+
+def test_prompt_asks_for_a_short_answer_then_sources():
+    from agentic_solutions.agents.semantic_memory_agent.graph import SYSTEM_PROMPT
+
+    assert "simply and concisely" in SYSTEM_PROMPT
+    assert "Sources:" in SYSTEM_PROMPT
+    assert "at the end" in SYSTEM_PROMPT
+    assert "two or three" in SYSTEM_PROMPT
+    # Models miscount lines inside a passage: they must copy the tool's own range.
+    assert "exactly as the tool returned" in SYSTEM_PROMPT and "count lines" in SYSTEM_PROMPT

@@ -54,7 +54,7 @@ Flow:
 ### Mapping
 - **Index** → the `library` MCP server: John Milton's *Paradise Lost*, split into overlapping passages of about 20 lines within each Book. Each passage is stored in Qdrant with a meaning vector (`bge-small-en-v1.5`) and a keyword vector (BM25), both computed locally.
 - **Retriever** → the `search_book` tool: hybrid search, which combines the meaning and keyword matches by reciprocal rank fusion. `read_passage` reads lines by position, for questions such as how the poem ends.
-- **Agent** → `agent`: the model. It is told to answer only from the passages and to cite each claim's Book and line range. Line numbers follow this edition.
+- **Agent** → `agent`: the model. It is told to answer only from the passages, simply and concisely, and to list its sources at the end, each with its Book, lines and the words it relied on. Line numbers follow this edition.
 - **Tools** → `tools`: runs the model's calls on the library server over MCP.
 - **Between questions** → `ask`: waits for your next message.
 - **Grader and query rewriter** → not separate nodes. When the passages miss, the agent searches again with other words, up to 6 tool rounds per question.
@@ -89,7 +89,7 @@ How `agent` makes the first step of every question a search:
 ```
 
 ### Try this
-- Send `What does Satan mean by 'Better to reign in Hell'?`. The first step is `search_book`, and the answer quotes Book I with its line range.
+- Send `What does Satan mean by 'Better to reign in Hell'?`. The first step is `search_book`. The answer is two sentences, and its sources at the end quote Book I with the line range.
 - Send `How does the poem end?`. A passage search cannot know what comes last, so the agent calls `read_passage` on the end of Book XII.
 - Send `What did Milton eat for breakfast?`. The search finds nothing relevant, and the agent says the passages don't cover it instead of answering from memory.
 - Compare with [[memory/knowledge-graph]]: which question about Satan and Beelzebub would need relations between entities rather than passages?
