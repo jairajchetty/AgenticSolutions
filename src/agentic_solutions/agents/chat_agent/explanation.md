@@ -1,4 +1,4 @@
-# Chat loop
+# Session
 
 ## What it is
 A conversation that keeps going. The graph asks for a message, answers it, then loops back to ask again, until you type `stop`. Because every message is kept in the state, the model sees the whole conversation each time it answers.
@@ -18,18 +18,21 @@ The trace shows `__start__`, then `ask` and `answer` taking turns.
    - Anything else goes to `answer`.
 3. `answer` sends the full history to the model, stores the reply, and returns to `ask`.
 
-In the web demo the `ask` node waits with `interrupt()` (see Human-in-the-loop); in the CLI it uses `input()`.
+In the web demo the `ask` node waits with `interrupt()` (see [[governance/approval]]); in the CLI it uses `input()`.
+
+The dividing line: Session is one conversation, remembered through one thread's checkpoints. [[memory/episodic]] keeps memories across separate conversations, so a new chat can recall an old one.
 
 ## LangGraph concepts
 - **Cycle**: `answer` links back to `ask`, so the graph loops.
 - **Conditional edge**: `add_conditional_edges` runs a router function that returns the name of the next node, or `END`.
 - **Memory inside a run**: the `add_messages` reducer appends every question and reply, so history builds up.
+- **Checkpointer + `thread_id`**: the web demo compiles the graph with a checkpointer; each `thread_id` is one session, and its messages are saved after every step.
 - **Typed router**: the return type `Literal["answer", "ask", "__end__"]` lists every possible destination, which is how the graph diagram is drawn.
 
 ## Trade-offs
 - Natural to use, but the history grows with every turn. Cost and latency rise, and long chats eventually hit the context limit.
-- Memory lasts only for one run. Closing the chat loses it unless you add a checkpointer.
-- Anything you type reaches the model unchecked. See Input guardrail for a fix.
+- The CLI run keeps history only in memory, so closing it loses the chat. The web demo persists it per thread through the checkpointer.
+- Anything you type reaches the model unchecked. See [[governance/guardrails]] for a fix, and [[governance/approval]] for a version that pauses for a person.
 
 ## Key code
 ```python

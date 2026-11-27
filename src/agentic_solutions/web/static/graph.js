@@ -6,6 +6,11 @@
 // the runner reports a transition and keep a traversal count in their label.
 // Conditional edges (a router picks one of them) are dashed and labelled "if".
 //
+// Static mode (Catalog spec §4.3) draws a Guide-only pattern's skeleton: the
+// same layout and idle styling, conditional edges still dashed and labelled,
+// but nothing ever runs on it, so there are no counters or pulses and every
+// method except destroy() is a no-op.
+//
 // Colours come from the CSS tokens on :root, re-read when the colour scheme
 // changes, so the graph follows the light and dark themes.
 
@@ -127,8 +132,22 @@ function edgeDisplay(data) {
   return parts.join(" ");
 }
 
-// createGraph(el, topology) -> {setNodeState, flashEdge, highlight, reset}
-export function createGraph(el, topology) {
+// Static mode's accessible text: the graph's nodes and edges, in words.
+function describeStatic(topology) {
+  const name = (id) => {
+    const n = topology.nodes.find((x) => x.id === id);
+    return !n ? id : n.kind === "node" ? n.label : n.kind;  // "start" / "end" for the terminals
+  };
+  const nodes = topology.nodes.filter((n) => n.kind === "node").map((n) => n.label);
+  const edges = topology.edges.map((e) =>
+    `${name(e.source)} to ${name(e.target)}${e.conditional ? ` (conditional${e.label ? `: ${e.label}` : ""})` : ""}`);
+  return `Diagram of the pattern's graph. Nodes: ${nodes.join(", ")}. Edges: ${edges.join("; ")}.`;
+}
+
+const noop = () => {};
+
+// createGraph(el, topology, {static}) -> {setNodeState, flashEdge, highlight, reset, destroy}
+export function createGraph(el, topology, { static: isStatic = false } = {}) {
   ensureDagre();
   live.get(el)?.destroy();
 
@@ -226,8 +245,11 @@ export function createGraph(el, topology) {
   const restyle = () => cy.style(stylesheet(palette()));
   scheme.addEventListener("change", restyle);
 
+  const methods = isStatic
+    ? { setNodeState: noop, flashEdge: noop, highlight: noop, reset: noop }
+    : { setNodeState, flashEdge, highlight, reset };
   const api = {
-    setNodeState, flashEdge, highlight, reset,
+    ...methods,
     destroy() {
       for (const id of [...pulses.keys()]) stopPulse(id);
       for (const handle of flashes.values()) clearTimeout(handle);
@@ -238,6 +260,7 @@ export function createGraph(el, topology) {
     },
   };
   live.set(el, api);
-  describe();
+  if (isStatic) el.setAttribute("aria-label", describeStatic(topology));
+  else describe();
   return api;
 }

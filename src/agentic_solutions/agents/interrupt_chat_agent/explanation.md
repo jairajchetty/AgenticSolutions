@@ -1,4 +1,4 @@
-# Human-in-the-loop
+# Approval
 
 ## What it is
 The same chat loop, but `ask` waits for you with `interrupt()` instead of `input()`. The graph pauses, saves its state, and hands control back to the caller. Later the caller resumes it with your text. This is the mechanism behind approval steps such as "OK to send this email?".
@@ -6,17 +6,20 @@ The same chat loop, but `ask` waits for you with `interrupt()` instead of `input
 ## When to use it
 - Web apps and APIs, where nothing can block a terminal waiting for typing.
 - Approvals and reviews: pause before a risky action and let a person decide.
+- Pair it with [[governance/audit]] to record who approved what.
 - Any run that may wait minutes or days for a human, since a paused graph is just saved data.
 
 ## How this graph works
-The graph is the same as Chat loop: `__start__`, `ask`, `answer`, back to `ask`, until `stop` goes to `__end__`. An empty message goes back to `ask`.
+The graph is the same as the [[memory/session]] chat loop: `__start__`, `ask`, `answer`, back to `ask`, until `stop` goes to `__end__`. An empty message goes back to `ask`.
 
 What differs is how `ask` behaves:
 
 1. `ask` calls `interrupt()`. The run pauses and the prompt is sent to you.
 2. You reply. The caller resumes the graph with `Command(resume=...)`.
 3. `ask` runs again from its first line. This time `interrupt()` returns your text instead of pausing. That is why the trace marks this `ask` step as "resumed".
-4. The router and `answer` then work exactly as in Chat loop.
+4. The router and `answer` then work exactly as in the chat loop.
+
+The dividing line: Approval is a person signing off at a pause point before the run goes on. [[governance/review]] is a separate agent or person checking the finished result, who can send it back for rework.
 
 ## LangGraph concepts
 - **interrupt(value)**: pauses the graph and shows `value` to the caller.

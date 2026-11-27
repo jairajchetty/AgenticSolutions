@@ -1,4 +1,4 @@
-# Single LLM call
+# Single Agent
 
 ## What it is
 The smallest useful LangGraph: one question goes in, one model call happens, one answer comes out. There is no loop, no memory between runs and no branching. It is the "hello world" that shows the building blocks every other pattern reuses.
@@ -16,6 +16,8 @@ The trace shows three stops: `__start__`, `answer`, `__end__`.
 3. `__end__` finishes the run.
 
 Both edges are fixed. Nothing is decided at run time, so every run takes the same path.
+
+The dividing line: Single Agent is one model handling everything itself. [[collaboration/supervisor]], [[collaboration/swarm]] and [[collaboration/hierarchy]] split the work across several agents that hand off to each other.
 
 ## LangGraph concepts
 - **State**: a `TypedDict` that holds the data flowing through the graph. Here it has a single key, `messages`.
@@ -47,4 +49,4 @@ return builder.compile(checkpointer=checkpointer)
 
 ## Try this
 - Ask any question, for example `What is a reducer in LangGraph?`, and watch the run go `__start__`, `answer`, `__end__`.
-- Ask a follow-up such as `Explain that more simply`. Each run starts fresh, so the model will not know what "that" means. This is the gap the Chat loop pattern fills.
+- Ask a follow-up such as `Explain that more simply`. Each run starts fresh, so the model will not know what "that" means. This is the gap the [[memory/session]] pattern fills.
