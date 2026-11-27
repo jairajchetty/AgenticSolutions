@@ -67,8 +67,17 @@ def test_approval_layout_places_every_node():
     assert all(n["position"] for n in nodes), [n["id"] for n in nodes if not n["position"]]
 
 
-def test_only_approval_has_a_fixed_layout():
-    assert {pid for pid, s in PATTERNS.items() if s.layout} == {"approval"}
+def test_fixed_layouts():
+    # Approval and Semantic are hand-placed: their labelled edges collide in the automatic layout.
+    assert {pid for pid, s in PATTERNS.items() if s.layout} == {"approval", "semantic"}
+
+
+def test_semantic_layout_places_every_node_and_bends_both_pairs():
+    t = topology("semantic")
+    assert all(n["position"] for n in t["nodes"]), [n["id"] for n in t["nodes"] if not n["position"]]
+    edges = by_edge(t)
+    for pair in (("ask", "agent"), ("agent", "ask"), ("agent", "tools"), ("tools", "agent")):
+        assert edges[pair]["bend"], pair  # the two directions curve apart, so their labels separate
 
 
 def test_approval_threshold_labels_follow_the_configured_limit():

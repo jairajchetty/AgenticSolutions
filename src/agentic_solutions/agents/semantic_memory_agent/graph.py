@@ -64,6 +64,22 @@ EDGE_LABELS = {
 }
 
 
+# The Studio draws Semantic from fixed positions, as it does Approval: in the
+# automatic layout the paired edges (ask <-> agent, agent <-> tools) overlap and
+# their labels and run counts collide. A bend bows an edge's curve, so the two
+# directions between a pair of nodes stay apart.
+LAYOUT = {
+    "positions": {
+        "__start__": (300, 0), "ask": (300, 110), "__end__": (560, 110),
+        "agent": (300, 300), "tools": (600, 300),
+    },
+    "bends": {
+        ("ask", "agent"): 75, ("agent", "ask"): 75,
+        ("agent", "tools"): 34, ("tools", "agent"): 34,
+    },
+}
+
+
 class State(TypedDict):
     messages: Annotated[list, add_messages]
     tool_rounds: int

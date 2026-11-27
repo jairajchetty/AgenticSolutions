@@ -168,7 +168,7 @@ PATTERNS: dict[str, PatternSpec] = {
               "chat", _build_semantic, "semantic_memory_agent",
               ("What does Satan mean by 'Better to reign in Hell'?",
                "What does Mammon propose in the council in Hell?", "How does the poem end?"),
-              edge_labels=lambda limit: semantic_graph.EDGE_LABELS),
+              edge_labels=lambda limit: semantic_graph.EDGE_LABELS, layout=semantic_graph.LAYOUT),
     )
 }
 
