@@ -80,3 +80,9 @@ async def test_answer_never_quotes_the_same_line_twice(run):
     for sample in PATTERNS["semantic"].samples:
         quotes = QUOTE.findall((await run(sample))[-1].content)
         assert len(quotes) == len(set(quotes)), (sample, quotes)
+
+
+async def test_question_about_something_the_poem_never_mentions_is_not_covered(run):  # deferred minor 1
+    # "Satan" and "think" are in the poem; "smartphones" is not, so no passage can answer it.
+    answer = (await run("What does Satan think about smartphones?"))[-1].content
+    assert "don't cover" in answer and "(Book" not in answer

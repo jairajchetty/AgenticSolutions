@@ -26,6 +26,9 @@ READ_ONLY = ToolAnnotations(readOnlyHint=True)
 NO_SUCH_BOOK = "Book {} does not exist; Paradise Lost has Books I to XII."
 MAX_QUERY = 500
 MAX_LIMIT = 10
+# Each search embeds the query with ONNX, which already uses every core: more
+# than two at once only makes them all slower.
+MAX_CONCURRENT_SEARCHES = 2
 INTERNAL_ERROR = "The library could not complete this request."
 
 log = logging.getLogger(__name__)
@@ -47,7 +50,11 @@ class LibraryServer(FastMCP):
             cause = err.__cause__
             if isinstance(cause, ToolError):
                 raise ToolError(str(cause)) from cause
-            if cause is None or isinstance(cause, ValidationError):
+            if isinstance(cause, ValidationError):
+                problems = "; ".join(f"{'.'.join(str(p) for p in e['loc']) or 'arguments'}: {e['msg']}"
+                                     for e in cause.errors())
+                raise ToolError(f"Invalid arguments for {name}: {problems}.") from cause
+            if cause is None:
                 raise
             log.exception("library tool %s failed", name, exc_info=cause)
             raise ToolError(INTERNAL_ERROR) from cause
@@ -55,7 +62,7 @@ class LibraryServer(FastMCP):
 
 def normalise_book(value: str) -> str:
     """'ii', '2', 'Book II' and 'II' all mean Book II. Raises ToolError otherwise."""
-    raw = re.sub(r"(?i)^\s*book\s+", "", str(value)).strip()
+    raw = re.sub(r"(?i)^\s*book\s+", "", str(value)).strip(" .")
     if raw.isdigit() and 1 <= int(raw) <= len(ROMAN):
         return ROMAN[int(raw) - 1]
     if raw.upper() in ROMAN:
@@ -66,10 +73,12 @@ def normalise_book(value: str) -> str:
 def build_server(index: LibraryIndex, *, host: str = "127.0.0.1", port: int = 8766) -> FastMCP:
     server = LibraryServer("library", instructions=INSTRUCTIONS, host=host, port=port, stateless_http=True)
 
-    async def run(fn, *args) -> Any:
+    searches = anyio.CapacityLimiter(MAX_CONCURRENT_SEARCHES)
+
+    async def run(fn, *args, limiter=None) -> Any:
         # Embedding a query and reading Qdrant are synchronous; keep the event loop free.
         try:
-            return await anyio.to_thread.run_sync(lambda: fn(*args))
+            return await anyio.to_thread.run_sync(lambda: fn(*args), limiter=limiter)
         except ValueError as err:
             raise ToolError(str(err)) from err
 
@@ -88,7 +97,7 @@ def build_server(index: LibraryIndex, *, host: str = "127.0.0.1", port: int = 87
         if not 1 <= limit <= MAX_LIMIT:
             raise ToolError(f"limit must be 1 to {MAX_LIMIT}.")
         numeral = normalise_book(book) if book is not None else None
-        hits = await run(index.search, query, limit, numeral)
+        hits = await run(index.search, query, limit, numeral, limiter=searches)
         return [vars(h) for h in hits]
 
     @server.tool(annotations=READ_ONLY)

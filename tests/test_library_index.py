@@ -150,3 +150,12 @@ def test_fast_embedder_loads_both_models_once_under_concurrency(tmp_path, monkey
     for t in threads:
         t.join()
     assert errors == [] and sorted(made) == ["dense", "sparse"]
+
+
+def test_folder_in_use_says_to_use_another_library_dir(tmp_path, text):  # deferred minor 2
+    first = open_index(tmp_path, text)
+    try:
+        with pytest.raises(RuntimeError, match="LIBRARY_DIR"):
+            open_index(tmp_path, text)
+    finally:
+        first.close()

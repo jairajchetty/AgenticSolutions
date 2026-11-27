@@ -288,7 +288,8 @@ def _semantic_step(messages: list[BaseMessage]) -> str | AIMessage:
         return (f"The poem ends as Adam and Eve leave Eden together:\n\n“{lines[-2]}”\n“{lines[-1]}” "
                 f"{_cite(data)}\n\nI read the last lines of Book XII to answer this. {OFFLINE_NOTE}")
     wanted = _content_words(human)
-    hits = [h for h in data if wanted & _content_words(h["text"])]
+    unknown = sorted(w for w in wanted if not _in_poem(w))
+    hits = [] if unknown else [h for h in data if wanted & _content_words(h["text"])]
     if not hits:
         return (f"The passages I found don't cover this. I searched for \"{query}\" and none of the "
                 f"passages mentioned it. {OFFLINE_NOTE}")
@@ -310,6 +311,17 @@ def _semantic_step(messages: list[BaseMessage]) -> str | AIMessage:
 
 
 _BOOK_LENGTHS: dict[str, int] = {}
+_POEM_WORDS: set[str] = set()
+
+
+def _in_poem(word: str) -> bool:
+    """Whether the poem uses the word (or its singular). A question about something the poem
+    never mentions ("smartphones") cannot be answered from it, whatever else matches."""
+    if not _POEM_WORDS:
+        from agentic_solutions.mcp_servers.library.text import TEXT_PATH
+
+        _POEM_WORDS.update(re.findall(r"[a-z]+", TEXT_PATH.read_text(encoding="utf-8").lower()))
+    return word in _POEM_WORDS or (word.endswith("s") and word[:-1] in _POEM_WORDS)
 
 
 def _book_length(numeral: str) -> int:

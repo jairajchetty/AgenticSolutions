@@ -319,6 +319,8 @@ The first start builds the index: about 20 seconds to download the models and 30
 | `LIBRARY_DIR` | `./data/library` | The Qdrant index (`qdrant/`), its fingerprint (`meta.json`) and the embedding models (`models/`) |
 | Server address | `127.0.0.1:8766`, path `/mcp` | Where `python -m agentic_solutions.mcp_servers.library` listens (`LIBRARY_HOST`, `LIBRARY_PORT`) |
 
+Qdrant's local mode lets one process use an index folder at a time. To run the standalone library server while the Studio is running, give it its own `LIBRARY_DIR`; it builds its own index there on its first start.
+
 ### The text
 
 The committed text is `mcp_servers/library/texts/paradise-lost.txt`: 12 Books, one verse line per line. It was made once from the Planet eBook PDF, which is not committed:

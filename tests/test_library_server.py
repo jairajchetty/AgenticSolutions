@@ -78,3 +78,43 @@ async def test_library_tools_schema(client):
     assert "this edition" in tools["read_passage"].description
     out = await tools["search_book"].ainvoke({"query": "pandemonium"})
     assert '"book":"II"' in out
+
+
+def test_book_name_with_trailing_full_stop():  # deferred minor 4
+    assert normalise_book("II.") == "II" and normalise_book("Book 2.") == "II"
+
+
+async def test_invalid_arguments_have_one_plain_prefix(client):  # deferred minor 3
+    result = await client.call("read_passage", {"book": "I", "start_line": "x", "end_line": 5})
+    assert result.startswith("Error: Invalid arguments for read_passage:"), result
+    assert "Error executing tool" not in result and "start_line" in result
+
+
+async def test_searches_run_at_most_two_at_a_time():  # deferred minor 5
+    import threading
+    import time
+
+    import anyio
+
+    from agentic_solutions.mcp_servers.library.index import Passage
+
+    class SlowIndex:
+        def __init__(self):
+            self.now = self.peak = 0
+            self.lock = threading.Lock()
+
+        def search(self, query, limit, book):
+            with self.lock:
+                self.now += 1
+                self.peak = max(self.peak, self.now)
+            time.sleep(0.05)
+            with self.lock:
+                self.now -= 1
+            return [Passage("I", 1, 2, "text", 0.5)]
+
+    index = SlowIndex()
+    async with InProcessLibraryClient(build_server(index)) as c:
+        async with anyio.create_task_group() as tg:
+            for i in range(8):
+                tg.start_soon(c.call, "search_book", {"query": f"q{i}"})
+    assert index.peak == 2

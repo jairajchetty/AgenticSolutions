@@ -128,7 +128,15 @@ class LibraryIndex:
         except (OSError, ValueError, AttributeError):
             current = None  # missing or corrupt: rebuild
         embedder.load()  # a cached start loads the models here too, not on the first search
-        client = QdrantClient(path=str(root / "qdrant"))
+        try:
+            client = QdrantClient(path=str(root / "qdrant"))
+        except RuntimeError as err:
+            if "already accessed" not in str(err):
+                raise
+            # Qdrant's local mode allows one process per folder.
+            raise RuntimeError(
+                f"The library index at {root} is in use by another process (the Studio or the standalone "
+                "library server). Stop it, or give this one its own LIBRARY_DIR.") from err
         built = current != wanted or not client.collection_exists(COLLECTION)
         if built:
             meta.unlink(missing_ok=True)
