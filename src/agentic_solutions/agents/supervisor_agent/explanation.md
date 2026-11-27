@@ -1,7 +1,7 @@
 # Supervisor
 
 ## What it is
-One coordinator manages a set of specialist workers; this is often called the orchestrator-workers pattern. The coordinator reads the task and the progress so far, chooses which worker or workers act next, merges what comes back, and decides when the job is finished. Workers do not talk to each other: every handoff passes through the coordinator, which holds the only complete view of the run.
+A manager agent with a team of specialists. The manager reads the task, decides which specialist or specialists should work next, collects what they return, and decides when the job is done. Specialists never talk to each other directly: everything goes through the manager, the only one that sees the whole picture.
 
 ## When to use it
 - The task splits into distinct roles, such as research then writing, and the order is not known in advance.

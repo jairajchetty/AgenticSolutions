@@ -1,5 +1,10 @@
 """Agent 4: the chat loop again, but waiting for input with `interrupt()`.
 
+This is the CLI lesson for `interrupt()`: run it with
+`python -m agentic_solutions.agents.interrupt_chat_agent`. The Patterns
+Studio's Approval demo is a different graph, `approval_agent`, which uses the
+same pause and resume to wait for a person's decision on an order.
+
 The graph is IDENTICAL to agent 2 (chat_agent): ask -> answer -> ask ... until
 "stop". Only HOW the `ask` node waits for the user changes.
 

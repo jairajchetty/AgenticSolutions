@@ -2,7 +2,8 @@
   "dependencies": ["."],
   "graphs": {
     "qa_agent": "./src/agentic_solutions/agents/qa_agent/graph.py:graph",
-    "interrupt_chat_agent": "./src/agentic_solutions/agents/interrupt_chat_agent/graph.py:graph"
+    "interrupt_chat_agent": "./src/agentic_solutions/agents/interrupt_chat_agent/graph.py:graph",
+    "approval_agent": "./src/agentic_solutions/agents/approval_agent/graph.py:graph"
   },
   "env": ".env"
 }

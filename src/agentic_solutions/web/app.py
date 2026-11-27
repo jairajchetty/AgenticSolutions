@@ -19,21 +19,30 @@ page. Both are computed once at startup, so opening a page never runs a graph
 or makes a thread.
 """
 import asyncio
+import hashlib
 import json
 import logging
+import secrets
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from importlib import import_module
 from pathlib import Path
+from typing import Literal
 from uuid import uuid4
 
 import anyio
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from langgraph.types import Command
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from starlette.middleware.sessions import SessionMiddleware
 
+from agentic_solutions.agents.approval_agent.erp import ErpClient, HttpErpClient, InProcessErpClient
+from agentic_solutions.common import approval_tokens
+from agentic_solutions.mcp_servers.erp.config import ErpSettings
+from agentic_solutions.mcp_servers.erp.server import build_server
+from agentic_solutions.mcp_servers.erp.store import ErpStore
 from agentic_solutions.web import catalog
 from agentic_solutions.web.config import Settings
 from agentic_solutions.web.registry import AGENTS_DIR, PATTERNS, BuildContext, PatternSpec, offline_factory
@@ -47,6 +56,38 @@ log = logging.getLogger(__name__)
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 MODE = "offline"  # M1 has no Live mode yet
 NOT_FOUND = "not found"  # same text for unknown and unowned, so ownership isn't leaked
+NO_ERP_SECRET = "ERP_APPROVAL_SECRET must be set when ERP_MCP_URL is set"
+NO_CLIENT_SECRET = "ERP_APPROVAL_SECRET must be set when an ERP client is passed in"
+# The 409 rules for the two kinds of pause (Approval spec §5.3, §9.1).
+FINISH_APPROVAL = "Finish the pending approval first"
+NOTHING_WAITING = "Nothing is waiting for approval"
+UNKNOWN_EDIT = "Unknown item in edits"
+EDIT_NEEDS_EDITS = "Send changed quantities to edit the order"
+EDITS_ONLY_WITH_EDIT = "Edits are only allowed with the edit decision"
+DUPLICATE_EDIT = "Each item can be edited once"
+OUT_OF_DATE = "This card is out of date. Showing the latest version."
+APPROVAL_NODE = "approval"
+
+
+class Edit(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    sku: str = Field(min_length=1, max_length=40)
+    quantity: int = Field(ge=1, le=999)
+
+
+class ResumeRequest(BaseModel):
+    """A decision on the pending approval card.
+
+    ``version`` and ``short_hash`` name the card the decision was made on, so
+    a decision from a tab showing an older card is refused, never applied to
+    whatever is pending now.
+    """
+    model_config = ConfigDict(extra="forbid")
+    decision: Literal["approve", "edit", "reject"]
+    version: int = Field(ge=1)
+    short_hash: str = Field(min_length=1, max_length=64)
+    edits: list[Edit] | None = Field(None, max_length=20)
+    reason: str | None = Field(None, max_length=500)
 
 
 async def _open_sqlite_saver(path: str):
@@ -74,8 +115,87 @@ def _build_guard():
     return ThreatGuard()
 
 
-def _config(thread_id: str) -> dict:
-    return {"configurable": {"thread_id": thread_id}}
+async def _open_erp(settings: Settings, stack: AsyncExitStack, app: FastAPI,
+                    erp: ErpClient | None) -> tuple[ErpClient, bytes]:
+    """The approval demo's ERP client and approval secret (plan ruling 3).
+
+    With no URL, the ERP server runs in-process over MCP's in-memory transport,
+    on its own SQLite store, for the app's lifetime; the secret is random per
+    start unless one is set. With a URL, the server is another process, so the
+    two must share ERP_APPROVAL_SECRET and startup fails without it.
+    """
+    secret = settings.erp_approval_secret.encode("utf-8") if settings.erp_approval_secret else None
+    if erp is not None:  # a caller-supplied client (tests); create_app checked the secret
+        return erp, secret
+    if settings.erp_mcp_url:
+        if secret is None:
+            raise RuntimeError(NO_ERP_SECRET)
+        return HttpErpClient(settings.erp_mcp_url), secret
+    secret = secret or secrets.token_bytes(32)
+    erp_settings = ErpSettings(db=settings.erp_db, secret=secret,
+                               auto_limit_zar=settings.erp_auto_approve_limit_zar,
+                               tenant_ttl_hours=settings.erp_tenant_ttl_hours)
+    store = ErpStore(erp_settings.db, secret=secret, auto_limit_zar=erp_settings.auto_limit_zar,
+                     tenant_ttl_hours=erp_settings.tenant_ttl_hours)
+    stack.callback(store.close)  # runs after the client below has closed (LIFO)
+    app.state.erp_store = store
+    client = await stack.enter_async_context(InProcessErpClient(build_server(store, erp_settings)))
+    return client, secret
+
+
+def _approver(session_id: str) -> str:
+    """The visitor's approver identity: a short hash, so the session id never reaches the ERP."""
+    return "visitor:" + hashlib.sha256(session_id.encode("utf-8")).hexdigest()[:12]
+
+
+def _config(thread_id: str, session_id: str) -> dict:
+    return {"configurable": {"thread_id": thread_id, "approver": _approver(session_id)}}
+
+
+def _paused(state) -> tuple[str, object] | None:
+    """The paused node and its interrupt value: the first task with interrupts."""
+    for task in state.tasks:
+        if task.interrupts:
+            return task.name, task.interrupts[0].value
+    return None
+
+
+async def _checked_input(spec: PatternSpec, graph, config: dict, body) -> object:
+    """The graph input for this request, or HTTPException (409/422) if it does not fit the pause.
+
+    Order: the kind of pause first (409), then whether the decision was made
+    on the pending card (409), then the payload's content (422).
+    """
+    decision = body.resume
+    if spec.mode != "chat":
+        if decision is not None:  # a trigger never pauses
+            raise HTTPException(409, NOTHING_WAITING)
+        if not body.text.strip():
+            raise HTTPException(422, "text must not be empty")
+        return spec.make_input(body.text)
+    paused = _paused(await graph.aget_state(config))
+    at_approval = paused is not None and paused[0] == APPROVAL_NODE
+    if at_approval and decision is None:
+        raise HTTPException(409, FINISH_APPROVAL)
+    if not at_approval and decision is not None:
+        raise HTTPException(409, NOTHING_WAITING)
+    if decision is None:
+        return spec.make_input(body.text)
+    card = paused[1] if isinstance(paused[1], dict) else {}
+    if (decision.version, decision.short_hash) != (card.get("version"), card.get("short_hash")):
+        raise HTTPException(409, OUT_OF_DATE)
+    if decision.decision == "edit" and not decision.edits:
+        raise HTTPException(422, EDIT_NEEDS_EDITS)
+    if decision.decision != "edit" and decision.edits is not None:
+        raise HTTPException(422, EDITS_ONLY_WITH_EDIT)
+    if decision.edits:
+        skus = {line.get("sku") for line in card.get("lines") or []}
+        if any(e.sku not in skus for e in decision.edits):
+            raise HTTPException(422, UNKNOWN_EDIT)
+        if len({e.sku for e in decision.edits}) != len(decision.edits):
+            raise HTTPException(422, DUPLICATE_EDIT)
+    # The graph gets the decision alone: the card check is done.
+    return Command(resume=decision.model_dump(exclude_none=True, exclude={"version", "short_hash"}))
 
 
 def _sse(event: dict) -> str:
@@ -154,41 +274,54 @@ def _catalog_listing(registry: dict[str, PatternSpec]) -> dict:
 
 
 def create_app(settings: Settings | None = None, *, checkpointer=None, guard=None,
-               registry: dict[str, PatternSpec] | None = None) -> FastAPI:
+               registry: dict[str, PatternSpec] | None = None, erp: ErpClient | None = None) -> FastAPI:
     """Build the app. ``registry`` (default ``PATTERNS``) is the set of runnable
-    demos; tests pass a larger one to see a catalog entry turn live."""
+    demos; tests pass a larger one to see a catalog entry turn live. ``erp``
+    (default: from settings, see ``_open_erp``) is the approval demo's ERP client."""
     settings = settings or Settings.from_env()
+    if erp is not None and not settings.erp_approval_secret:
+        # A random secret here would sign tokens the caller's ERP can never verify.
+        raise RuntimeError(NO_CLIENT_SECRET)
     registry = PATTERNS if registry is None else registry
     store = ThreadStore()
 
     class RunRequest(BaseModel):
-        text: str = Field(min_length=1, max_length=settings.max_input_chars)
+        """Exactly one of a message (``text``) or a decision on the approval card (``resume``)."""
+        text: str | None = Field(None, min_length=1, max_length=settings.max_input_chars)
+        resume: ResumeRequest | None = None
+
+        @model_validator(mode="after")
+        def _exactly_one(self):
+            if (self.text is None) == (self.resume is None):
+                raise ValueError("send exactly one of text or resume")
+            return self
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         # Sync graph nodes run in the loop's default executor: make it large (spec §9a).
         executor = ThreadPoolExecutor(max_workers=settings.worker_threads)
         asyncio.get_running_loop().set_default_executor(executor)
-        conn = None
-        saver = checkpointer
-        if saver is None:
-            saver, conn = await _open_sqlite_saver(settings.checkpoint_db)
-        threat_guard = guard if guard is not None else _build_guard()
-        graphs = {
-            pid: spec.build(BuildContext(
-                offline_factory(pid, settings.offline_latency_scale), saver, threat_guard))
-            for pid, spec in registry.items()
-        }
-        app.state.graphs = graphs
-        app.state.topologies = {pid: graph_topology(g) for pid, g in graphs.items()}
-        app.state.catalog_pages = _catalog_pages(registry, app.state.topologies)
-        app.state.catalog_listing = _catalog_listing(registry)
-        try:
+        async with AsyncExitStack() as stack:  # unwinds in reverse, on a failed start too
+            stack.callback(executor.shutdown, wait=False)
+            saver = checkpointer
+            if saver is None:
+                saver, conn = await _open_sqlite_saver(settings.checkpoint_db)
+                stack.push_async_callback(conn.close)
+            erp_client, erp_secret = await _open_erp(settings, stack, app, erp)
+            threat_guard = guard if guard is not None else _build_guard()
+            graphs = {
+                pid: spec.build(BuildContext(
+                    offline_factory(pid, settings.offline_latency_scale), saver, threat_guard,
+                    erp=erp_client,
+                    issue_token=lambda claims: approval_tokens.issue(claims, erp_secret),
+                    auto_limit_zar=settings.erp_auto_approve_limit_zar))
+                for pid, spec in registry.items()
+            }
+            app.state.graphs = graphs
+            app.state.topologies = {pid: graph_topology(g) for pid, g in graphs.items()}
+            app.state.catalog_pages = _catalog_pages(registry, app.state.topologies)
+            app.state.catalog_listing = _catalog_listing(registry)
             yield
-        finally:
-            if conn is not None:
-                await conn.close()
-            executor.shutdown(wait=False)
 
     app = FastAPI(title="Agentic Patterns Studio", lifespan=lifespan)
     app.state.store = store
@@ -250,7 +383,7 @@ def create_app(settings: Settings | None = None, *, checkpointer=None, guard=Non
             # Prime: run to the first pause at `ask`, so every message is a resume.
             graph = request.app.state.graphs[spec.id]
             last = None
-            async for event in run_events(graph, spec.start_input(), _config(record.id),
+            async for event in run_events(graph, spec.start_input(), _config(record.id, record.session_id),
                                           thread_id=record.id, mode=MODE, resumed=False):
                 last = event
             if last is None or last.get("status") != "paused":
@@ -266,12 +399,22 @@ def create_app(settings: Settings | None = None, *, checkpointer=None, guard=Non
             raise HTTPException(409, "conversation ended")
         spec = registry[record.pattern_id]
         chat = spec.mode == "chat"
-        if not chat and not body.text.strip():
-            raise HTTPException(422, "text must not be empty")
+        graph = request.app.state.graphs[spec.id]
+        config = _config(record.id, record.session_id)
         sid = record.session_id
+        # Claim the run slot first, then check which pause the thread is in.
+        # The slot is per session and a thread belongs to one session, so the
+        # state read below cannot go stale: a second click or tab gets 409
+        # here, or (after the first run) a 409 for the pause it now finds.
         if not store.begin_run(sid):
             raise HTTPException(409, "a run is already in progress")
-        graph = request.app.state.graphs[spec.id]
+        try:
+            graph_input = await _checked_input(spec, graph, config, body)
+        except BaseException:
+            # Refused (or cancelled) before any run started: free the slot, but
+            # never close the thread, which is exactly as it was.
+            store.end_run(sid)
+            raise
 
         finished = False
 
@@ -288,7 +431,7 @@ def create_app(settings: Settings | None = None, *, checkpointer=None, guard=Non
         async def stream():
             nonlocal finished
             events = run_events(
-                graph, spec.make_input(body.text), _config(record.id),
+                graph, graph_input, config,
                 thread_id=record.id, mode=record.mode,
                 resumed=chat,  # a chat thread was primed to a pause; a trigger starts fresh
                 output=spec.output)
@@ -315,16 +458,14 @@ def create_app(settings: Settings | None = None, *, checkpointer=None, guard=Non
     async def thread_state(thread_id: str, request: Request):
         record = owned_thread(request, thread_id)
         graph = request.app.state.graphs[record.pattern_id]
-        state = await graph.aget_state(_config(record.id))
+        config = _config(record.id, record.session_id)
+        state = await graph.aget_state(config)
         # One checkpoint per saved step (spec §4.6): the trace shows this count.
         checkpoints = 0
-        async for _ in graph.aget_state_history(_config(record.id)):
+        async for _ in graph.aget_state_history(config):
             checkpoints += 1
-        paused = None
-        for task in state.tasks:
-            if task.interrupts:
-                paused = {"node": task.name, "payload": to_jsonable(task.interrupts[0].value)}
-                break
+        found = _paused(state)
+        paused = None if found is None else {"node": found[0], "payload": to_jsonable(found[1])}
         return {"values": to_jsonable(state.values), "next": list(state.next),
                 "paused": paused, "ended": record.ended, "closed": record.closed,
                 "checkpoints": checkpoints}

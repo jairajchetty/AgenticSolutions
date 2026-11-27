@@ -1,7 +1,7 @@
 # Semantic
 
 ## What it is
-Facts the agent looks up from an external knowledge source at answer time, rather than facts the model happened to absorb in training. This is retrieval-augmented generation: documents are split into passages and indexed ahead of time; at question time the question becomes a search, the best-matching passages are fetched, and the model answers from them. Because the knowledge sits outside the model, it can be updated without retraining, scoped to what the asker may see, and cited. A common extension, corrective retrieval, checks the passages before answering and searches again with a better query when they miss.
+The agent looks things up in a trusted source before answering, instead of relying on what the model remembers from training. Documents are indexed in advance; when a question comes in, the agent fetches the passages that match it best and answers from them, which is often called retrieval-augmented generation (RAG). Because the knowledge lives outside the model, it can be kept up to date, limited to what each person may see, and cited.
 
 ## When to use it
 - Answers must come from your own documents, such as manuals, policies or articles.

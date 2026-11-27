@@ -156,6 +156,60 @@ The server runs a single worker because thread ownership is kept in memory. Desi
 
 The frontend's pure logic (hash routing, catalog search) has Node unit tests in `tests/js`, run by `tests/test_js.py` as part of `pytest`. They need Node 21 or newer; with none found the test is skipped (set `NODE_BIN` to point at a specific binary).
 
+## Approval demo and the mock ERP
+
+The Approval demo orders goods from a mock ERP (enterprise resource planning) system for a fictional South African company, priced in rand. The agent can search the catalogue, check budgets, get quotes and draft a requisition. It cannot place the order. Orders of R5,000 or less are approved by policy; larger orders pause for you to approve, edit or reject. The ERP is an MCP server, and it checks every approval itself.
+
+### One-command run
+
+```bash
+python -m agentic_solutions.web   # then open http://localhost:8000/#/governance/approval
+```
+
+With `ERP_MCP_URL` unset, the Studio runs the ERP inside its own process, with a random approval secret for each start. There is nothing else to start.
+
+### Running the ERP separately
+
+Start the server, then point the Studio at it. Both processes must use the same `ERP_APPROVAL_SECRET`, because the Studio signs each approval and the ERP verifies it. They must also use the same `ERP_AUTO_APPROVE_LIMIT_ZAR`. The Studio's policy approves orders up to its limit, and the ERP refuses a policy approval over its own limit.
+
+```bash
+export ERP_APPROVAL_SECRET=<a long random string>
+python -m agentic_solutions.mcp_servers.erp        # serves http://127.0.0.1:8765/mcp
+
+# in a second terminal, with the same ERP_APPROVAL_SECRET
+export ERP_MCP_URL=http://127.0.0.1:8765/mcp
+python -m agentic_solutions.web
+```
+
+If `ERP_MCP_URL` is set without `ERP_APPROVAL_SECRET`, the Studio refuses to start. The ERP server also refuses to serve over HTTP without `ERP_APPROVAL_SECRET`.
+
+To browse the server's tools in the MCP Inspector, run it over stdio instead:
+
+```bash
+python -m agentic_solutions.mcp_servers.erp --stdio
+```
+
+### Configuration
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `ERP_MCP_URL` | unset | Unset runs the ERP in-process; set it to use a separate server |
+| `ERP_APPROVAL_SECRET` | random per start | Signs approvals; required when `ERP_MCP_URL` is set, and must match the server's |
+| `ERP_AUTO_APPROVE_LIMIT_ZAR` | `5000` | Orders at or under this total are approved by policy |
+| `ERP_DB` | `./data/erp.sqlite` | SQLite file for the ERP's data |
+| `ERP_TENANT_TTL_HOURS` | `168` | How long a visitor's ERP data is kept after their last use |
+| Server address | `127.0.0.1:8765`, path `/mcp` | Where `python -m agentic_solutions.mcp_servers.erp` listens |
+
+### Command line
+
+```bash
+python -m agentic_solutions.agents.approval_agent
+```
+
+The CLI uses Claude, so it needs `ANTHROPIC_API_KEY`. It runs the ERP in-process unless `ERP_MCP_URL` is set, in which case `ERP_APPROVAL_SECRET` is required too. Larger orders stop and ask you to approve, edit or reject. Type "stop" to quit.
+
+In `langgraph.json`, the `approval_agent` graph connects to a separate ERP server, so `langgraph dev` needs `ERP_MCP_URL` and `ERP_APPROVAL_SECRET` set (for example in `.env`).
+
 ## Roadmap ideas
 
 2. ~~Chat loop~~ (done: `chat_agent`), ~~`interrupt()` + checkpointer~~ (done: `interrupt_chat_agent`); next, add the guard to the interrupt version

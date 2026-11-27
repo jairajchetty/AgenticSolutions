@@ -1,7 +1,7 @@
 # Swarm
 
 ## What it is
-A group of peer agents that hand control to each other directly. Each agent either answers or passes the conversation to a better-suited peer, which carries on from there. No manager chooses who goes next: the active agent decides, typically by calling a handoff tool or returning a handoff. The system usually remembers which agent is active, so the next user turn goes straight to it.
+A team of agents with no manager, who pass the conversation between them. The agent currently in charge either answers or hands over to a colleague better suited to the question, much like a phone call transferred between departments. The system usually remembers who has the conversation, so your next message goes straight to them.
 
 ## When to use it
 - Distinct specialists should own the conversation in turn, such as refunds and then troubleshooting.

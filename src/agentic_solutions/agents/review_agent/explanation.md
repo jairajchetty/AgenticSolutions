@@ -1,7 +1,7 @@
 # Review
 
 ## What it is
-A separate checker, another agent or a person, judges a result before it is accepted. The author produces a draft, the reviewer assesses it against stated criteria, and either accepts it or sends it back with comments for revision. Independence is the point: the reviewer brings different instructions, information, tools, authority or a different model, so it can catch what the author cannot see in its own work. Review is often called a critic or second-opinion pattern, and it is a natural place for a person's judgement on quality, as distinct from a person's permission to proceed.
+A second pair of eyes. Before a result is accepted, a separate checker, another agent or a person, judges it against agreed criteria and either accepts it or sends it back with comments. Because the checker is independent, with different instructions, information or a different model, it can catch mistakes the author cannot see in its own work. Review is about quality; a person's permission to go ahead is [[governance/approval]].
 
 ## When to use it
 - A mistake would be costly enough that a second opinion is worth the delay.

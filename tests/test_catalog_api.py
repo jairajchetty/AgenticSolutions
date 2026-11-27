@@ -17,7 +17,8 @@ LIVE_ROUTES = {"collaboration/single-agent", "memory/session",
 
 
 def _settings() -> Settings:
-    return Settings(session_secret="test-secret", offline_latency_scale=0, checkpoint_db=":memory:")
+    return Settings(session_secret="test-secret", offline_latency_scale=0, checkpoint_db=":memory:",
+                    erp_db=":memory:")
 
 
 def test_catalog_listing_shape_and_order(client):
@@ -43,10 +44,11 @@ def test_page_for_live_pattern(client):
     assert page["category"] == {"id": "governance", "name": "Governance"}
     assert page["name"] == "Approval"
     assert page["status"] == "live"
-    assert page["demo"] == "human_in_loop"
-    assert page["demo_title"] == PATTERNS["human_in_loop"].title
+    assert page["demo"] == "approval"
+    assert page["demo_title"] == PATTERNS["approval"].title
     assert page["explanation_md"].startswith("# Approval")
-    assert "ask" in {n["id"] for n in page["topology"]["nodes"]}
+    assert {n["id"] for n in page["topology"]["nodes"]} >= {
+        "ask", "agent", "tools", "policy", "approval", "submit_po"}
     assert (page["prev"], page["next"]) == ("governance/guardrails", "governance/audit")
 
 

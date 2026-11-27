@@ -788,6 +788,138 @@ h3, .purpose-body h2 {
 .chip-label { flex: none; font-family: var(--font-display); font-weight: 600; }
 .chip-detail { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* ---------- The approval card (Approval spec §5.3) ----------
+   A paper sheet inside the console. Approve is the only amber in view (Send
+   steps down to an outline while the card is pending); the focus ring is ink
+   (the console's `.sheet` rule); the lines table scrolls inside the card. */
+
+.approval-card {
+  align-self: stretch;
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px 16px;
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-top: 3px solid var(--navy);
+  border-radius: 2px;
+  box-shadow: var(--sheet-edge);
+}
+.approval-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 12px; }
+.approval-title { margin: 0; font-size: var(--step-1); line-height: 1.2; }
+.approval-title:focus { outline: none; }
+.approval-title:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.approval-ref { margin: 0; font-family: var(--font-code); font-size: 0.8125rem; color: var(--muted-ink); }
+.approval-note {
+  justify-self: start;
+  margin: 0;
+  padding: 1px 8px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+}
+.approval-muted { color: var(--muted-ink); }
+
+.approval-table { min-width: 0; overflow-x: auto; border: 1px solid var(--rule); border-radius: 2px; }
+.approval-table table { width: 100%; min-width: 24rem; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.approval-table th, .approval-table td { padding: 6px 10px; text-align: left; vertical-align: baseline; }
+.approval-table thead th {
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--muted-ink);
+  background: var(--paper-sunk);
+  border-bottom: 1px solid var(--rule);
+}
+.approval-table tbody tr + tr > * { border-top: 1px solid var(--rule); }
+.approval-table tfoot > tr > * { font-weight: 700; border-top: 1.5px solid var(--ink); }
+.approval-table .num { text-align: right; white-space: nowrap; }
+/* While quantities are edited, the quoted prices and totals are stale: muted,
+   struck through, and labelled until the re-quote arrives. */
+.is-editing .approval-quoted { color: var(--muted-ink); text-decoration: line-through; }
+.approval-table tfoot > tr.approval-stale > * {
+  padding-top: 0;
+  font-weight: 400;
+  font-style: italic;
+  color: var(--muted-ink);
+  border-top: 0;
+}
+.approval-stale { color: var(--muted-ink); font-style: italic; }
+.approval-stale[hidden] { display: none; }
+.approval-item { font-weight: 400; }
+.approval-name { display: block; }
+.approval-sku { display: block; font-family: var(--font-code); font-size: 0.8125rem; color: var(--muted-ink); }
+.approval-qty-input {
+  width: 5.5em;
+  padding: 2px 6px;
+  font: inherit;
+  text-align: right;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+}
+.approval-qty-input:focus-visible { outline-offset: 0; }
+
+.approval-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px 16px;
+  margin: 0;
+}
+.approval-facts dt { font-family: var(--font-display); font-weight: 600; color: var(--muted-ink); }
+.approval-facts dd { margin: 0; overflow-wrap: anywhere; }
+.approval-warn, .approval-problem {
+  margin: 0;
+  padding: 6px 10px;
+  color: var(--signal-red);
+  font-weight: 600;
+  border-left: 3px solid var(--signal-red);
+  background: var(--paper);
+}
+
+.approval-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.approval-panel {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--paper-sunk);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+}
+.approval-panel[hidden], .approval-problem[hidden], .approval-qty-input[hidden], .approval-qty[hidden] { display: none; }
+.approval-panel > p { margin: 0; }
+.approval-label { font-family: var(--font-display); font-weight: 600; }
+.approval-reason {
+  width: 100%;
+  min-height: 52px;
+  padding: 6px 8px;
+  resize: vertical;
+  font: inherit;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+}
+.approval-reason:focus-visible { outline-offset: 0; }
+.btn[aria-expanded="true"] { background: var(--paper-sunk); }
+
+/* The visitor's decision, on their side of the conversation. */
+.decision-note {
+  align-self: flex-end;
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  color: var(--muted-ink);
+}
+.decision-label { font-family: var(--font-display); font-weight: 600; color: var(--ink); }
+
+@media (max-width: 699px) {
+  .approval-card { padding: 12px; gap: 10px; }
+  .approval-facts { column-gap: 12px; }
+}
+
 .sample-chip {
   padding: 4px 10px;
   font: inherit;

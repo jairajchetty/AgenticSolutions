@@ -7,9 +7,10 @@ this" section suggests, has its own rule; anything else falls through to the
 pattern's fallback reply.
 """
 
+import json
 import re
 
-from langchain_core.messages import BaseMessage
+from langchain_core.messages import AIMessage, BaseMessage
 
 from agentic_solutions.web.offline.model import Rule, Script
 
@@ -120,28 +121,124 @@ GUARDRAIL = Script(
                        "a known attack, the refuse node would have answered instead."),
 )
 
-HUMAN_IN_LOOP = Script(
+# ------------------------------------------------------------------ approval
+#
+# The approval agent always calls a tool-bound model, so these rules are kind
+# "tools". The ERP is real; only the model's choices are scripted. Each call
+# reads the tool results so far in this turn and makes the next step:
+# search -> budget -> quote -> draft -> propose_order. After propose_order is
+# answered (a reject, an ERP refusal, an expired draft) it explains in text.
+
+APPROVAL_SAMPLES = (
+    "Order 12 laptops for the Cape Town office under CT-OPS",
+    "Order 3 keyboards for CT-OPS",
+    "Order 40 monitors for JHB-FIN",
+)
+
+# An order must start the message ("Order 3 ...", "Please buy 3 ..."), so
+# "Don't order ...", "reorder ..." and questions about an order never place one.
+_ORDER = re.compile(
+    r"\s*(?:please\s+)?(?:order|buy)\s+(\d+)\s+(.+?)\s+(?:for|under)\s+.*?\b(CT-OPS|JHB-FIN|DBN-LOG|HQ-IT)\b",
+    re.IGNORECASE)
+_NEGATION = re.compile(r"\b(?:don'?t|do\s+not|never|not|cancel|stop)\b", re.IGNORECASE)
+
+
+def _find_order(text: str) -> re.Match | None:
+    """The order in this message, or None if it does not start with one or says not to."""
+    if _NEGATION.search(text.replace("\u2019", "'")):
+        return None
+    return _ORDER.match(text)
+
+
+def _singular(word: str) -> str:
+    """Drop a simple plural: "laptops" -> "laptop". Short words and "-ss" words stay."""
+    w = word.lower()
+    return w[:-1] if len(w) > 3 and w.endswith("s") and not w.endswith("ss") else w
+
+
+def _call(name: str, **args) -> AIMessage:
+    return AIMessage(content="", tool_calls=[{"name": name, "args": args, "id": "scripted"}])
+
+
+def _this_turn(messages: list[BaseMessage]) -> tuple[str, list[BaseMessage]]:
+    """The latest human text and the messages after it."""
+    for i in range(len(messages) - 1, -1, -1):
+        if messages[i].type == "human":
+            return _text_of(messages[i]), messages[i + 1:]
+    return "", []
+
+
+def _text_of(message: BaseMessage) -> str:
+    return message.content if isinstance(message.content, str) else str(message.content)
+
+
+def _explain_outcome(result: str) -> str:
+    """Plain words for whatever answered propose_order, and a next step."""
+    if result.startswith("The approver rejected this order."):
+        return (f"{result} Nothing was ordered. Tell me what to change, for example fewer units "
+                "or another cost centre, and I'll draft a new requisition.")
+    refused = "The ERP refused the order: "
+    if result.startswith(refused):
+        return (f"The ERP refused the order, so nothing was ordered. Its reason: "
+                f"{result[len(refused):]} Try a smaller quantity, or a cost centre with more "
+                "budget left, and I'll draft it again.")
+    return (f"{result} Nothing new was ordered. Send the order again and I'll draft a fresh "
+            "requisition.")
+
+
+def _order_step(messages: list[BaseMessage]) -> str | AIMessage:
+    human, turn = _this_turn(messages)
+    found = _find_order(human)
+    if not found:
+        return _approval_fallback(messages)
+    qty, item, cc = int(found.group(1)), found.group(2), found.group(3).upper()
+    query = " ".join(_singular(w) for w in item.split())
+    results = {m.name: _text_of(m) for m in turn if m.type == "tool"}
+    last = next((m for m in reversed(turn) if m.type == "tool"), None)
+    if last is None:
+        return _call("search_catalogue", query=query)
+    content = _text_of(last)
+    if last.name == "propose_order":
+        return _explain_outcome(content)
+    if content.startswith("Error") or not content.startswith(("{", "[")):
+        return f"I couldn't finish drafting that order: {content} Nothing was ordered."
+    if last.name == "search_catalogue":
+        if not json.loads(content):
+            return (f"I couldn't find \"{query}\" in the catalogue, so nothing was drafted. "
+                    "Try laptops, keyboards or monitors.")
+        return _call("check_budget", cost_centre=cc)
+    if last.name == "check_budget":
+        sku = json.loads(results["search_catalogue"])[0]["sku"]
+        return _call("get_price_quote", sku=sku, quantity=qty)
+    if last.name == "get_price_quote":
+        return _call("create_requisition", cost_centre=cc,
+                     lines=[{"quote_id": json.loads(content)["quote_id"]}], justification=human)
+    if last.name == "create_requisition":
+        req = json.loads(content)
+        return _call("propose_order", req_id=req["req_id"],
+                     summary=f"{qty} x {query} for {cc}")
+    return "I've done what I can for this order. Nothing more was changed."
+
+
+def _approval_fallback(_messages: list[BaseMessage]) -> str:
+    listed = "; ".join(f'"{s}"' for s in APPROVAL_SAMPLES)
+    return _fallback(
+        "I'm a procurement assistant: I can draft a purchase order on the mock ERP and propose "
+        "it, but a policy or you must approve it before anything is ordered. Ask in the form "
+        "\"Order <quantity> <item> for <cost centre>\", with a cost centre of CT-OPS, JHB-FIN, "
+        f"DBN-LOG or HQ-IT. Try one of: {listed}.")
+
+
+APPROVAL = Script(
     rules=(
-        Rule("interrupt",
-             "interrupt() pauses a running graph and hands a payload to the caller. The "
-             "graph's state is saved by the checkpointer, and nothing runs until someone "
-             "resumes it, so waiting costs no compute."),
-        Rule("checkpointer",
-             "A checkpointer saves the graph's state after every step, keyed by thread id. "
-             "That is what lets a paused graph survive a page reload or a server restart and "
-             "continue exactly where it stopped."),
-        Rule("resume",
-             "To resume, you call the graph again on the same thread with Command(resume=value). "
-             "The paused interrupt() call returns that value, and the node carries on from "
-             "that point."),
+        Rule(lambda text: bool(_find_order(text)), _order_step, kind="tools"),
     ),
-    fallback=_fallback("The graph is paused at the ask node, waiting for a human. Your message "
-                       "resumed it, the model replied, and it paused again."),
+    fallback=_approval_fallback,
 )
 
 SCRIPTS: dict[str, Script] = {
     "qa": QA,
     "chat_loop": CHAT_LOOP,
     "guardrail": GUARDRAIL,
-    "human_in_loop": HUMAN_IN_LOOP,
+    "approval": APPROVAL,
 }

@@ -1,7 +1,7 @@
 # Guardrails
 
 ## What it is
-An automatic screen placed on the path into or out of the model. Each input (or output) is checked against a policy before it moves on; anything that fails is blocked and met with a fixed refusal. A blocked input never reaches the model, and the refusal never depends on the model an attacker is trying to steer. A typical form screens each user turn for prompt injection before the model sees it.
+An automatic safety check on what goes into, or comes out of, the model. Each message is checked against a set of rules before it moves on; if it fails, it is blocked and the user gets a fixed refusal. A typical use is catching attempts to trick the model, such as "ignore your instructions and…", before the model ever sees them.
 
 ## When to use it
 - Assistants exposed to untrusted users, where prompt injection or data extraction is a real risk.

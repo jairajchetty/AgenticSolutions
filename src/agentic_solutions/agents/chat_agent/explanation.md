@@ -1,7 +1,7 @@
 # Session
 
 ## What it is
-A conversation that keeps going. The system takes a turn from the user, replies, and waits for the next turn until the user ends the session. Every turn is kept in the session's message history, so the model sees the whole conversation each time it replies and follow-up questions make sense.
+A conversation that remembers what was said. Each time you send a message, the agent sees the whole conversation so far, so a follow-up such as "and what about the second one?" makes sense. The conversation carries on until you end it.
 
 ## When to use it
 - Chat assistants and support bots, where follow-ups depend on what was said earlier.

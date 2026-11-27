@@ -59,7 +59,7 @@ def test_demo_folder_and_crosslist_values():
     got = {p.route: (p.demo, p.folder, p.crosslist_of) for k in c.CATALOG for p in k.patterns}
     assert got["cognitive/react"] == ("react", "react_agent", None)
     assert got["cognitive/planning"] == ("plan_execute", "plan_execute_agent", None)
-    assert got["governance/approval"] == ("human_in_loop", "interrupt_chat_agent", None)
+    assert got["governance/approval"] == ("approval", "approval_agent", None)
     assert got["execution/tool-use"] == (None, None, "cognitive/react")
     assert got["governance/review"] == (None, "review_agent", None)
     assert sum(1 for v in got.values() if v[2]) == 1
@@ -84,3 +84,11 @@ def test_neighbours_wrap_within_category():
 
 def test_unknown_route_is_none():
     assert c.entry("memory/nope") is None and c.entry("nonsense") is None
+
+
+def test_catalog_approval_points_at_approval_demo():
+    approval = c.entry("governance/approval")
+    assert (approval.demo, approval.folder) == ("approval", "approval_agent")
+    assert approval.aliases == ('human-in-the-loop', 'HITL', 'interrupt', 'sign-off')
+    assert c.status(approval, PATTERNS) == "live"
+    assert "human_in_loop" not in PATTERNS

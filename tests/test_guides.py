@@ -85,14 +85,15 @@ def node_topology(folder):
 
     from agentic_solutions.web.registry import PATTERNS, BuildContext, offline_factory
     from agentic_solutions.web.topology import graph_topology
-    from fakes import make_guard
+    from fakes import UnreachableErp, make_guard, no_token
 
     if folder in SKELETONS:
         mod = importlib.import_module(f"agentic_solutions.agents.{folder}.graph")
         return graph_topology(mod.build_skeleton())
     for pid, spec in PATTERNS.items():
         if spec.explanation_path.parent.name == folder:
-            ctx = BuildContext(offline_factory(pid, 0), InMemorySaver(), make_guard())
+            ctx = BuildContext(offline_factory(pid, 0), InMemorySaver(), make_guard(),
+                               erp=UnreachableErp(), issue_token=no_token)
             return graph_topology(spec.build(ctx))
     raise AssertionError(f"no graph for {folder}")
 
@@ -146,7 +147,7 @@ def test_guide_only_h1_is_taxonomy_name():
 DIVIDING: dict[str, set[str]] = {
     "qa_agent": {"collaboration/supervisor", "collaboration/swarm", "collaboration/hierarchy"},
     "chat_agent": {"memory/episodic"},
-    "interrupt_chat_agent": {"governance/review"},
+    "approval_agent": {"governance/review"},
     "secure_chat_agent": {"governance/review"},
     "react_agent": {"execution/tool-use", "execution/autonomous"},
     "reflection_agent": {"governance/review"},
