@@ -236,9 +236,116 @@ APPROVAL = Script(
     fallback=_approval_fallback,
 )
 
+# ------------------------------------------------------------------ semantic
+#
+# The library is real; only the model's choices are scripted. Each call reads
+# this turn's tool results: search first (a fixed query for each sample), then,
+# for the end of the poem, read the last lines of Book XII. The answer quotes a
+# line from a passage the tools returned and cites that passage's own Book and
+# lines, so its citations are real whatever the index ranked first.
+
+SEMANTIC_SAMPLES = (
+    "What does Satan mean by 'Better to reign in Hell'?",
+    "What does Mammon propose in the council in Hell?",
+    "How does the poem end?",
+)
+_SEMANTIC_QUERIES = {
+    SEMANTIC_SAMPLES[0]: "Better to reign in Hell than serve in Heaven",
+    SEMANTIC_SAMPLES[1]: "Mammon speaks in the council",
+    SEMANTIC_SAMPLES[2]: "the end of the poem: Adam and Eve leave Eden",
+}
+_END_OF_POEM = re.compile(r"\b(?:poem|book|story)\s+end\b|\bend\s+of\s+the\s+(?:poem|book|story)\b", re.IGNORECASE)
+_SEMANTIC_STOP = {"about", "after", "before", "could", "does", "doesn", "their", "there", "these", "those",
+                  "what", "when", "where", "which", "while", "would", "paradise", "poem", "milton", "propose"}
+
+
+def _content_words(text: str) -> set[str]:
+    """Words of 5+ letters that carry meaning, so "eat" or "the" never count as a match."""
+    return {w for w in re.findall(r"[a-z]+", text.lower()) if len(w) >= 5 and w not in _SEMANTIC_STOP}
+
+
+def _cite(p: dict) -> str:
+    return f"(Book {p['book']}, {p['start_line']}–{p['end_line']})"
+
+
+def _semantic_step(messages: list[BaseMessage]) -> str | AIMessage:
+    human, turn = _this_turn(messages)
+    results = [(m.name, _text_of(m)) for m in turn if m.type == "tool"]
+    query = _SEMANTIC_QUERIES.get(human.strip(), human.strip())
+    if not results:
+        return _call("search_book", query=query, limit=3)
+    end_of_poem = bool(_END_OF_POEM.search(human))
+    if end_of_poem and not any(name == "read_passage" for name, _ in results):
+        last = _book_length("XII")
+        return _call("read_passage", book="XII", start_line=max(1, last - 19), end_line=last)
+    name, text = results[-1]
+    try:
+        data = json.loads(text)
+    except ValueError:
+        return f"The library could not answer: {text} {OFFLINE_NOTE}"
+    if name == "read_passage":
+        lines = data["text"].splitlines()
+        return (f"The poem ends as Adam and Eve leave Eden together:\n\n“{lines[-2]}”\n“{lines[-1]}” "
+                f"{_cite(data)}\n\nI read the last lines of Book XII to answer this. {OFFLINE_NOTE}")
+    wanted = _content_words(human)
+    unknown = sorted(w for w in wanted if not _in_poem(w))
+    hits = [] if unknown else [h for h in data if wanted & _content_words(h["text"])]
+    if not hits:
+        return (f"The passages I found don't cover this. I searched for \"{query}\" and none of the "
+                f"passages mentioned it. {OFFLINE_NOTE}")
+    parts, quoted = [], set()
+    for h in hits:
+        # Overlapping passages can share a line: quote each line once.
+        lines = [ln.strip() for ln in h["text"].splitlines() if ln.strip() not in quoted]
+        line = next((ln for ln in lines if wanted & _content_words(ln)), None)
+        if line is None:
+            continue
+        quoted.add(line)
+        parts.append(f"“{line}” {_cite(h)}")
+        if len(parts) == 2:
+            break
+    if not parts:
+        return (f"The passages I found don't cover this. I searched for \"{query}\" and none of the "
+                f"passages mentioned it. {OFFLINE_NOTE}")
+    return "From the passages I found:\n\n" + "\n\n".join(parts) + f"\n\n{OFFLINE_NOTE}"
+
+
+_BOOK_LENGTHS: dict[str, int] = {}
+_POEM_WORDS: set[str] = set()
+
+
+def _in_poem(word: str) -> bool:
+    """Whether the poem uses the word (or its singular). A question about something the poem
+    never mentions ("smartphones") cannot be answered from it, whatever else matches."""
+    if not _POEM_WORDS:
+        from agentic_solutions.mcp_servers.library.text import TEXT_PATH
+
+        _POEM_WORDS.update(re.findall(r"[a-z]+", TEXT_PATH.read_text(encoding="utf-8").lower()))
+    return word in _POEM_WORDS or (word.endswith("s") and word[:-1] in _POEM_WORDS)
+
+
+def _book_length(numeral: str) -> int:
+    if not _BOOK_LENGTHS:
+        from agentic_solutions.mcp_servers.library.text import TEXT_PATH, parse_text
+
+        _BOOK_LENGTHS.update({b.numeral: len(b.lines) for b in parse_text(TEXT_PATH.read_text(encoding="utf-8"))})
+    return _BOOK_LENGTHS[numeral]
+
+
+def _semantic_fallback(_messages: list[BaseMessage]) -> str:
+    listed = "; ".join(f'"{s}"' for s in SEMANTIC_SAMPLES)
+    return _fallback(f"I answer questions about Paradise Lost from passages I search for. Try: {listed}.")
+
+
+SEMANTIC = Script(
+    rules=(Rule(match=lambda _text: True, reply=_semantic_step, kind="tools"),),
+    fallback=_semantic_fallback,
+)
+
 SCRIPTS: dict[str, Script] = {
     "qa": QA,
     "chat_loop": CHAT_LOOP,
     "guardrail": GUARDRAIL,
     "approval": APPROVAL,
+    "semantic": SEMANTIC,
 }

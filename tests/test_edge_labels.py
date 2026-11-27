@@ -4,14 +4,15 @@ from langgraph.checkpoint.memory import InMemorySaver
 from agentic_solutions.agents.interrupt_chat_agent.graph import build_graph
 from agentic_solutions.web.registry import PATTERNS, BuildContext, offline_factory, pattern_topology
 from agentic_solutions.web.topology import graph_topology
-from fakes import UnreachableErp, make_guard, no_token
+from fakes import NoLibrary, UnreachableErp, make_guard, no_token
 
 MAX_SHORT = 16  # characters: longer labels crowd the drawing
 
 
 def ctx(pid, limit=5000):
     return BuildContext(llm_factory=offline_factory(pid, latency_scale=0), checkpointer=InMemorySaver(),
-                        guard=make_guard(), erp=UnreachableErp(), issue_token=no_token, auto_limit_zar=limit)
+                        guard=make_guard(), erp=UnreachableErp(), issue_token=no_token, auto_limit_zar=limit,
+                        library=NoLibrary())
 
 
 def topology(pid, limit=5000):

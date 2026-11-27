@@ -12,7 +12,7 @@ from agentic_solutions.web.offline.scripts import SCRIPTS
 from agentic_solutions.web.registry import PATTERNS
 from fakes import make_guard
 
-LIVE_ROUTES = {"collaboration/single-agent", "memory/session",
+LIVE_ROUTES = {"collaboration/single-agent", "memory/session", "memory/semantic",
                "governance/guardrails", "governance/approval"}
 
 
@@ -31,7 +31,7 @@ def test_catalog_listing_shape_and_order(client):
     assert set(rows[0]) == {"id", "name", "description", "aliases", "status", "route", "target", "composite", "builds_on"}
     statuses = {p["route"]: p["status"] for p in rows}
     assert {r for r, s in statuses.items() if s == "live"} == LIVE_ROUTES
-    assert sum(s == "guide" for s in statuses.values()) == 17
+    assert sum(s == "guide" for s in statuses.values()) == 16
     assert statuses["execution/tool-use"] == "guide"
     tool_use = next(p for p in rows if p["route"] == "execution/tool-use")
     assert tool_use["target"] == "cognitive/react"

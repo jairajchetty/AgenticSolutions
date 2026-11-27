@@ -25,6 +25,7 @@ class Settings:
     erp_auto_approve_limit_zar: float = 5000
     erp_db: str = "./data/erp.sqlite"
     erp_tenant_ttl_hours: float = 168
+    library_dir: str = "./data/library"  # the Semantic demo's Qdrant index and embedding models
     # Where the server listens (also read by ``python -m agentic_solutions.web``).
     host: str = "127.0.0.1"
     port: int = 8000
@@ -51,6 +52,7 @@ class Settings:
                 env.get("ERP_AUTO_APPROVE_LIMIT_ZAR") or cls.erp_auto_approve_limit_zar),
             erp_db=env.get("ERP_DB") or cls.erp_db,
             erp_tenant_ttl_hours=float(env.get("ERP_TENANT_TTL_HOURS") or cls.erp_tenant_ttl_hours),
+            library_dir=env.get("LIBRARY_DIR") or cls.library_dir,
             host=env.get("HOST") or cls.host,
             port=int(env.get("PORT") or cls.port),
             openrouter_zdr=(env.get("OPENROUTER_ZDR") or "").strip().lower() in ("1", "true", "yes"),

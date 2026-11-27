@@ -48,39 +48,44 @@ Flow:
 ## How this Studio implements it
 
 ### Mapping
-This demo is a Guide-only skeleton: the nodes are placeholders that return `{}`, but the wiring is real and the diagram is drawn from it. It draws the corrective variant, with the grading loop.
-
-- **Retriever** → `retrieve`: would fetch passages for `query` into `documents`.
-- **Grader** → `grade`: would judge the passages; its router `route_after_grade` sends control to `answer` or `rewrite_query`, and is fixed to `answer`.
-- **Query rewriter** → `rewrite_query`: would rephrase `query`, then loop back to `retrieve`.
-- **Agent** → `answer`: would answer `question` from `documents`, then go to `__end__`.
-- **Index** → not drawn; a live version would search a document store. There is no retry counter in state yet, which a live version needs.
+- **Index** → the `library` MCP server: John Milton's *Paradise Lost*, split into overlapping passages of about 20 lines within each Book. Each passage is stored in Qdrant with a dense embedding (`bge-small-en-v1.5`) and a BM25 keyword vector, both computed locally.
+- **Retriever** → the `search_book` tool: hybrid search that fuses the dense and keyword results with reciprocal rank fusion. `read_passage` reads lines by position, for questions such as how the poem ends.
+- **Agent** → `agent`: the model. It is told to answer only from the passages and to cite each claim's Book and line range. Line numbers follow this edition.
+- **Tools** → `tools`: runs the model's calls on the library server over MCP.
+- **Between questions** → `ask`: waits for your next message.
+- **Grader and query rewriter** → not separate nodes. The agent searches again with other words when the passages miss, up to 6 tool rounds per question.
 
 ### Framework concepts
-- **Conditional edges**: `route_after_grade` is annotated `Literal["answer", "rewrite_query"]`, so both branches appear in the diagram.
-- **Cycle**: the edge from `rewrite_query` back to `retrieve` lets the graph retry.
-- **State**: holds `question`, `query`, `documents` and `answer`; a counter field would let the router give up.
-- **Store search**: `langgraph.store.base.BaseStore` supports similarity search when it is configured with an embedding index; a separate vector database is the other usual choice.
+- **Forced first search:** the first model call of each question is bound with `tool_choice="search_book"`. If a model answers in text or calls another tool instead, `agent` replaces that reply with the search.
+- **Prebuilt tool node:** `tools` is LangGraph's `ToolNode`. It runs the model's tool calls and returns each result as a message.
+- **`Command(goto=...)` routing:** `ask` and `agent` return a `Command` that names the next node.
+- **MCP client:** the library server runs in-process over MCP's in-memory transport. The same server runs on its own with `python -m agentic_solutions.mcp_servers.library`.
+- **Index lifecycle:** the index is built on the first start (about a minute, including the model download) and reused while the text, chunking and models are unchanged.
 
 ### Key code
+How `agent` makes the first step of every question a search:
 ```python
-builder = StateGraph(State)
-builder.add_node("retrieve", retrieve)
-builder.add_node("grade", grade)
-builder.add_node("rewrite_query", rewrite_query)
-builder.add_node("answer", answer)
-
-builder.add_edge(START, "retrieve")
-builder.add_edge("retrieve", "grade")
-builder.add_conditional_edges("grade", route_after_grade)
-builder.add_edge("rewrite_query", "retrieve")
-builder.add_edge("answer", END)
-
-return builder.compile()
+        if rounds == 0:
+            llm = llm.bind_tools(tools, tool_choice=FORCED_TOOL)  # the first step is always a search
+        elif rounds >= MAX_TOOL_ROUNDS:
+            llm = llm.bind_tools(tools, tool_choice=NO_TOOLS)
+        else:
+            llm = llm.bind_tools(tools)
+        reply = declined_or(await llm.ainvoke([SystemMessage(SYSTEM_PROMPT), *state["messages"]], config))
+        calls = reply.tool_calls
+        if rounds >= MAX_TOOL_ROUNDS and calls:
+            # Defence in depth: a model that ignores tool_choice still cannot pass the cap.
+            reply = AIMessage(reply.text.strip() or STEP_LIMIT)
+            calls = []
+        if rounds == 0 and not any(c["name"] == FORCED_TOOL for c in calls):
+            # A model that ignored the forced choice: search with the question, and drop its reply.
+            reply = AIMessage("", tool_calls=[{"name": FORCED_TOOL, "args": {"query": _question(state)},
+                                               "id": f"forced-search-{uuid4().hex[:12]}"}])
+            calls = reply.tool_calls
 ```
 
 ### Try this
-- Which state field would `rewrite_query` change so that the next `retrieve` searches differently?
-- Which node does `grade` send the run to when the passages are not relevant?
-- Where would you add a retry limit: in a node, in `route_after_grade`, or both?
-- Compare with [[memory/session]], the live pattern: it remembers what was said in this conversation. Where does Semantic's knowledge come from instead?
+- Send `What does Satan mean by 'Better to reign in Hell'?`. The first step is `search_book`, and the answer quotes Book I with its line range.
+- Send `How does the poem end?`. A passage search cannot know what comes last, so the agent calls `read_passage` on the end of Book XII.
+- Send `What did Milton eat for breakfast?`. The search finds nothing relevant, and the agent says the passages don't cover it instead of answering from memory.
+- Compare with [[memory/knowledge-graph]]: which question about Satan and Beelzebub would need relations between entities rather than passages?

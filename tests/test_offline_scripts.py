@@ -14,7 +14,7 @@ from agentic_solutions.common.approval_tokens import issue
 from agentic_solutions.mcp_servers.erp.config import ErpSettings
 from agentic_solutions.mcp_servers.erp.server import build_server
 from agentic_solutions.mcp_servers.erp.store import ErpStore
-from fakes import UnreachableErp, make_guard, no_token
+from fakes import NoLibrary, UnreachableErp, make_guard, no_token
 from guide_format import try_this_text
 
 # Inputs a Guide may name that deliberately never reach a scripted rule.
@@ -28,8 +28,8 @@ STATE_KEYS = {"messages", "threat", "refusal"}
 
 def model(pattern_id):
     m = ScriptedChatModel(script=SCRIPTS[pattern_id], latency=(0, 0), tokens_per_second=0)
-    # The approval agent always calls a tool-bound model, so its rules are kind "tools".
-    return m.bind_tools([]) if pattern_id == "approval" else m
+    # The approval and semantic agents always call a tool-bound model, so their rules are kind "tools".
+    return m.bind_tools([]) if pattern_id in ("approval", "semantic") else m
 
 
 def try_this_inputs(spec):
@@ -38,7 +38,7 @@ def try_this_inputs(spec):
     md = spec.explanation_path.read_text(encoding="utf-8")
     section = try_this_text(md)
     graph = spec.build(BuildContext(offline_factory(spec.id, 0), InMemorySaver(), make_guard(),
-                                    erp=UnreachableErp(), issue_token=no_token))
+                                    erp=UnreachableErp(), issue_token=no_token, library=NoLibrary()))
     names = set(graph.get_graph().nodes) | STATE_KEYS
     return [s for s in re.findall(r"`([^`]+)`", section) if s not in names]
 
