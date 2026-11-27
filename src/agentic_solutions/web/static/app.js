@@ -11,8 +11,10 @@
 import {
   ApiError, createThread, getCatalog, getCatalogPage, getPattern, getSession, getState, streamRun,
 } from "./api.js";
-import { renderGuide, renderInlineCode } from "./guide.js";
+import { renderGuide, renderInlineCode, renderPurpose, splitPurpose } from "./guide.js";
 import { renderHome } from "./catalog.js";
+import { ABOUT, bindContact } from "./about.js";
+import { buildHero, playHero } from "./hero.js";
 import { createGraph } from "./graph.js";
 import { createTrace } from "./trace.js";
 import { createConsole } from "./console.js";
@@ -92,6 +94,7 @@ async function showHome({ notice = null } = {}) {
   leavePattern();
   showView("home");
   setNotice(notice);
+  playHero($("hero-graph"));
   renderCrumbs(null);
   document.title = "Catalog · Agentic Patterns Studio";
   const category = pendingCategory;
@@ -109,6 +112,7 @@ async function showHome({ notice = null } = {}) {
   if (token !== loadToken) return;
   const home = renderHome($("home-body"), catalog, {
     onOpen: (route) => { location.hash = formatHash(route); },
+    searchEl: $("home-search"),
   });
   if (category) {
     home.focusCategory(category);
@@ -191,17 +195,31 @@ function renderPageChrome(page) {
   document.title = `${listed} · ${page.category.name} · Agentic Patterns Studio`;
 }
 
+// The Guide, split once (Blueprint spec §9.4): "What it is" and "When to use
+// it" go in the purpose sheet under the h1, the rest in the sheet below the
+// bench. A guide missing either heading leaves the purpose sheet with just
+// the h1 and renders in full below (Review Focus 5).
+function renderPageGuide(page) {
+  const { purpose, rest } = splitPurpose(page.explanation_md);
+  const box = $("purpose-body");
+  if (purpose !== "") renderPurpose(box, purpose, { linkFor: nameFor });
+  else box.replaceChildren();
+  box.hidden = purpose === "";
+  renderGuide($("guide-body"), rest, { linkFor: nameFor });
+  $("guide-rest").hidden = rest.trim() === "";
+}
+
 // A live demo: the M1 workbench, unchanged, for the registry pattern `demo`.
 function openLivePage(page, detail) {
   showView("pattern", { bench: true });
   state.pattern = detail;
   state.threadId = null;
   renderPatternChrome(detail);
-  renderGuide($("guide-body"), page.explanation_md, { linkFor: nameFor });
+  renderPageGuide(page);
   document.dispatchEvent(new CustomEvent("pattern-change", { detail: { pattern: detail } }));
 }
 
-// A pattern with no demo yet (Catalog spec §4.3): the banner, its skeleton as
+// A pattern with no demo yet (Catalog spec §4.3): the note, its skeleton as
 // a static diagram, and the Guide. No thread and no run (Review Focus 5).
 let staticGraph = null;
 function showGuideOnly(page) {
@@ -209,7 +227,7 @@ function showGuideOnly(page) {
   state.pattern = null;
   state.threadId = null;
   staticGraph = createGraph($("guide-only-graph"), page.topology, { static: true });
-  renderGuide($("guide-only-body"), page.explanation_md, { linkFor: nameFor });
+  renderPageGuide(page);
 }
 
 // Leaving any pattern page: stop a live bench, drop a static diagram.
@@ -269,8 +287,19 @@ function route() {
   else selectRoute(where.route);
 }
 
+// The title block's copy lives in about.js, so it is edited in one place.
+function renderAbout() {
+  $("about-name").textContent = ABOUT.name;
+  $("footer-name").textContent = ABOUT.name;
+  $("about-role").textContent = ABOUT.role;
+  $("about-record").textContent = ABOUT.record;
+}
+
 async function start() {
   $("skip-link").addEventListener("click", skipToContent);
+  bindContact(document.body);
+  renderAbout();
+  buildHero($("hero-graph"));
   document.addEventListener("keydown", stepWithArrows);
   try {
     state.session = await getSession();

@@ -4,7 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Agentic Patterns Studio</title>
-  <meta name="color-scheme" content="light dark">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=Public+Sans:wght@400;600;700&display=swap">
   <link rel="stylesheet" href="/static/styles.css">
   <!-- Pinned CDN builds (no build step). They expose globals used by the modules. -->
   <script src="https://cdn.jsdelivr.net/npm/cytoscape@3.30.2/dist/cytoscape.min.js"></script>
@@ -33,32 +35,67 @@
   </header>
 
   <main id="main">
-    <!-- Catalog home (Catalog spec §4.2); catalog.js fills #home-body. -->
+    <!-- Landing (Blueprint spec §4.1): hero, title block, catalog sheet.
+         catalog.js fills #home-search and #home-body; hero.js draws #hero-graph;
+         app.js fills the title block from about.js. -->
     <section class="home" id="home" aria-labelledby="home-title" hidden>
-      <h1 class="view-title" id="home-title" tabindex="-1">Pattern catalog</h1>
       <p class="notice" id="home-notice" role="status" hidden></p>
+      <div class="hero">
+        <div class="hero-copy">
+          <h1 class="hero-title" id="home-title" tabindex="-1">Agent architectures, drawn to scale and running live.</h1>
+          <p class="hero-lede">Twenty-one agentic design patterns, each with the problem it solves, when to use it, and a working graph you can step through.</p>
+          <div class="home-search" id="home-search"></div>
+        </div>
+        <figure class="hero-figure">
+          <svg class="hero-graph" id="hero-graph" aria-hidden="true" focusable="false"></svg>
+          <figcaption class="visually-hidden">Diagram of the ReAct pattern's graph</figcaption>
+        </figure>
+      </div>
+
+      <section class="title-block" aria-labelledby="about-heading">
+        <h2 class="visually-hidden" id="about-heading">About the architect</h2>
+        <div class="tb-cell">
+          <p class="tb-label">Architect</p>
+          <p class="tb-name" id="about-name"></p>
+          <p class="tb-text" id="about-role"></p>
+        </div>
+        <div class="tb-cell">
+          <p class="tb-label">Record</p>
+          <p class="tb-text" id="about-record"></p>
+        </div>
+        <div class="tb-cell tb-contact">
+          <p class="tb-label">Contact</p>
+          <a class="btn-contact" href="#" data-contact rel="nofollow">Get in touch</a>
+          <span class="contact-reveal" data-contact-reveal hidden></span>
+        </div>
+      </section>
+
       <div class="home-body" id="home-body"></div>
     </section>
 
-    <!-- Pattern page (Catalog spec §4.3): the M1 workbench for a live demo, or
-         the Guide-only view for a pattern with no demo yet. -->
+    <!-- Pattern page (Blueprint spec §4.2): the purpose sheet first, then the
+         workbench (live demo) or the static diagram (Guide-only), then the
+         rest of the Guide. Paper sheets carry `.sheet`; the graph sits on navy. -->
     <div class="pattern-view" id="pattern-view" hidden>
-      <div class="page-head">
+      <section class="sheet purpose" id="purpose" aria-labelledby="page-title">
         <h1 class="view-title" id="page-title" tabindex="-1"></h1>
         <p class="page-note" id="page-note" hidden></p>
-      </div>
+        <!-- guide.js renderPurpose: .purpose-what and .purpose-when -->
+        <div class="purpose-body" id="purpose-body" hidden></div>
+      </section>
 
-      <!-- A pattern with no demo yet: banner, static diagram, Guide. No
+      <!-- A pattern with no demo yet: a note and the static diagram. No
            console and no timeline, so nothing here creates a thread or a run. -->
       <div class="guide-only" id="guide-only" hidden>
-        <p class="demo-banner" role="note">
-          <strong class="demo-banner-title">Live demo coming</strong>
-          <span>This pattern doesn't have a live demo yet. The diagram below is its graph; the explanation covers how it works.</span>
+        <p class="demo-line" role="note">
+          <span class="mark mark-guide" aria-hidden="true">○</span>
+          <strong class="demo-line-title">Live demo coming.</strong>
+          <span>This pattern doesn't have a live demo yet. The diagram below is its graph; the guide covers how it works.</span>
         </p>
-        <section class="panel diagram" aria-labelledby="diagram-title">
-          <header class="panel-head">
+        <section class="drawing diagram" aria-labelledby="diagram-title">
+          <header class="drawing-head">
             <h2 id="diagram-title">Graph</h2>
-            <p class="panel-sub">The pattern's LangGraph skeleton, not running</p>
+            <p class="drawing-sub">The pattern's LangGraph skeleton, not running</p>
           </header>
           <div class="trace-graph diagram-graph" id="guide-only-graph" role="img" aria-label="Diagram of the pattern's graph"></div>
           <ul class="graph-legend" aria-label="Legend">
@@ -66,19 +103,13 @@
             <li><span class="lg-dash" aria-hidden="true"></span>conditional edge (if)</li>
           </ul>
         </section>
-        <section class="panel guide" aria-labelledby="guide-only-title">
-          <header class="panel-head">
-            <h2 id="guide-only-title">Pattern guide</h2>
-          </header>
-          <div class="guide-body" id="guide-only-body"></div>
-        </section>
       </div>
 
       <div class="bench" id="bench" hidden>
-        <section class="panel trace" id="trace" aria-labelledby="trace-title">
-          <header class="panel-head">
+        <section class="drawing trace" id="trace" aria-labelledby="trace-title">
+          <header class="drawing-head">
             <h2 id="trace-title">Execution trace</h2>
-            <p class="panel-sub" id="trace-pattern"></p>
+            <p class="drawing-sub" id="trace-pattern"></p>
             <p class="trace-thread" id="trace-thread" hidden></p>
           </header>
           <div class="trace-graph" id="trace-graph" role="img" aria-label="Graph of the selected pattern"></div>
@@ -90,24 +121,25 @@
             <li><span class="lg-dash" aria-hidden="true"></span>conditional edge (if)</li>
             <li><span class="lg-count" aria-hidden="true">×2</span>times taken</li>
           </ul>
-          <div class="trace-lower">
-            <section class="trace-timeline" aria-labelledby="timeline-title">
-              <h3 id="timeline-title">Timeline</h3>
-              <ol class="timeline" id="trace-timeline" aria-live="polite">
-                <li class="empty-hint">Steps appear here as the graph runs.</li>
-              </ol>
-            </section>
-            <details class="trace-state" id="trace-state-box" open>
-              <summary>State</summary>
-              <div class="state-view" id="trace-state"></div>
-            </details>
-          </div>
         </section>
 
-        <section class="panel console" id="console" aria-labelledby="console-title">
-          <header class="panel-head">
+        <div class="sheet trace-lower">
+          <section class="trace-timeline" aria-labelledby="timeline-title">
+            <h3 id="timeline-title">Timeline</h3>
+            <ol class="timeline" id="trace-timeline" aria-live="polite">
+              <li class="empty-hint">Steps appear here as the graph runs.</li>
+            </ol>
+          </section>
+          <details class="trace-state" id="trace-state-box" open>
+            <summary>State</summary>
+            <div class="state-view" id="trace-state"></div>
+          </details>
+        </div>
+
+        <section class="sheet console" id="console" aria-labelledby="console-title">
+          <header class="sheet-head">
             <h2 id="console-title">Agent console</h2>
-            <p class="panel-sub" id="console-summary"></p>
+            <p class="sheet-sub" id="console-summary"></p>
           </header>
           <div class="console-messages" id="console-messages" aria-live="polite">
             <p class="empty-hint">Pick a sample or type a message to run the graph.</p>
@@ -123,18 +155,22 @@
             </div>
           </form>
         </section>
-
-        <section class="panel guide" id="guide" aria-labelledby="guide-title">
-          <header class="panel-head">
-            <h2 id="guide-title">Pattern guide</h2>
-          </header>
-          <div class="guide-body" id="guide-body">
-            <p class="empty-hint">Loading the guide…</p>
-          </div>
-        </section>
       </div>
+
+      <section class="sheet guide-rest" id="guide-rest" aria-labelledby="guide-title">
+        <header class="sheet-head">
+          <h2 id="guide-title">Pattern guide</h2>
+        </header>
+        <div class="guide-body" id="guide-body"></div>
+      </section>
     </div>
   </main>
+
+  <footer class="site-footer">
+    <p>Built by <span id="footer-name">Jairaj Chetty</span> with LangGraph and Claude. <a href="#" data-contact rel="nofollow">Get in touch</a>
+      <span class="contact-reveal" data-contact-reveal hidden></span>
+      <noscript>Email: jairajchetty at gmail dot com</noscript></p>
+  </footer>
 
   <div class="visually-hidden" id="announcer" aria-live="polite"></div>
 </body>

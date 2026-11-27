@@ -1,74 +1,41 @@
-/* Agentic Patterns Studio: a lab bench for watching agents run.
-   Cool aluminium bench, white instrument panels, one cobalt "signal" colour
-   for whatever is live. Node states also use amber (paused), red (error)
-   and green (done), always paired with an icon or label (spec §6). */
+/* Agentic Patterns Studio: Blueprint theme. One theme, no dark variant.
+   Navy drafting sheet, paper panels, blueprint-blue linework. Amber marks the
+   one active thing; red marks an error. */
 
 :root {
-  --bench: #e6eaec;
-  --panel: #fafbfb;
-  --panel-sunk: #f0f3f4;
-  --ink: #17212a;
-  --muted: #56636e;
-  --rule: #c5ced4;
-  --grid: #dde3e7;
-  --grid-major: #cdd5da;
-  --signal: #2557d6;
-  --signal-soft: #dfe7fb;
-  --on-signal: #ffffff;
-  --paused: #a96d12;
-  --error: #b3392a;
-  --done: #2c7550;
+  --navy: #0f2b46;
+  --line: #9cc7e8;
+  --paper: #f3f6f8;
+  --ink: #13202b;
+  --amber: #e2a33b;
+  --signal-red: #c2412d;
+  --muted-ink: #51606d;
 
-  --font-ui: "Inter Variable", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-ui: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-code: ui-monospace, "Cascadia Code", "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
 
-  --step--1: 0.8125rem;
-  --step-0: 0.9375rem;
-  --step-1: 1.0625rem;
-  --step-2: 1.3125rem;
+  --step-0: 1rem;
+  --step-1: 1.25rem;
+  --step-2: 1.5625rem;
+  --step-3: 1.9375rem;
+  --step-5: 3.0625rem;
 
-  --gap: 16px;
-  --radius-panel: 8px;
-  --radius-ctl: 5px;
+  --frame: 1600px;
+  --frame-pad: 32px;
+  --frame-rule: color-mix(in srgb, var(--line) 35%, transparent);
+
+  /* Derived from the palette above, never new colours. */
+  --paper-sunk: color-mix(in srgb, var(--paper) 90%, var(--line));  /* wells on a sheet */
+  --paper-tint: color-mix(in srgb, var(--paper) 72%, var(--line));  /* your own bubble */
+  --rule: color-mix(in srgb, var(--line) 60%, var(--paper));        /* hairlines on paper */
+  --rule-strong: color-mix(in srgb, var(--line) 45%, var(--muted-ink));
+  --grid: color-mix(in srgb, var(--line) 9%, transparent);
+  --sheet-edge: 0 2px 0 color-mix(in srgb, var(--navy) 55%, #000);  /* the one sheet shadow */
   color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bench: #12181d;
-    --panel: #1a2228;
-    --panel-sunk: #151c21;
-    --ink: #d9e1e6;
-    --muted: #8a99a4;
-    --rule: #2d3a43;
-    --grid: #1f282f;
-    --grid-major: #27323a;
-    --signal: #86a8ff;
-    --signal-soft: #22304f;
-    --on-signal: #0d1526;
-    --paused: #e2a646;
-    --error: #ec7f6d;
-    --done: #6fc79b;
-    color-scheme: dark;
-  }
-}
-:root[data-theme="dark"] {
-  --bench: #12181d;
-  --panel: #1a2228;
-  --panel-sunk: #151c21;
-  --ink: #d9e1e6;
-  --muted: #8a99a4;
-  --rule: #2d3a43;
-  --grid: #1f282f;
-  --grid-major: #27323a;
-  --signal: #86a8ff;
-  --signal-soft: #22304f;
-  --on-signal: #0d1526;
-  --paused: #e2a646;
-  --error: #ec7f6d;
-  --done: #6fc79b;
-  color-scheme: dark;
-}
+h1, h2, h3, .brand { font-family: var(--font-display); font-weight: 600; }
 
 *, *::before, *::after { box-sizing: border-box; }
 
@@ -76,7 +43,11 @@ html { -webkit-text-size-adjust: 100%; }
 
 body {
   margin: 0;
-  background: var(--bench);
+  background-color: var(--navy);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 24px 24px;
   color: var(--ink);
   font-family: var(--font-ui);
   font-size: var(--step-0);
@@ -86,10 +57,14 @@ body {
 code, pre, kbd { font-family: var(--font-code); font-size: 0.92em; }
 
 :focus-visible {
-  outline: 2px solid var(--signal);
+  outline: 2px solid var(--amber);
   outline-offset: 2px;
   border-radius: 3px;
 }
+/* Amber rings on the navy frame; ink rings on paper. Every paper surface on a
+   pattern page carries `.sheet` (bubbles, chips, cards and notices sit inside
+   one); the landing catalog is `.cat-sheet`. */
+:is(.sheet, .cat-sheet, .notice) :focus-visible { outline-color: var(--ink); }
 
 .visually-hidden {
   position: absolute !important;
@@ -103,14 +78,15 @@ code, pre, kbd { font-family: var(--font-code); font-size: 0.92em; }
   position: absolute;
   left: 16px; top: -48px;
   padding: 8px 12px;
-  background: var(--signal);
-  color: var(--on-signal);
-  border-radius: var(--radius-ctl);
+  font-weight: 600;
+  background: var(--paper);
+  color: var(--ink);
+  border-radius: 2px;
   z-index: 10;
 }
 .skip-link:focus { top: 8px; }
 
-/* ---------- Masthead: brand, breadcrumb, mode badge ---------- */
+/* ---------- Masthead: brand, breadcrumb, mode badge (on the navy frame) ---------- */
 
 .masthead {
   display: grid;
@@ -118,22 +94,21 @@ code, pre, kbd { font-family: var(--font-code); font-size: 0.92em; }
   grid-template-areas: "brand crumbs stepper mode";
   align-items: center;
   gap: 12px 24px;
-  padding: 12px var(--gap);
-  background: var(--panel);
-  border-bottom: 1px solid var(--rule);
+  padding: 14px var(--frame-pad);
+  color: var(--paper);
+  border-bottom: 1px solid var(--frame-rule);
 }
 
 .brand {
   grid-area: brand;
   margin: 0;
   font-size: var(--step-1);
-  font-weight: 650;
-  letter-spacing: -0.01em;
+  letter-spacing: 0.02em;
   white-space: nowrap;
 }
 
 .brand a { color: inherit; text-decoration: none; }
-.brand a:hover { color: var(--signal); }
+.brand a:hover { text-decoration: underline; text-underline-offset: 4px; }
 
 /* Catalog › Memory › Episodic: every crumb a link, the last one current. */
 .breadcrumbs { grid-area: crumbs; min-width: 0; }
@@ -145,24 +120,26 @@ code, pre, kbd { font-family: var(--font-code); font-size: 0.92em; }
   margin: 0;
   padding: 0;
   list-style: none;
-  font-size: var(--step--1);
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: var(--step-0);
 }
 .breadcrumbs li { display: inline-flex; align-items: baseline; min-width: 0; }
 .breadcrumbs li + li::before {
   content: "›" / "";
   padding: 0 8px;
-  color: var(--muted);
+  color: var(--line);
 }
 .breadcrumbs a {
-  color: var(--muted);
+  color: var(--line);
   text-decoration: none;
   border-radius: 3px;
 }
-.breadcrumbs a:hover { color: var(--signal); text-decoration: underline; }
-.breadcrumbs a[aria-current="page"] { color: var(--ink); font-weight: 650; }
+.breadcrumbs a:hover { color: var(--paper); text-decoration: underline; }
+.breadcrumbs a[aria-current="page"] { color: var(--paper); font-weight: 600; }
 
 .stepper { grid-area: stepper; display: inline-flex; gap: 4px; }
-.step {
+.masthead .step {
   display: inline-grid;
   place-items: center;
   min-width: 34px;
@@ -170,139 +147,205 @@ code, pre, kbd { font-family: var(--font-code); font-size: 0.92em; }
   text-decoration: none;
   font-size: var(--step-0);
   line-height: 1.2;
+  color: var(--line);
+  background: transparent;
+  border-color: var(--line);
 }
+.masthead .step:hover { color: var(--paper); background: transparent; border-color: var(--paper); }
 
 .mode {
   grid-area: mode;
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 10px;
-  border: 1px solid var(--rule);
+  padding: 2px 10px;
+  border: 1px solid var(--frame-rule);
   border-radius: 999px;
-  font-size: var(--step--1);
-  color: var(--muted);
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: var(--step-0);
+  letter-spacing: 0.02em;
+  color: var(--line);
   white-space: nowrap;
 }
+/* Offline: an open ring. Live: filled. Shape, not colour, carries the mode. */
 .mode-led {
   width: 8px; height: 8px;
   border-radius: 50%;
-  background: var(--paused);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--paused) 22%, transparent);
+  border: 1.5px solid var(--line);
 }
-.mode[data-mode="live"] .mode-led {
-  background: var(--done);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--done) 22%, transparent);
-}
+.mode[data-mode="live"] .mode-led { background: var(--line); }
 
 /* ---------- Views: catalog home | pattern page (Catalog spec §4) ---------- */
 
 /* Views are switched with the hidden attribute; it must beat class display rules. */
 [hidden] { display: none !important; }
 
-.view-title {
-  max-width: 1600px;
+.view-title:focus, .hero-title:focus { outline: none; }
+.hero-title:focus-visible { outline: 2px solid var(--amber); outline-offset: 4px; }
+.view-title:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
+
+/* ---------- Landing: hero, title block, catalog sheet (Blueprint spec §4.1) ---------- */
+
+.home {
+  max-width: var(--frame);
   margin: 0 auto;
-  padding: var(--gap) var(--gap) 0;
+  padding: 0 var(--frame-pad) 48px;
+  color: var(--paper);
+}
+.home > .notice { margin: 16px 0 0; }
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: 32px 48px;
+  align-items: center;
+  padding: 56px 0 32px;
+}
+.hero-title {
+  max-width: 18ch;
+  margin: 0 0 20px;
+  font-size: 58px;
+  line-height: 1;
+  letter-spacing: -0.005em;
+  color: var(--paper);
+}
+.hero-lede {
+  max-width: 50ch;
+  margin: 0 0 28px;
   font-size: var(--step-1);
+  line-height: 1.45;
+  color: var(--line);
 }
-.view-title:focus { outline: none; }
-.view-title:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+.home-search { max-width: 34rem; min-height: 9rem; }
 
-.home { max-width: 1600px; margin: 0 auto; padding: 0 var(--gap) calc(var(--gap) * 2); }
-.home .view-title { padding-left: 0; padding-right: 0; }
-.home > .notice { margin: 12px 0 0; }
+.hero-figure { margin: 0; }
+.hero-graph { display: block; width: 100%; max-width: 540px; height: auto; margin: 0 auto; }
 
-.page-head { max-width: 1600px; margin: 0 auto; }
-.pattern-view .view-title { font-size: var(--step-2); letter-spacing: -0.01em; }
-.page-note {
-  margin: 2px 0 0;
-  padding: 0 var(--gap);
-  color: var(--muted);
-  font-size: var(--step--1);
-}
+/* Hero graph line art (hero.js). */
+.hero-graph text { font-family: var(--font-display); }
+.hero-edge { fill: none; stroke: var(--line); stroke-width: 1.6; }
+.hero-edge.is-dashed { stroke-dasharray: 5 4; }
+.hero-ghosts .hero-edge { opacity: 0.28; }
+.hero-arrowhead { fill: none; stroke: var(--line); stroke-width: 1.6; }
+.hero-reveal { fill: none; stroke: #fff; stroke-width: 16; stroke-dasharray: 1 2; }
+.hero-edge-label { fill: var(--line); font-size: 16px; font-weight: 500; }
+.hero-node rect, .hero-node circle { fill: var(--navy); stroke: var(--line); stroke-width: 1.6; }
+.hero-node .hero-dot { fill: var(--line); stroke: none; }
+.hero-node text { fill: var(--paper); font-size: 20px; font-weight: 600; }
+.hero-node { transition: opacity 300ms; }
+.hero-node rect, .hero-node circle, .hero-node text { transition: fill 200ms, stroke 200ms; }
+.hero-graph[data-phase="trace"] .hero-node:not(.is-seen) { opacity: 0.3; }
+.hero-graph[data-phase="trace"] .hero-edge-label { opacity: 0.3; }
+.hero-node.is-active rect, .hero-node.is-active circle { stroke: var(--amber); stroke-width: 2.4; }
+.hero-node.is-active text, .hero-node.is-active .hero-dot { fill: var(--amber); }
 
-/* ---------- Catalog home: search + five category cards (Catalog spec §4.2) ---------- */
-
-/* The search reads as a problem statement, so it gets the bench's width and
-   the one bold rule on the page: a cobalt edge that lights up on focus. */
-.cat-search { margin: 12px 0 4px; }
+/* The search reads as a problem statement, drawn as an outlined field on the frame. */
+.cat-search { margin: 0; }
 .cat-search-label {
   display: block;
-  margin-bottom: 6px;
-  font-size: var(--step-1);
-  font-weight: 650;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: var(--paper);
 }
 .cat-search-field {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0 12px;
-  background: var(--panel);
-  border: 1px solid var(--rule);
-  border-left: 4px solid var(--rule);
-  border-radius: var(--radius-panel);
-  transition: border-color 160ms;
+  padding: 0 12px 0 14px;
+  border: 1.5px solid var(--line);
+  border-radius: 2px;
 }
-.cat-search-field:focus-within { border-color: var(--signal); }
-.cat-search-icon { color: var(--muted); font-size: 1.25rem; line-height: 1; }
+.cat-search-field:focus-within { outline: 2px solid var(--amber); outline-offset: 2px; }
 .cat-search-input {
   flex: 1 1 auto;
   min-width: 0;
-  padding: 12px 0;
+  padding: 11px 0;
   font: inherit;
   font-size: var(--step-1);
-  color: var(--ink);
+  color: var(--paper);
   background: transparent;
   border: 0;
 }
-.cat-search-input::placeholder { color: var(--muted); opacity: 1; }
+.cat-search-input::placeholder { color: var(--line); opacity: 1; }
 .cat-search-input:focus, .cat-search-input:focus-visible { outline: none; }
+.cat-search-input::-webkit-search-cancel-button { filter: grayscale(1) brightness(2.2); }
 .cat-search-key {
   padding: 0 7px;
-  font-size: 0.75rem;
-  color: var(--muted);
-  border: 1px solid var(--rule);
-  border-bottom-width: 2px;
-  border-radius: 4px;
+  color: var(--line);
+  border: 1px solid var(--line);
+  border-radius: 2px;
 }
-.cat-search-hint { margin: 6px 0 0; font-size: 0.75rem; color: var(--muted); }
+.cat-search-hint { margin: 8px 0 0; color: var(--line); }
 
-.cat-count { min-height: 1.5em; margin: 6px 0 0; font-size: var(--step--1); color: var(--signal); font-weight: 600; }
+.cat-count { min-height: 1.5em; margin: 8px 0 0; color: var(--paper); font-weight: 600; }
 .cat-count:empty { visibility: hidden; }
-.cat-empty {
-  margin: 4px 0 12px;
-  padding: 10px 14px;
-  border: 1px dashed var(--rule);
-  border-radius: var(--radius-ctl);
-  background: var(--panel-sunk);
-}
+.cat-empty { margin: 4px 0 0; color: var(--paper); }
 
-.cat-cards {
+/* The title block: the panel where an architect signs the drawing. */
+.title-block {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 2fr) minmax(0, 1fr);
+  margin: 0 0 40px;
+  border: 1.5px solid var(--line);
+}
+.tb-cell { min-width: 0; padding: 14px 20px 18px; }
+.tb-cell + .tb-cell { border-left: 1.5px solid var(--line); }
+.tb-cell p { margin: 0; }
+.tb-label {
+  margin-bottom: 4px !important;
+  font-family: var(--font-display);
+  font-weight: 500;
+  color: var(--line);
+}
+.tb-name { font-family: var(--font-display); font-weight: 600; font-size: var(--step-2); line-height: 1.2; }
+.tb-text { max-width: 75ch; color: var(--paper); }
+.tb-contact { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.btn-contact {
+  display: inline-block;
+  padding: 9px 18px;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--amber);
+  border-radius: 2px;
+  text-decoration: none;
+}
+.btn-contact:hover { background: color-mix(in srgb, var(--amber) 88%, var(--paper)); }
+.btn-contact:focus-visible { outline-offset: 3px; }
+.contact-reveal { color: var(--paper); overflow-wrap: anywhere; }
+
+/* The catalog: five columns on one paper sheet, divided by rules, not cards.
+   Each column draws its rule as a right/bottom shadow that the sheet clips at
+   its own edge, so no edge doubles up when the columns wrap. Columns share
+   the sheet's rows (subgrid), so the rules under the questions line up. */
+.cat-sheet {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 8px;
-  align-items: start;
+  overflow: hidden;
+  color: var(--ink);
+  background: var(--paper);
+  border-radius: 2px;
+  box-shadow: var(--sheet-edge);
 }
-.cat-card {
+.cat-col {
+  display: grid;
+  grid-row: span 3;
+  grid-template-rows: subgrid;
+  align-content: start;
   min-width: 0;
-  padding: 12px 8px 8px;
-  background: var(--panel);
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-panel);
+  padding: 20px 12px 16px;
+  box-shadow: 1px 0 0 var(--rule), 0 1px 0 var(--rule);
 }
-.cat-card.is-empty { background: var(--panel-sunk); border-style: dashed; }
 .cat-title {
   margin: 0 8px;
-  font-size: var(--step-1);
-  font-weight: 650;
+  font-size: var(--step-2);
+  line-height: 1.2;
   color: var(--ink);
 }
 .cat-title:focus { outline: none; }
-.cat-title:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
-.cat-question { margin: 0 8px 8px; font-size: var(--step--1); color: var(--muted); }
-.cat-none { margin: 0 8px 4px; font-size: var(--step--1); color: var(--muted); font-style: italic; }
+.cat-title:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.cat-question { margin: 2px 8px 12px; color: var(--muted-ink); }
+.cat-none { margin: 8px 8px 0; color: var(--muted-ink); font-style: italic; }
 .cat-list { margin: 0; padding: 8px 0 0; list-style: none; border-top: 1px solid var(--rule); }
 .cat-link {
   display: grid;
@@ -310,375 +353,400 @@ code, pre, kbd { font-family: var(--font-code); font-size: 0.92em; }
   padding: 6px 8px 7px;
   color: var(--ink);
   text-decoration: none;
-  border-radius: var(--radius-ctl);
+  border-radius: 2px;
 }
-.cat-link:hover { background: var(--panel-sunk); }
-.cat-link:hover .cat-label { color: var(--signal); }
-.cat-name { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 7px; font-weight: 650; }
-.cat-hint { padding-left: 19px; font-size: var(--step--1); color: var(--muted); line-height: 1.4; }
-.cat-xref { font-size: 0.75rem; font-weight: 600; color: var(--signal); white-space: nowrap; }
+.cat-link:hover { background: var(--paper-sunk); }
+.cat-link:hover .cat-label { text-decoration: underline; text-underline-offset: 3px; }
+.cat-name { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 7px; font-weight: 600; }
+.cat-hint { padding-left: 19px; color: var(--muted-ink); line-height: 1.4; }
+.cat-xref { font-weight: 600; color: var(--muted-ink); white-space: nowrap; }
 
 .mark { display: inline-block; width: 12px; text-align: center; line-height: 1; }
-.mark-live { color: var(--signal); }
+.mark-live { color: var(--ink); }
 .mark-live .mark-glyph, .cat-legend .mark-live { font-size: 1.2em; }  /* ● sets smaller than ○ */
-.mark-guide { color: var(--muted); }
+.mark-guide { color: var(--muted-ink); }
+.cat-legend .mark { color: var(--line); }
 
+/* The legend sits under the sheet, on the frame. */
 .cat-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 20px;
-  margin: 16px 0 0;
+  gap: 4px 24px;
+  margin: 14px 0 0;
   padding: 0;
   list-style: none;
-  font-size: 0.75rem;
-  color: var(--muted);
+  color: var(--line);
 }
 .cat-legend li { display: inline-flex; align-items: baseline; gap: 6px; }
 
-@media (max-width: 1199px) {
-  .cat-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+/* Footer: one line on the frame. */
+.site-footer {
+  max-width: var(--frame);
+  margin: 0 auto;
+  padding: 20px var(--frame-pad) 32px;
+  color: var(--line);
+  border-top: 1px solid var(--frame-rule);
+}
+.site-footer p { margin: 0; }
+.site-footer a { color: var(--paper); text-underline-offset: 3px; }
+.site-footer .contact-reveal { margin-left: 8px; }
+
+/* Five columns need ~200 px each, so the sheet wraps 3 + 2 before the hero stacks. */
+@media (max-width: 1099px) {
+  .cat-sheet { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 899px) {
+  .hero { grid-template-columns: minmax(0, 1fr); padding-top: 40px; }
+  .hero-graph { margin-left: 0; }
 }
 @media (max-width: 699px) {
-  .cat-cards { grid-template-columns: minmax(0, 1fr); }
+  :root { --frame-pad: 16px; }
+  .hero { padding: 32px 0 32px; }
+  .hero-title { font-size: 38px; }
+  .hero-graph { width: 80%; }
+  .hero-edge-label { font-size: 17px; }  /* 17 x 0.78 = 13.3 px on a 375 px screen */
+  .title-block { grid-template-columns: minmax(0, 1fr); }
+  .tb-cell + .tb-cell { border-left: 0; border-top: 1.5px solid var(--line); }
+  .cat-sheet { grid-template-columns: minmax(0, 1fr); }
 }
 
-/* ---------- Guide-only page: banner, static diagram, Guide (Catalog spec §4.3) ---------- */
+/* ---------- Pattern page (Blueprint spec §4.2): purpose sheet, bench, guide ---------- */
 
-.guide-only {
+.pattern-view {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--gap);
-  max-width: 1600px;
+  gap: 28px;
+  max-width: var(--frame);
   margin: 0 auto;
-  padding: 12px var(--gap) var(--gap);
+  padding: 28px var(--frame-pad) 48px;
 }
-.demo-banner {
+
+/* A paper sheet: every reading surface. Flat, squared, one edge shadow. */
+.sheet {
+  min-width: 0;
+  color: var(--ink);
+  background: var(--paper);
+  border-radius: 2px;
+  box-shadow: var(--sheet-edge);
+}
+.sheet-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--rule);
+}
+.sheet-head h2 { margin: 0; font-size: var(--step-2); line-height: 1.2; }
+.sheet-sub { margin: 0; color: var(--muted-ink); }
+
+h3, .purpose-body h2 {
+  margin: 0 0 8px;
+  font-size: var(--step-1);
+  line-height: 1.2;
+  color: var(--ink);
+}
+
+.empty-hint { margin: 0; color: var(--muted-ink); }
+
+/* The purpose sheet: the pattern's name, then what it is and when to use it. */
+.purpose { padding: 28px 32px 30px; }
+.view-title {
+  margin: 0;
+  font-size: var(--step-5);
+  line-height: 1.05;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+}
+.page-note { max-width: 75ch; margin: 6px 0 0; color: var(--muted-ink); }
+.purpose-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  margin-top: 20px;
+  border-top: 1px solid var(--rule);
+}
+.purpose-body > * { min-width: 0; padding-top: 16px; }
+.purpose-what { padding-right: 32px; }
+.purpose-when { padding-left: 32px; border-left: 1px solid var(--rule); }
+.purpose-what .guide-text { font-size: var(--step-1); }
+.purpose-what .guide-text p { line-height: 1.5; }
+.purpose-body .guide-text { max-width: 65ch; }
+
+/* A drawing on the navy frame: the live trace or the static diagram. The body's
+   drafting grid shows through; a hairline frame marks the drawing's edge. */
+.drawing { min-width: 0; color: var(--paper); }
+.drawing-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+  margin-bottom: 10px;
+}
+.drawing-head h2 { margin: 0; font-size: var(--step-2); line-height: 1.2; color: var(--paper); }
+.drawing-sub { margin: 0; color: var(--line); }
+.drawing-sub code { color: var(--paper); }
+/* Chat threads: "⏸ paused at ask · thread 3f2a… · 7 checkpoints" (spec §4.6). */
+.trace-thread {
+  margin: 0 0 0 auto;
+  color: var(--line);
+  font-family: var(--font-code);
+  font-size: 0.875rem;
+  white-space: pre-wrap;
+}
+
+.trace-graph {
+  height: clamp(300px, 46vh, 520px);
+  border: 1px solid var(--frame-rule);
+}
+.diagram-graph { height: clamp(340px, 60vh, 580px); }
+
+.graph-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  margin: 0;
+  padding: 8px 0 0;
+  list-style: none;
+  color: var(--line);
+}
+.graph-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.lg { font-weight: 700; }
+.lg-active { color: var(--amber); }
+.lg-done, .lg-paused { color: var(--line); }
+/* Echoes an error node: a paper ✕ in a small signal-red box. */
+.lg-error {
+  display: inline-grid;
+  place-items: center;
+  width: 18px; height: 18px;
+  font-size: 0.75rem;
+  line-height: 1;
+  color: var(--paper);
+  background: color-mix(in srgb, var(--signal-red) 40%, var(--navy));
+  border: 1.5px solid var(--signal-red);
+}
+.lg-dash, .lg-solid { width: 22px; border-top: 1.5px dashed var(--line); }
+.lg-solid { border-top-style: solid; }
+.lg-count { font-family: var(--font-display); font-weight: 500; color: var(--paper); }
+
+/* Guide-only: one slim line on the frame, then the diagram. */
+.guide-only { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
+.demo-line {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 4px 12px;
+  gap: 2px 8px;
   margin: 0;
-  padding: 10px 14px;
-  background: color-mix(in srgb, var(--paused) 8%, var(--panel));
-  border: 1px dashed color-mix(in srgb, var(--paused) 60%, transparent);
-  border-left: 4px solid var(--paused);
-  border-radius: var(--radius-ctl);
+  padding-bottom: 12px;
+  color: var(--line);
+  border-bottom: 1px dashed var(--frame-rule);
 }
-.guide-only > :is(.panel, .demo-banner) { grid-area: auto; }  /* not the bench's named areas */
-.demo-banner-title { color: var(--paused); }
-.diagram-graph { height: clamp(260px, 40vh, 440px); }
-.lg-solid { width: 22px; border-top: 1.5px solid var(--muted); }
-.notice {
-  padding: 8px 12px;
-  border: 1px solid var(--paused);
-  border-radius: var(--radius-ctl);
-  background: var(--panel-sunk);
-}
+.demo-line .mark { color: var(--line); }
+.demo-line-title { color: var(--paper); font-weight: 600; }
 
-/* ---------- Bench: trace | console, guide below ---------- */
+/* ---------- Bench: trace on the frame | console sheet; timeline and state below ---------- */
 
 .bench {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(340px, 1fr);
   grid-template-areas:
     "trace console"
-    "guide guide";
-  gap: var(--gap);
-  padding: var(--gap);
-  max-width: 1600px;
-  margin: 0 auto;
+    "lower console";
+  grid-template-rows: auto 1fr;
+  gap: 20px 28px;
 }
-.trace   { grid-area: trace; }
-.console { grid-area: console; }
-.guide   { grid-area: guide; }
-
-.panel {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  background: var(--panel);
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-panel);
-}
-
-.panel-head {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--rule);
-}
-.panel-head h2 {
-  margin: 0;
-  font-size: var(--step-0);
-  font-weight: 650;
-}
-.panel-sub {
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--step--1);
-}
-/* Chat threads: "⏸ paused at ask · thread 3f2a… · 7 checkpoints" (spec §4.6). */
-.trace-thread {
-  margin: 0 0 0 auto;
-  color: var(--muted);
-  font-family: var(--font-code);
-  font-size: 0.75rem;
-  white-space: pre-wrap;
-}
-.trace-thread[hidden] { display: none; }
-
-h3 {
-  margin: 0 0 8px;
-  font-size: var(--step--1);
-  font-weight: 650;
-  color: var(--muted);
-}
-
-.empty-hint { margin: 0; color: var(--muted); font-size: var(--step--1); }
-.error-note { margin: 0; color: var(--error); }
-
-/* Trace: the graph sits on engineering graph paper. */
-.trace-graph {
-  height: clamp(300px, 46vh, 520px);
-  background-color: var(--panel-sunk);
-  background-image:
-    linear-gradient(var(--grid-major) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid-major) 1px, transparent 1px),
-    linear-gradient(var(--grid) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
-  background-size: 80px 80px, 80px 80px, 16px 16px, 16px 16px;
-  background-position: -1px -1px;
-}
-
-.graph-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 16px;
-  margin: 0;
-  padding: 6px 16px;
-  list-style: none;
-  font-size: 0.75rem;
-  color: var(--muted);
-  border-bottom: 1px solid var(--rule);
-}
-.graph-legend li { display: inline-flex; align-items: center; gap: 5px; }
-.lg { font-weight: 700; }
-.lg-active { color: var(--signal); }
-.lg-done { color: var(--done); }
-.lg-paused { color: var(--paused); }
-.lg-error { color: var(--error); }
-.lg-dash { width: 22px; border-top: 1.5px dashed var(--muted); }
-.lg-count { font-family: var(--font-code); }
+.trace       { grid-area: trace; }
+.trace-lower { grid-area: lower; align-self: start; }
+.console     { grid-area: console; align-self: start; display: flex; flex-direction: column; }
 
 .trace-lower {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
-.trace-timeline { padding: 12px 16px; border-right: 1px solid var(--rule); }
+.trace-timeline { min-width: 0; padding: 14px 16px; border-right: 1px solid var(--rule); }
 .timeline {
+  display: grid;
+  gap: 2px;
   margin: 0;
   padding: 0;
   list-style: none;
   max-height: 220px;
   overflow-y: auto;
-  font-size: var(--step--1);
 }
 
-.trace-state { padding: 12px 16px; min-width: 0; }
+.trace-state { min-width: 0; padding: 14px 16px; }
 .trace-state summary {
-  cursor: pointer;
-  font-size: var(--step--1);
-  font-weight: 650;
-  color: var(--muted);
   margin-bottom: 8px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--step-1);
+  cursor: pointer;
 }
+/* The state JSON scrolls inside its own well, never the page (Review Focus 2). */
 .state-view {
-  margin: 0;
   max-height: 220px;
   overflow: auto;
   padding: 8px 10px;
-  background: var(--panel-sunk);
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-ctl);
+  font-family: var(--font-code);
   font-size: 0.8125rem;
   line-height: 1.45;
-}
-
-/* Console */
-.console-messages {
-  flex: 1 1 auto;
-  min-height: 260px;
-  max-height: 62vh;
-  overflow-y: auto;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.console-samples {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 0 16px;
-}
-.console-samples:not(:empty) { padding-bottom: 10px; }
-
-.console-input {
-  display: grid;
-  gap: 8px;
-  padding: 12px 16px 16px;
-  border-top: 1px solid var(--rule);
-}
-.console-input textarea {
-  width: 100%;
-  resize: vertical;
-  min-height: 52px;
-  padding: 8px 10px;
-  color: var(--ink);
-  background: var(--panel-sunk);
+  background: var(--paper-sunk);
   border: 1px solid var(--rule);
-  border-radius: var(--radius-ctl);
-  font: inherit;
+  border-radius: 2px;
 }
-.console-input textarea:focus-visible { outline-offset: 0; }
-.console-actions { display: flex; gap: 8px; }
-
-.btn {
-  padding: 6px 14px;
-  font: inherit;
-  font-size: var(--step--1);
-  font-weight: 600;
-  color: var(--ink);
-  background: var(--panel);
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-ctl);
-  cursor: pointer;
-}
-.btn:hover { background: var(--panel-sunk); }
-.btn-primary {
-  color: var(--on-signal);
-  background: var(--signal);
-  border-color: var(--signal);
-}
-.btn-primary:hover { background: color-mix(in srgb, var(--signal) 88%, var(--ink)); }
-.btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* ---------- Timeline: one readout row per finished step ---------- */
 
-.timeline { display: grid; gap: 2px; }
 .timeline-step {
   display: flex;
   align-items: baseline;
   gap: 8px;
   width: 100%;
-  padding: 4px 8px;
+  padding: 3px 8px 3px 6px;
   font: inherit;
   text-align: left;
   color: var(--ink);
   background: transparent;
-  border: 1px solid transparent;
-  border-radius: 4px;
+  border: 0;
+  border-left: 3px solid transparent;
+  border-radius: 0;
   cursor: pointer;
 }
-.timeline-step:hover { background: var(--panel-sunk); }
-.timeline-step[aria-pressed="true"] {
-  background: var(--signal-soft);
-  border-color: color-mix(in srgb, var(--signal) 45%, transparent);
-}
-.step-num {
-  min-width: 3ch;
-  font-family: var(--font-code);
-  font-variant-numeric: tabular-nums;
-  color: var(--muted);
-}
-.step-node { font-family: var(--font-code); font-weight: 600; }
-.step-time { color: var(--muted); font-variant-numeric: tabular-nums; }
+.timeline-step:hover { background: var(--paper-sunk); }
+/* The step on show (a selection, not the running step): an ink bar. */
+.timeline-step[aria-pressed="true"] { background: var(--paper-sunk); border-left-color: var(--ink); }
+.step-num { min-width: 3ch; font-variant-numeric: tabular-nums; color: var(--muted-ink); }
+.step-node { font-family: var(--font-display); font-weight: 600; font-size: var(--step-1); line-height: 1.2; }
+.step-time { color: var(--muted-ink); font-variant-numeric: tabular-nums; }
 .step-tag {
   margin-left: auto;
   padding: 0 6px;
-  font-size: 0.75rem;
-  color: var(--paused);
-  border: 1px solid color-mix(in srgb, var(--paused) 55%, transparent);
-  border-radius: 999px;
+  color: var(--muted-ink);
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
 }
-.timeline-mark {
-  padding: 2px 8px;
-  font-size: 0.75rem;
-  color: var(--muted);
-}
+.timeline-mark { padding: 2px 9px; color: var(--muted-ink); }
 .timeline-mark.mark-run {
-  margin-top: 6px;
-  padding-bottom: 2px;
-  border-bottom: 1px dashed var(--rule);
-  font-weight: 650;
+  margin-top: 8px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--ink);
+  border-bottom: 1px solid var(--rule);
 }
 .timeline-mark.mark-run:first-child { margin-top: 0; }
-.mark-paused { color: var(--paused); }
-.mark-error { color: var(--error); }
-.mark-done { color: var(--done); }
+.mark-error { color: var(--signal-red); }
+.mark-done { color: var(--ink); }
 
 /* State view: collapsible JSON, one <details> per object or list. */
-.state-caption { margin: 0 0 6px; font-family: var(--font-ui); color: var(--muted); font-size: 0.75rem; }
-.state-view { font-family: var(--font-code); }
+.state-caption { margin: 0 0 6px; font-family: var(--font-ui); color: var(--muted-ink); font-size: 0.875rem; }
 .json-node > summary { cursor: pointer; list-style-position: outside; margin-left: 1em; }
 .json-body { padding-left: 1em; border-left: 1px solid var(--rule); margin-left: 0.3em; }
 .json-row { padding-left: 1em; overflow-wrap: anywhere; }
-.json-key { color: var(--muted); }
-.json-shape, .json-empty { color: var(--muted); font-size: 0.92em; }
+.json-key, .json-shape, .json-empty { color: var(--muted-ink); }
 .json-string { color: var(--ink); white-space: pre-wrap; }
-.json-number, .json-boolean { color: var(--signal); }
-.json-null { color: var(--muted); font-style: italic; }
+.json-number, .json-boolean { color: var(--navy); font-weight: 600; }
+.json-null { color: var(--muted-ink); font-style: italic; }
 
-/* ---------- Console messages ---------- */
+/* ---------- Console sheet ---------- */
+
+.console-messages {
+  flex: 1 1 auto;
+  min-height: 260px;
+  max-height: 62vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 20px;
+}
+.console-samples { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 20px; }
+.console-samples:not(:empty) { padding-bottom: 12px; }
+
+.console-input {
+  display: grid;
+  gap: 10px;
+  padding: 14px 20px 18px;
+  border-top: 1px solid var(--rule);
+}
+.console-input textarea {
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 10px;
+  resize: vertical;
+  font: inherit;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+}
+.console-input textarea::placeholder { color: var(--muted-ink); opacity: 1; }
+.console-input textarea:focus-visible { outline-offset: 0; }
+.console-actions { display: flex; gap: 8px; }
+
+/* Buttons (Blueprint spec §4.3): primary amber with ink text, one per view;
+   secondary an outline, ink on paper and line on navy. */
+.btn {
+  padding: 7px 16px;
+  font: inherit;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--ink);
+  background: transparent;
+  border: 1.5px solid var(--ink);
+  border-radius: 2px;
+  cursor: pointer;
+}
+.btn:hover { background: var(--paper-sunk); }
+.btn-primary { background: var(--amber); border-color: var(--amber); }
+.btn-primary:hover { background: color-mix(in srgb, var(--amber) 85%, var(--paper)); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn:disabled:hover { background: transparent; }
+.btn-primary:disabled:hover { background: var(--amber); }
+.btn-small { padding: 2px 10px; }
+
+/* ---------- Console messages (on the console sheet) ---------- */
 
 .msg {
   max-width: 88%;
   padding: 8px 12px 10px;
+  background: var(--paper-sunk);
   border: 1px solid var(--rule);
-  border-radius: 8px;
-  background: var(--panel-sunk);
+  border-radius: 2px;
 }
 .msg-who {
   margin: 0 0 2px;
-  font-size: 0.75rem;
-  font-weight: 650;
-  color: var(--muted);
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--muted-ink);
 }
 .msg-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
-.msg-blank { color: var(--muted); font-style: italic; }
-.msg-user {
-  align-self: flex-end;
-  background: var(--signal-soft);
-  border-color: color-mix(in srgb, var(--signal) 35%, transparent);
-  border-bottom-right-radius: 2px;
-}
-.msg-assistant { align-self: flex-start; border-bottom-left-radius: 2px; }
+.msg-blank { color: var(--muted-ink); font-style: italic; }
+.msg-user { align-self: flex-end; background: var(--paper-tint); border-color: var(--rule-strong); }
+.msg-assistant { align-self: flex-start; }
 .msg-assistant.streaming .msg-text::after {
   content: "▍";
   margin-left: 1px;
-  color: var(--signal);
+  color: var(--muted-ink);
   animation: caret 0.9s steps(2) infinite;
 }
 @keyframes caret { 50% { opacity: 0; } }
 .msg-refusal, .msg-error {
   align-self: flex-start;
-  border-left: 3px solid var(--error);
-  background: color-mix(in srgb, var(--error) 8%, var(--panel));
+  background: var(--paper);
+  border-color: color-mix(in srgb, var(--signal-red) 40%, var(--paper));
+  border-left: 3px solid var(--signal-red);
 }
-.msg-refusal .msg-who, .msg-error .msg-who { color: var(--error); }
+.msg-refusal .msg-who, .msg-error .msg-who { color: var(--signal-red); }
 
 .result-card {
   align-self: stretch;
   padding: 10px 14px 12px;
+  background: var(--paper);
   border: 1px solid var(--rule);
-  border-left: 3px solid var(--signal);
-  border-radius: var(--radius-ctl);
-  background: var(--panel);
+  border-left: 3px solid var(--rule-strong);
+  border-radius: 2px;
 }
-.result-card.done { border-left-color: var(--done); }
-.result-card .msg-text:empty::before { content: "Running…"; color: var(--muted); }
+.result-card.done { border-left-color: var(--ink); }
+.result-card .msg-text:empty::before { content: "Running…"; color: var(--muted-ink); }
 
 .msg-prompt {
   display: flex;
@@ -686,127 +754,142 @@ h3 {
   flex-wrap: wrap;
   gap: 8px;
   padding: 6px 0;
-  color: var(--ink);
-  font-size: var(--step--1);
 }
 .badge {
   padding: 0 8px;
-  font-size: 0.75rem;
-  font-weight: 650;
-  border-radius: 999px;
+  font-family: var(--font-display);
+  font-weight: 600;
   white-space: nowrap;
+  border-radius: 2px;
 }
-.badge-paused {
-  color: var(--paused);
-  border: 1px solid color-mix(in srgb, var(--paused) 60%, transparent);
-  background: color-mix(in srgb, var(--paused) 10%, transparent);
-}
-.prompt-text { color: var(--muted); }
+.badge-paused { color: var(--ink); border: 3px double var(--ink); }
+.prompt-text { color: var(--muted-ink); }
 
 .notice {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px 12px;
-  align-self: center;
   padding: 6px 12px;
-  font-size: var(--step--1);
-  color: var(--muted);
-  border: 1px dashed var(--rule);
-  border-radius: 999px;
+  color: var(--muted-ink);
+  background: var(--paper);
+  border: 1px dashed var(--rule-strong);
+  border-radius: 2px;
 }
-.btn-small { padding: 2px 10px; font-size: 0.75rem; }
+.console-messages > .notice { align-self: center; }
 
 .chip-line {
   align-self: flex-start;
   display: flex;
   gap: 8px;
   max-width: 100%;
-  font-size: var(--step--1);
-  color: var(--muted);
+  color: var(--muted-ink);
 }
+.chip-label { flex: none; font-family: var(--font-display); font-weight: 600; }
 .chip-detail { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .sample-chip {
   padding: 4px 10px;
   font: inherit;
-  font-size: var(--step--1);
+  text-align: left;
   color: var(--ink);
-  background: var(--panel-sunk);
+  background: var(--paper-sunk);
   border: 1px solid var(--rule);
-  border-radius: 999px;
+  border-radius: 2px;
   cursor: pointer;
 }
-.sample-chip:hover { border-color: var(--signal); }
+.sample-chip:hover { border-color: var(--ink); }
 .sample-chip:disabled { opacity: 0.5; cursor: not-allowed; }
+.sample-chip:disabled:hover { border-color: var(--rule); }
 
-/* Guide: the explanation's sections as labelled blocks. */
+/* ---------- Guide sheet: the remaining sections as ruled blocks ---------- */
+
 .guide-body {
   display: grid;
-  overflow: hidden;
-  border-radius: 0 0 var(--radius-panel) var(--radius-panel);
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0;
+  overflow: hidden;
 }
-/* Sections pair up (What | When, Concepts | Trade-offs, Key code | Try this);
-   "How this graph works" spans the bench. Hairlines are right/bottom shadows
-   clipped by the container, so shared edges never double up. */
+/* Sections pair up (Concepts | Trade-offs, Key code | Try this); "How this
+   graph works" spans the sheet. Hairlines are right/bottom shadows clipped by
+   the container, so shared edges never double up. */
 .guide-block {
-  padding: 16px 20px 18px;
   min-width: 0;
+  padding: 18px 20px 20px;
   box-shadow: 1px 0 0 var(--rule), 0 1px 0 var(--rule);
 }
 .guide-intro,
-.guide-how-this-graph-works { grid-column: 1 / -1; }
-.guide-block h3 { font-size: var(--step-0); color: var(--ink); }
-.guide-text { max-width: 72ch; }
+.guide-how-this-graph-works,
+.guide-what-it-is,
+.guide-when-to-use-it { grid-column: 1 / -1; }
+.guide-text { max-width: 75ch; }
 .guide-text > :first-child { margin-top: 0; }
 .guide-text > :last-child { margin-bottom: 0; }
 .guide-text p, .guide-text li { line-height: 1.6; }
 .guide-text ul, .guide-text ol { padding-left: 1.3em; }
 .guide-text li + li { margin-top: 4px; }
+.guide-text a { color: var(--ink); text-underline-offset: 3px; }
 .guide-text :not(pre) > code {
   padding: 1px 5px;
-  background: var(--panel-sunk);
+  background: var(--paper-sunk);
   border: 1px solid var(--rule);
-  border-radius: 4px;
+  border-radius: 2px;
+  overflow-wrap: anywhere;
 }
+/* Code fences scroll inside the sheet, never the page (Review Focus 2). */
 .guide-text pre {
+  max-width: 100%;
   margin: 0;
   padding: 12px 14px;
   overflow-x: auto;
-  background: var(--panel-sunk);
-  border: 1px solid var(--rule);
-  border-left: 3px solid var(--signal);
-  border-radius: var(--radius-ctl);
   font-size: 0.8125rem;
   line-height: 1.55;
+  background: var(--paper-sunk);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--navy);
+  border-radius: 2px;
 }
 .guide-text pre code { font-size: inherit; }
 .guide-body > .empty-hint,
-.guide-body > .error-note,
-.guide-fallback { grid-column: 1 / -1; padding: 16px 20px; margin: 0; white-space: pre-wrap; }
+.guide-fallback {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 16px 20px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 
-/* ---------- Narrow screens: Console, Trace, Guide ---------- */
+/* ---------- Narrow screens ---------- */
 
 @media (max-width: 899px) {
   .masthead {
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas: "brand mode" "crumbs stepper";
   }
-  .brand { grid-area: brand; }
-  .mode { grid-area: mode; }
-  .breadcrumbs { grid-area: crumbs; }
-  .stepper { grid-area: stepper; }
+
+  .purpose-body { grid-template-columns: minmax(0, 1fr); }
+  .purpose-what { padding-right: 0; }
+  .purpose-when { padding-left: 0; border-left: 0; border-top: 1px solid var(--rule); margin-top: 16px; }
 
   .bench {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "console" "trace" "guide";
+    grid-template-areas: "console" "trace" "lower";
+    grid-template-rows: none;
   }
   .console-messages { max-height: 55vh; }
   .trace-lower { grid-template-columns: minmax(0, 1fr); }
   .trace-timeline { border-right: 0; border-bottom: 1px solid var(--rule); }
   .guide-body { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 699px) {
+  .pattern-view { gap: 20px; padding-top: 16px; }
+  .purpose { padding: 20px 16px 22px; }
+  .view-title { font-size: var(--step-3); }
+  .purpose-what .guide-text { font-size: var(--step-0); }
+  .sheet-head, .guide-block { padding-left: 16px; padding-right: 16px; }
+  .console-messages, .console-input { padding-left: 16px; padding-right: 16px; }
+  .console-samples { padding: 0 16px; }
+  .msg { max-width: 94%; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -816,4 +899,5 @@ h3 {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+  .hero-node, .hero-node * { transition: none; }
 }

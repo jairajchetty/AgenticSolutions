@@ -29,11 +29,12 @@ export function renderInlineCode(el, text) {
 const slug = (text) =>
   text.toLowerCase().replace(/[`'’]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
-// Split markdown into {title, body} sections on `## ` lines outside code fences.
-// The `# ` page title is dropped (the page heading already shows it); text before the
-// first `##` becomes an untitled intro block.
-function splitSections(markdown) {
-  const sections = [{ title: null, lines: [] }];
+// The one line scanner. Cuts markdown into chunks at `## ` lines outside code
+// fences; each chunk is {title, heading, lines} (heading is the raw `## ` line,
+// null for the preamble before the first `##`). `# ` lines in the preamble are
+// the page title and are dropped.
+function chunkMarkdown(markdown) {
+  const chunks = [{ title: null, heading: null, lines: [] }];
   let fence = null;
   for (const line of markdown.replace(/\r\n/g, "\n").split("\n")) {
     const marker = line.match(/^\s*(```+|~~~+)/);
@@ -42,15 +43,22 @@ function splitSections(markdown) {
       else if (marker[1][0] === fence) fence = null;
     }
     if (!fence && /^##\s+/.test(line)) {
-      sections.push({ title: line.replace(/^##\s+/, "").trim(), lines: [] });
-    } else if (!fence && /^#\s+/.test(line) && sections.length === 1) {
+      chunks.push({ title: line.replace(/^##\s+/, "").trim(), heading: line, lines: [] });
+    } else if (!fence && /^#\s+/.test(line) && chunks.length === 1) {
       continue;
     } else {
-      sections[sections.length - 1].lines.push(line);
+      chunks[chunks.length - 1].lines.push(line);
     }
   }
-  return sections
-    .map((s) => ({ title: s.title, body: s.lines.join("\n").trim() }))
+  return chunks;
+}
+
+// Split markdown into {title, body} sections. The `# ` page title is dropped (the
+// page heading already shows it); text before the first `##` becomes an untitled
+// intro block.
+function splitSections(markdown) {
+  return chunkMarkdown(markdown)
+    .map((c) => ({ title: c.title, body: c.lines.join("\n").trim() }))
     .filter((s) => s.title || s.body);
 }
 
@@ -88,34 +96,74 @@ function linkMarkers(root, linkFor) {
   }
 }
 
+const PURPOSE_HEADINGS = ["What it is", "When to use it"];
+
+// splitPurpose(markdown): pull the "What it is" and "When to use it" sections
+// (matched by heading text, kept with their `##` headings, in that order) out
+// of the Guide. `rest` is everything else in original order, minus the leading
+// `# ` title (the purpose sheet shows the title itself). If either purpose
+// heading is missing, purpose is "" and rest is the whole Guide minus its title.
+// Pure: no DOM, so it runs under node.
+export function splitPurpose(markdown) {
+  const chunks = chunkMarkdown(String(markdown || ""));
+  const text = (cs) => cs.flatMap((c) => (c.heading === null ? c.lines : [c.heading, ...c.lines])).join("\n");
+  const picked = PURPOSE_HEADINGS.map((t) => chunks.find((c) => c.title === t));
+  if (picked.some((c) => !c)) return { purpose: "", rest: text(chunks) };
+  return {
+    purpose: picked.map((c) => text([c]).trim()).join("\n\n"),
+    rest: text(chunks.filter((c) => !picked.includes(c))),
+  };
+}
+
+// One labelled block: <section class> with a heading (h3 by default) and the
+// sanitised, linked body. The only innerHTML assignment in the app lives here.
+function buildBlock(className, id, title, bodyMarkdown, linkFor, { level = 3 } = {}) {
+  const block = document.createElement("section");
+  block.className = className;
+  if (title) {
+    const h = document.createElement(`h${level}`);
+    h.id = id;
+    renderInlineCode(h, title);
+    block.setAttribute("aria-labelledby", h.id);
+    block.append(h);
+  }
+  const body = document.createElement("div");
+  body.className = "guide-text";
+  body.innerHTML = markdownToSafeHtml(bodyMarkdown);
+  linkMarkers(body, linkFor);
+  block.append(body);
+  return block;
+}
+
+// CDN unavailable: show the raw Markdown as text rather than nothing.
+function renderFallback(el, markdown) {
+  const pre = document.createElement("pre");
+  pre.className = "guide-fallback";
+  pre.textContent = markdown || "";
+  el.append(pre);
+}
+
 // renderGuide(el, markdown, {linkFor}): the sectioned Guide, with pattern links.
 export function renderGuide(el, markdown, { linkFor } = {}) {
   el.replaceChildren();
   const sections = splitSections(markdown || "");
-  if (!window.marked || !window.DOMPurify) {
-    // CDN unavailable: show the raw Markdown as text rather than nothing.
-    const pre = document.createElement("pre");
-    pre.className = "guide-fallback";
-    pre.textContent = markdown || "";
-    el.append(pre);
-    return;
-  }
+  if (!window.marked || !window.DOMPurify) return renderFallback(el, markdown);
   sections.forEach((section, i) => {
-    const block = document.createElement("section");
     const key = section.title ? slug(section.title) : "intro";
-    block.className = `guide-block guide-${key}`;
-    if (section.title) {
-      const h = document.createElement("h3");
-      h.id = `guide-h-${i}-${key}`;
-      renderInlineCode(h, section.title);
-      block.setAttribute("aria-labelledby", h.id);
-      block.append(h);
-    }
-    const body = document.createElement("div");
-    body.className = "guide-text";
-    body.innerHTML = markdownToSafeHtml(section.body);
-    linkMarkers(body, linkFor);
-    block.append(body);
-    el.append(block);
+    el.append(buildBlock(`guide-block guide-${key}`, `guide-h-${i}-${key}`,
+      section.title, section.body, linkFor));
+  });
+}
+
+// renderPurpose(el, purposeMarkdown, {linkFor}): the two purpose sections as
+// `.purpose-what` and `.purpose-when` blocks, same sanitise + link pipeline.
+// Their headings are h2: they sit directly under the page h1.
+export function renderPurpose(el, markdownPurpose, { linkFor } = {}) {
+  el.replaceChildren();
+  if (!window.marked || !window.DOMPurify) return renderFallback(el, markdownPurpose);
+  const byTitle = new Map(splitSections(markdownPurpose || "").map((s) => [s.title, s]));
+  [["What it is", "purpose-what"], ["When to use it", "purpose-when"]].forEach(([title, cls]) => {
+    const section = byTitle.get(title);
+    if (section) el.append(buildBlock(cls, `${cls}-h`, title, section.body, linkFor, { level: 2 }));
   });
 }
