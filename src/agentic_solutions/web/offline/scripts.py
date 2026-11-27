@@ -283,7 +283,62 @@ def _with_sources(answer: str, sources: list[str]) -> str:
     return f"{answer}\n\nSources:\n" + "\n".join(sources) + f"\n\n{OFFLINE_NOTE}"
 
 
+_GRADED_BLOCK = re.compile(r"^\[(\d+)\] Book [IVX]+, \d+–\d+:\n(.*?)(?=\n\n\[\d+\] Book |\Z)", re.M | re.S)
+_BREAKFAST_REWRITES = ("meal food eating at morning", "Adam and Eve eat a meal")
+
+
+def _semantic_role(messages: list[BaseMessage]) -> str:
+    """"grade", "rewrite" or "agent": the grader and rewriter are known by their system prompt."""
+    from agentic_solutions.agents.semantic_memory_agent.graph import GRADER_PROMPT, REWRITER_PROMPT
+
+    first = messages[0] if messages else None
+    if first is None or first.type != "system":
+        return "agent"
+    head = _text_of(first).split("\n", 1)[0]
+    if head == GRADER_PROMPT.split("\n", 1)[0]:
+        return "grade"
+    if head == REWRITER_PROMPT.split("\n", 1)[0]:
+        return "rewrite"
+    return "agent"
+
+
+def _question_line(text: str) -> str:
+    match = re.match(r"Question: (.*)", text)
+    return match.group(1).strip() if match else ""
+
+
+def _scripted_grade(messages: list[BaseMessage]) -> AIMessage:
+    """A passage is relevant when it shares a content word with the question, and the question
+    names nothing the poem never mentions. With no content words to judge by, keep every passage."""
+    text = _text_of(messages[-1])
+    question = _question_line(text)
+    blocks = [(int(n), body) for n, body in _GRADED_BLOCK.findall(text)]
+    wanted = _content_words(question)
+    if any(not _in_poem(w) for w in wanted):
+        relevant: list[int] = []
+    elif not wanted:
+        relevant = [n for n, _ in blocks]
+    else:
+        relevant = [n for n, body in blocks if wanted & _content_words(body)]
+    return _call("grade_passages", relevant=relevant)
+
+
+def _scripted_rewrite(messages: list[BaseMessage]) -> AIMessage:
+    text = _text_of(messages[-1])
+    question = _question_line(text)
+    tried = {ln[2:].strip().lower() for ln in text.splitlines() if ln.startswith("- ")}
+    options = list(_BREAKFAST_REWRITES) if "breakfast" in question.lower() else []
+    options += [" ".join(sorted(_content_words(question))), question]
+    query = next((q for q in options if q and q.lower() not in tried), question)
+    return _call("rewrite_search", query=query)
+
+
 def _semantic_step(messages: list[BaseMessage]) -> str | AIMessage:
+    role = _semantic_role(messages)
+    if role == "grade":
+        return _scripted_grade(messages)
+    if role == "rewrite":
+        return _scripted_rewrite(messages)
     human, turn = _this_turn(messages)
     results = [(m.name, _text_of(m)) for m in turn if m.type == "tool"]
     query = _SEMANTIC_QUERIES.get(human.strip(), human.strip())
@@ -298,6 +353,8 @@ def _semantic_step(messages: list[BaseMessage]) -> str | AIMessage:
         data = json.loads(text)
     except ValueError:
         return f"The library could not answer: {text} {OFFLINE_NOTE}"
+    if isinstance(data, dict) and "passages" in data:
+        data = data["passages"]  # a graded search result: only the relevant passages
     if name == "read_passage":
         lines = data["text"].splitlines()
         return _with_sources("The poem ends with Adam and Eve leaving Eden together, hand in hand.",
