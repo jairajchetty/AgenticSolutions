@@ -556,9 +556,9 @@ h3, .purpose-body h2 {
 }
 .page-note { max-width: 75ch; margin: 6px 0 0; color: var(--muted-ink); }
 /* The owner's use-case description under the name (catalog.yaml use_case),
-   set like the "What it is" text below it. */
-.use-case { max-width: 75ch; margin-top: 16px; color: var(--ink); font-size: var(--step-1); }
-.use-case-text p { margin: 0; line-height: 1.5; }
+   set like the "When to use it" text below it. */
+.use-case { max-width: 75ch; margin-top: 16px; color: var(--ink); font-size: var(--step-0); }
+.use-case-text p { margin: 0; line-height: 1.6; }
 .use-case-text p + p { margin-top: 1em; }
 .purpose-body {
   display: grid;
@@ -1170,7 +1170,7 @@ h3, .purpose-body h2 {
   .pattern-view { gap: 20px; padding-top: 16px; }
   .purpose { padding: 20px 16px 22px; }
   .view-title { font-size: var(--step-3); }
-  .purpose-what .guide-text, .use-case { font-size: var(--step-0); }
+  .purpose-what .guide-text { font-size: var(--step-0); }
   .sheet-head, .guide-block { padding-left: 16px; padding-right: 16px; }
   .console-messages, .console-input { padding-left: 16px; padding-right: 16px; }
   .console-samples { padding: 0 16px; }
