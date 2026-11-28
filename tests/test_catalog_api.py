@@ -12,7 +12,7 @@ from agentic_solutions.web.offline.scripts import SCRIPTS
 from agentic_solutions.web.registry import PATTERNS
 from fakes import make_guard
 
-LIVE_ROUTES = {"collaboration/single-agent", "memory/session", "memory/semantic",
+LIVE_ROUTES = {"collaboration/single-agent", "memory/session", "memory/rag",
                "governance/guardrails", "governance/approval"}
 
 
@@ -80,8 +80,8 @@ def test_page_carries_the_use_case(client, monkeypatch):
 
     from agentic_solutions.web import catalog
 
-    page = client.get("/api/catalog/memory/semantic").json()
-    assert "use_case" in page and page["use_case"] == catalog.entry("memory/semantic").use_case
+    page = client.get("/api/catalog/memory/rag").json()
+    assert "use_case" in page and page["use_case"] == catalog.entry("memory/rag").use_case
 
 
 def test_crosslist_page_shows_its_targets_use_case(client):

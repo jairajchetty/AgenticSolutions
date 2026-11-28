@@ -1,4 +1,4 @@
-"""The Semantic demo on the offline (scripted) model, against the real text.
+"""The RAG demo on the offline (scripted) model, against the real text.
 
 The index uses the fake embedder (exact words), so these runs are fast and need
 no model download. Citations must exist in the text and contain what they quote.
@@ -9,7 +9,7 @@ import pytest
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command
 
-from agentic_solutions.agents.semantic_memory_agent.library import InProcessLibraryClient
+from agentic_solutions.agents.rag_agent.library import InProcessLibraryClient
 from agentic_solutions.mcp_servers.library.server import build_server
 from agentic_solutions.mcp_servers.library.text import TEXT_PATH, parse_text
 from agentic_solutions.web.offline.scripts import OFFLINE_NOTE
@@ -27,8 +27,8 @@ MAX_ANSWER_WORDS = 40
 @pytest.fixture
 async def run(library_index):
     async with InProcessLibraryClient(build_server(library_index)) as client:
-        spec = PATTERNS["semantic"]
-        graph = spec.build(BuildContext(offline_factory("semantic", 0), InMemorySaver(), make_guard(),
+        spec = PATTERNS["rag"]
+        graph = spec.build(BuildContext(offline_factory("rag", 0), InMemorySaver(), make_guard(),
                                         library=client))
 
         async def ask(question, with_nodes=False):
@@ -69,7 +69,7 @@ def check_citations(answer):
 
 
 async def test_each_sample_searches_then_answers_with_real_citations(run):
-    for sample in PATTERNS["semantic"].samples:
+    for sample in PATTERNS["rag"].samples:
         messages = await run(sample)
         assert tool_calls(messages)[0]["name"] == "search_book", sample
         check_citations(messages[-1].content)
@@ -92,7 +92,7 @@ async def test_uncovered_question_says_so(run):  # Review Focus 1
 
 async def test_answer_never_quotes_the_same_line_twice(run):
     # Overlapping passages can share a line; the answer should quote it once.
-    for sample in PATTERNS["semantic"].samples:
+    for sample in PATTERNS["rag"].samples:
         quotes = QUOTE.findall((await run(sample))[-1].content)
         assert len(quotes) == len(set(quotes)), (sample, quotes)
 
@@ -113,7 +113,7 @@ async def test_breakfast_shows_the_corrective_loop(run):
 
 
 async def test_samples_grade_relevant_first_time(run):
-    for sample in PATTERNS["semantic"].samples:
+    for sample in PATTERNS["rag"].samples:
         messages, nodes = await run(sample, with_nodes=True)
         assert "rewrite_query" not in nodes, (sample, nodes)
         assert nodes[nodes.index("grade") + 1] == "agent", (sample, nodes)
@@ -138,7 +138,7 @@ def graded_passages(messages):
 
 
 async def test_sources_never_cite_a_dropped_passage(run):
-    for sample in PATTERNS["semantic"].samples:
+    for sample in PATTERNS["rag"].samples:
         messages = await run(sample)
         _, sources = split_answer(messages[-1].content)
         kept = graded_passages(messages)
@@ -147,7 +147,7 @@ async def test_sources_never_cite_a_dropped_passage(run):
 
 
 async def test_agent_reads_graded_form(run):  # Review Focus 5
-    messages = await run(PATTERNS["semantic"].samples[0])
+    messages = await run(PATTERNS["rag"].samples[0])
     tool_texts = [m.content for m in messages if m.type == "tool"]
     assert any('"passages":' in t for t in tool_texts)
     check_citations(messages[-1].content)

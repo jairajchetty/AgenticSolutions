@@ -41,7 +41,7 @@ Flow:
 - Nuance and context in prose are lost when text is reduced to triples.
 
 ## Related patterns
-- The dividing line with [[memory/semantic]]: Knowledge Graph retrieves entities and the relations between them. Semantic (RAG) retrieves passages of text that resemble the query, and cannot follow a chain of relations unless one passage happens to state it all.
+- The dividing line with [[memory/rag]]: Knowledge Graph retrieves entities and the relations between them. RAG retrieves passages of text that resemble the query, and cannot follow a chain of relations unless one passage happens to state it all.
 - [[memory/episodic]] remembers what happened with a user; facts extracted from those episodes can feed a graph.
 - [[cognitive/react]] fits when graph queries are one tool the agent calls in a loop, deciding how far to explore.
 

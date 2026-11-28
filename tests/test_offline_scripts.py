@@ -28,8 +28,8 @@ STATE_KEYS = {"messages", "threat", "refusal"}
 
 def model(pattern_id):
     m = ScriptedChatModel(script=SCRIPTS[pattern_id], latency=(0, 0), tokens_per_second=0)
-    # The approval and semantic agents always call a tool-bound model, so their rules are kind "tools".
-    return m.bind_tools([]) if pattern_id in ("approval", "semantic") else m
+    # The approval and RAG agents always call a tool-bound model, so their rules are kind "tools".
+    return m.bind_tools([]) if pattern_id in ("approval", "rag") else m
 
 
 def try_this_inputs(spec):

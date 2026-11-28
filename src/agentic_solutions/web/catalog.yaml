@@ -109,14 +109,19 @@ categories:
         folder: episodic_memory_agent
         builds_on: [memory/session, execution/tool-use]
 
-      - id: semantic
-        name: Semantic (RAG)
+      - id: rag
+        name: Retrieval Augmented Generation (RAG)
         use_case: |
-          The agent answers questions about the book "Paradise Lost" by John Milton. It uses a vector database to find relevant sections, then summarizes them to answer the user's question.
+          The agent answers questions about the book "Paradise Lost" by John Milton. It uses a vector database to find relevant "chunks", then summarizes them to answer the user's question.
+          
+          The chunk size is 500 words for this demo, in reality chunk sizing is an important exercise that should optimise for efficiency and semantic cohesion. Retrieval is based on vector similarity.
+          
+          This book is somewhat challenging for a model to answer questions about, as it is written in 17th century English and contains many references to classical mythology. 
         description: Look up facts from a document store
+
         aliases: [RAG, retrieval, vector search, knowledge base]
-        demo: semantic
-        folder: semantic_memory_agent
+        demo: rag
+        folder: rag_agent
         builds_on: [memory/session, cognitive/react, execution/tool-use]
 
       - id: knowledge-graph
@@ -124,7 +129,7 @@ categories:
         description: Reason over entities and relationships
         aliases: [graph RAG, entity memory, ontology]
         folder: knowledge_graph_agent
-        builds_on: [memory/semantic, execution/tool-use]
+        builds_on: [memory/rag, execution/tool-use]
 
   - id: execution
     name: Execution

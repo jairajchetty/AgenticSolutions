@@ -60,7 +60,7 @@ from agentic_solutions.web.runner import run_events
 from agentic_solutions.web.serialize import to_jsonable
 from agentic_solutions.web.threads import ThreadRecord, ThreadStore, once
 from agentic_solutions.web.topology import graph_topology
-from agentic_solutions.agents.semantic_memory_agent.library import InProcessLibraryClient, UnavailableLibrary
+from agentic_solutions.agents.rag_agent.library import InProcessLibraryClient, UnavailableLibrary
 from agentic_solutions.mcp_servers.library.index import LibraryIndex
 from agentic_solutions.mcp_servers.library.server import build_server as build_library_server
 
@@ -164,7 +164,7 @@ async def _open_erp(settings: Settings, stack: AsyncExitStack, app: FastAPI,
 
 
 def _open_library_index(settings: Settings, stack: AsyncExitStack) -> LibraryIndex:
-    """The Semantic demo's index, built first if the text, chunking or models changed.
+    """The RAG demo's index, built first if the text, chunking or models changed.
 
     The first build downloads the embedding models and embeds the poem: about a minute.
     """
@@ -179,13 +179,13 @@ async def _open_library(settings: Settings, stack: AsyncExitStack, app: FastAPI)
     """The library MCP server, in-process over the in-memory transport, for the app's lifetime.
 
     If the library cannot open (no network for the first model download, or another
-    process holding LIBRARY_DIR), the Studio still starts: the Semantic demo's tools
+    process holding LIBRARY_DIR), the Studio still starts: the RAG demo's tools
     say the library is unavailable, and every other demo works as before.
     """
     try:
         index = _open_library_index(settings, stack)
     except Exception:
-        log.exception("The library could not open; the Semantic demo will report it as unavailable.")
+        log.exception("The library could not open; the RAG demo will report it as unavailable.")
         return UnavailableLibrary()
     app.state.library_index = index
     return await stack.enter_async_context(InProcessLibraryClient(build_library_server(index)))

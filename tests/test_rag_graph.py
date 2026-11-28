@@ -1,4 +1,4 @@
-"""The Semantic agent: ReAct over the library, with the first search of each question forced."""
+"""The RAG agent: ReAct over the library, with the first search of each question forced."""
 import pytest
 from langchain_core.messages import AIMessage
 from langgraph.checkpoint.memory import InMemorySaver
@@ -6,7 +6,7 @@ from langgraph.types import Command
 
 import json
 
-from agentic_solutions.agents.semantic_memory_agent.graph import (
+from agentic_solutions.agents.rag_agent.graph import (
     EDGE_LABELS, MAX_REWRITES, MAX_TOOL_ROUNDS, NO_TOOLS, build_graph)
 from agentic_solutions.web.topology import graph_topology
 
@@ -144,7 +144,7 @@ async def test_forced_search_ids_are_unique_per_question():  # review: repeated 
 
 
 def test_prompt_asks_for_a_short_answer_then_sources():
-    from agentic_solutions.agents.semantic_memory_agent.graph import SYSTEM_PROMPT
+    from agentic_solutions.agents.rag_agent.graph import SYSTEM_PROMPT
 
     assert "simply and concisely" in SYSTEM_PROMPT
     assert "Sources:" in SYSTEM_PROMPT

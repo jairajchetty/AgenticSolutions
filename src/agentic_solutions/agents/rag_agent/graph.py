@@ -1,10 +1,10 @@
-"""Semantic memory: a ReAct agent that answers from Paradise Lost, through the library MCP server.
+"""RAG (retrieval-augmented generation): a ReAct agent that answers from Paradise Lost, through the library MCP server.
 
     START -> ask --(question)--> agent --(search / read)--> tools -> grade --(relevant)--> agent
               ^  --(stop)--> END   \\--(answer)--> ask              \\--(none relevant)--> rewrite_query -> tools
               +--(empty)--+
 
-Semantic memory is facts looked up from a document store. Here the store is a
+RAG answers from facts looked up in a document store. Here the store is a
 Qdrant index of the poem (hybrid dense + BM25 search), behind two MCP tools:
 `search_book` and `read_passage`. The model is told to answer only from the
 passages the tools return, and to cite the Book and lines.
@@ -122,7 +122,7 @@ EDGE_LABELS = {
 }
 
 
-# The Studio draws Semantic from fixed positions, as it does Approval: in the
+# The Studio draws RAG from fixed positions, as it does Approval: in the
 # automatic layout the paired edges (ask <-> agent, agent <-> tools) overlap and
 # their labels and run counts collide. A bend bows an edge's curve, so the two
 # directions between a pair of nodes stay apart.
@@ -170,7 +170,7 @@ def _question(state: State) -> str:
 
 
 def build_graph(*, library: LibraryClient, checkpointer=None, llm_factory: LLMFactory | None = None):
-    """Wire the Semantic agent. `library` is the MCP client for the library server."""
+    """Wire the RAG agent. `library` is the MCP client for the library server."""
     tools = library_tools(library)
 
     def ask(state: State) -> Command[Literal["agent", "ask", "__end__"]]:

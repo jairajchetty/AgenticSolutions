@@ -16,7 +16,7 @@ def sse(resp):
 
 
 def test_catalog_and_detail(client):
-    assert [p["id"] for p in client.get("/api/patterns").json()] == ["qa", "chat_loop", "guardrail", "approval", "semantic"]
+    assert [p["id"] for p in client.get("/api/patterns").json()] == ["qa", "chat_loop", "guardrail", "approval", "rag"]
     d = client.get("/api/patterns/guardrail").json()
     assert d["mode"] == "chat" and "## What it is" in d["explanation_md"] and d["topology"]["nodes"]
     assert client.get("/api/patterns/nope").status_code == 404
@@ -227,5 +227,5 @@ def test_studio_starts_when_the_library_cannot_open(monkeypatch, tmp_path):  # r
     settings = Settings(session_secret="s", offline_latency_scale=0, checkpoint_db=":memory:",
                         erp_db=str(tmp_path / "erp.sqlite"), erp_approval_secret="x")
     with TestClient(create_app(settings, checkpointer=InMemorySaver(), guard=make_guard())) as c:
-        assert [p["id"] for p in c.get("/api/patterns").json()][-1] == "semantic"
+        assert [p["id"] for p in c.get("/api/patterns").json()][-1] == "rag"
         assert c.get("/api/patterns/guardrail").status_code == 200

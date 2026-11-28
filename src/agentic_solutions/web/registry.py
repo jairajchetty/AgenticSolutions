@@ -18,8 +18,8 @@ from agentic_solutions.agents.chat_agent import graph as chat_graph
 from agentic_solutions.agents.interrupt_chat_agent import graph as interrupt_graph
 from agentic_solutions.agents.qa_agent import graph as qa_graph
 from agentic_solutions.agents.secure_chat_agent import graph as secure_graph
-from agentic_solutions.agents.semantic_memory_agent import graph as semantic_graph
-from agentic_solutions.agents.semantic_memory_agent.library import LibraryClient
+from agentic_solutions.agents.rag_agent import graph as rag_graph
+from agentic_solutions.agents.rag_agent.library import LibraryClient
 from agentic_solutions.agents.secure_chat_agent.guard import ThreatGuard
 from agentic_solutions.common.llm import LLMFactory, make_model
 from agentic_solutions.web.offline.model import ScriptedChatModel
@@ -40,7 +40,7 @@ class BuildContext:
     erp: ErpClient | None = None
     issue_token: Callable[[dict], str] | None = None  # signs approval claims (the app holds the secret)
     auto_limit_zar: float = 5000
-    library: LibraryClient | None = None  # the Semantic demo's MCP client to the library server
+    library: LibraryClient | None = None  # the RAG demo's MCP client to the library server
 
 
 @dataclass(frozen=True)
@@ -107,10 +107,10 @@ def _build_approval(c: BuildContext):
         checkpointer=c.checkpointer, llm_factory=c.llm_factory)
 
 
-def _build_semantic(c: BuildContext):
+def _build_rag(c: BuildContext):
     if c.library is None:
-        raise RuntimeError("the semantic demo needs a library client")
-    return semantic_graph.build_graph(library=c.library, checkpointer=c.checkpointer, llm_factory=c.llm_factory)
+        raise RuntimeError("the RAG demo needs a library client")
+    return rag_graph.build_graph(library=c.library, checkpointer=c.checkpointer, llm_factory=c.llm_factory)
 
 
 def _spec(
@@ -163,12 +163,12 @@ PATTERNS: dict[str, PatternSpec] = {
               ("Order 12 laptops for the Cape Town office under CT-OPS", "Order 3 keyboards for CT-OPS",
                "Order 40 monitors for JHB-FIN"),
               edge_labels=approval_graph.edge_labels, layout=approval_graph.LAYOUT),
-        _spec("semantic", "Semantic (RAG): answers from a vector database",
+        _spec("rag", "RAG: answers from a vector database",
               "The agent searches Paradise Lost through an MCP tool and answers only from the passages it finds.",
-              "chat", _build_semantic, "semantic_memory_agent",
+              "chat", _build_rag, "rag_agent",
               ("What does Satan mean by 'Better to reign in Hell'?",
                "What does Mammon propose in the council in Hell?", "How does the poem end?"),
-              edge_labels=lambda limit: semantic_graph.EDGE_LABELS, layout=semantic_graph.LAYOUT),
+              edge_labels=lambda limit: rag_graph.EDGE_LABELS, layout=rag_graph.LAYOUT),
     )
 }
 

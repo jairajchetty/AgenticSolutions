@@ -1,7 +1,7 @@
 """The library MCP server, through the Studio's in-process client and model tools."""
 import pytest
 
-from agentic_solutions.agents.semantic_memory_agent.library import InProcessLibraryClient, library_tools
+from agentic_solutions.agents.rag_agent.library import InProcessLibraryClient, library_tools
 from agentic_solutions.mcp_servers.library.index import LibraryIndex
 from agentic_solutions.mcp_servers.library.server import build_server, normalise_book
 from fakes import FakeEmbedder, library_fixture_text

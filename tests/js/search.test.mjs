@@ -20,7 +20,7 @@ test("problem statements find their pattern (Review Focus 1)", () => {
   assert.deepEqual(hits("remember users"), ["memory/episodic"]);
   assert.ok(hits("human sign-off").includes("governance/approval"));
   assert.deepEqual(hits("HITL"), ["governance/approval"]);
-  assert.ok(hits("RAG").includes("memory/semantic"));
+  assert.ok(hits("RAG").includes("memory/rag"));
   // Reflection, plus the composites built on it (through its alias).
   assert.deepEqual(hits("evaluator-optimizer"),
     ["cognitive/reflection", "cognitive/search", "execution/autonomous", "governance/review"]);
@@ -80,7 +80,7 @@ test("a card matches on the names of the patterns it builds on", () => {
 
 test("a card matches on a building block's alias (Review Focus 5)", () => {
   const found = hits("function calling");
-  assert.ok(found.includes("governance/approval") && found.includes("memory/semantic"));
+  assert.ok(found.includes("governance/approval") && found.includes("memory/rag"));
   assert.ok(!found.includes("governance/review"));  // Review builds on Reflection and Single Agent only
 });
 
