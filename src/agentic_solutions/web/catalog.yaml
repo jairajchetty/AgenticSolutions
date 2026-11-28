@@ -112,11 +112,12 @@ categories:
       - id: rag
         name: Retrieval Augmented Generation (RAG)
         use_case: |
-          The agent answers questions about the book "Paradise Lost" by John Milton. It uses a vector database to find relevant "chunks", then summarizes them to answer the user's question.
+          The agent answers questions about the book "Paradise Lost" by John Milton. This book is somewhat challenging for a model to answer questions about, as it is written in 17th century English and contains many references to classical mythology.
+          It uses a vector database to find relevant "chunks", then summarizes them to answer the user's question.
           
           The chunks in this demo are passages of about 20 lines of verse, around 170 words on average; in reality, chunk sizing is an important exercise that should optimise for efficiency and semantic cohesion. Retrieval is hybrid: it combines vector similarity with keyword (BM25) search.
           
-          This book is somewhat challenging for a model to answer questions about, as it is written in 17th century English and contains many references to classical mythology. 
+           
         description: Look up facts from a document store
 
         aliases: [RAG, retrieval, vector search, knowledge base]
