@@ -200,19 +200,6 @@ export function renderGuide(el, markdown, { linkFor } = {}) {
   if (studio) el.append(buildStudioDisclosure(studio, linkFor));
 }
 
-// renderPurpose(el, purposeMarkdown, {linkFor}): the two purpose sections as
-// `.purpose-what` and `.purpose-when` blocks, same sanitise + link pipeline.
-// Their headings are h2: they sit directly under the page h1.
-export function renderPurpose(el, markdownPurpose, { linkFor } = {}) {
-  el.replaceChildren();
-  if (!window.marked || !window.DOMPurify) return renderFallback(el, markdownPurpose);
-  const byTitle = new Map(splitSections(markdownPurpose || "").map((s) => [s.title, s]));
-  [["What it is", "purpose-what"], ["When to use it", "purpose-when"]].forEach(([title, cls]) => {
-    const section = byTitle.get(title);
-    if (section) el.append(buildBlock(cls, `${cls}-h`, title, section.body, linkFor, { level: 2 }));
-  });
-}
-
 // The owner's use-case text (catalog.yaml `use_case`) as paragraphs: split on
 // blank lines, each paragraph's lines joined with a space. Shown as plain text.
 export function useCaseParagraphs(text) {
