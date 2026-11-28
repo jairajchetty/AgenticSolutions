@@ -25,7 +25,7 @@ class Settings:
     erp_auto_approve_limit_zar: float = 5000
     erp_db: str = "./data/erp.sqlite"
     erp_tenant_ttl_hours: float = 168
-    library_dir: str = "./data/library"  # the Semantic demo's Qdrant index and embedding models
+    library_dir: str = "./data/library"  # the RAG demo's Qdrant index and embedding models
     # Where the server listens (also read by ``python -m agentic_solutions.web``).
     host: str = "127.0.0.1"
     port: int = 8000

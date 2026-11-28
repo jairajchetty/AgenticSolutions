@@ -236,7 +236,7 @@ APPROVAL = Script(
     fallback=_approval_fallback,
 )
 
-# ------------------------------------------------------------------ semantic
+# ------------------------------------------------------------------ rag
 #
 # The library is real; only the model's choices are scripted. Each call reads
 # this turn's tool results: search first (a fixed query for each sample), then,
@@ -244,34 +244,34 @@ APPROVAL = Script(
 # line from a passage the tools returned and cites that passage's own Book and
 # lines, so its citations are real whatever the index ranked first.
 
-SEMANTIC_SAMPLES = (
+RAG_SAMPLES = (
     "What does Satan mean by 'Better to reign in Hell'?",
     "What does Mammon propose in the council in Hell?",
     "How does the poem end?",
 )
-_SEMANTIC_QUERIES = {
-    SEMANTIC_SAMPLES[0]: "Better to reign in Hell than serve in Heaven",
-    SEMANTIC_SAMPLES[1]: "Mammon speaks in the council",
-    SEMANTIC_SAMPLES[2]: "the end of the poem: Adam and Eve leave Eden",
+_RAG_QUERIES = {
+    RAG_SAMPLES[0]: "Better to reign in Hell than serve in Heaven",
+    RAG_SAMPLES[1]: "Mammon speaks in the council",
+    RAG_SAMPLES[2]: "the end of the poem: Adam and Eve leave Eden",
 }
 _END_OF_POEM = re.compile(r"\b(?:poem|book|story)\s+end\b|\bend\s+of\s+the\s+(?:poem|book|story)\b", re.IGNORECASE)
-_SEMANTIC_STOP = {"about", "after", "before", "could", "does", "doesn", "their", "there", "these", "those",
+_RAG_STOP = {"about", "after", "before", "could", "does", "doesn", "their", "there", "these", "those",
                   "what", "when", "where", "which", "while", "would", "paradise", "poem", "milton", "propose"}
 
 
 def _content_words(text: str) -> set[str]:
     """Words of 5+ letters that carry meaning, so "eat" or "the" never count as a match."""
-    return {w for w in re.findall(r"[a-z]+", text.lower()) if len(w) >= 5 and w not in _SEMANTIC_STOP}
+    return {w for w in re.findall(r"[a-z]+", text.lower()) if len(w) >= 5 and w not in _RAG_STOP}
 
 
 # The short answers the script gives for its samples; other questions get a plain lead.
-_SEMANTIC_ANSWERS = {
-    SEMANTIC_SAMPLES[0]: "Satan means he would rather rule in Hell than serve under God in Heaven. "
+_RAG_ANSWERS = {
+    RAG_SAMPLES[0]: "Satan means he would rather rule in Hell than serve under God in Heaven. "
                          "Ruling, even in Hell, is worth more to him than obedience.",
-    SEMANTIC_SAMPLES[1]: "Mammon argues against another war with Heaven. He proposes that the fallen angels "
+    RAG_SAMPLES[1]: "Mammon argues against another war with Heaven. He proposes that the fallen angels "
                          "stay in Hell and build their own kingdom there.",
 }
-_SEMANTIC_LEAD = "These passages come closest to your question."
+_RAG_LEAD = "These passages come closest to your question."
 
 
 def _source(p: dict, line: str) -> str:
@@ -287,9 +287,9 @@ _GRADED_BLOCK = re.compile(r"^\[(\d+)\] Book [IVX]+, \d+–\d+:\n(.*?)(?=\n\n\[\
 _BREAKFAST_REWRITES = ("meal food eating at morning", "Adam and Eve eat a meal")
 
 
-def _semantic_role(messages: list[BaseMessage]) -> str:
+def _rag_role(messages: list[BaseMessage]) -> str:
     """"grade", "rewrite" or "agent": the grader and rewriter are known by their system prompt."""
-    from agentic_solutions.agents.semantic_memory_agent.graph import GRADER_PROMPT, REWRITER_PROMPT
+    from agentic_solutions.agents.rag_agent.graph import GRADER_PROMPT, REWRITER_PROMPT
 
     first = messages[0] if messages else None
     if first is None or first.type != "system":
@@ -333,15 +333,15 @@ def _scripted_rewrite(messages: list[BaseMessage]) -> AIMessage:
     return _call("rewrite_search", query=query)
 
 
-def _semantic_step(messages: list[BaseMessage]) -> str | AIMessage:
-    role = _semantic_role(messages)
+def _rag_step(messages: list[BaseMessage]) -> str | AIMessage:
+    role = _rag_role(messages)
     if role == "grade":
         return _scripted_grade(messages)
     if role == "rewrite":
         return _scripted_rewrite(messages)
     human, turn = _this_turn(messages)
     results = [(m.name, _text_of(m)) for m in turn if m.type == "tool"]
-    query = _SEMANTIC_QUERIES.get(human.strip(), human.strip())
+    query = _RAG_QUERIES.get(human.strip(), human.strip())
     if not results:
         return _call("search_book", query=query, limit=3)
     end_of_poem = bool(_END_OF_POEM.search(human))
@@ -379,7 +379,7 @@ def _semantic_step(messages: list[BaseMessage]) -> str | AIMessage:
     if not sources:
         return (f"The passages I found don't cover this. I searched for \"{query}\" and none of the "
                 f"passages mentioned it. {OFFLINE_NOTE}")
-    return _with_sources(_SEMANTIC_ANSWERS.get(human.strip(), _SEMANTIC_LEAD), sources)
+    return _with_sources(_RAG_ANSWERS.get(human.strip(), _RAG_LEAD), sources)
 
 
 _BOOK_LENGTHS: dict[str, int] = {}
@@ -404,14 +404,14 @@ def _book_length(numeral: str) -> int:
     return _BOOK_LENGTHS[numeral]
 
 
-def _semantic_fallback(_messages: list[BaseMessage]) -> str:
-    listed = "; ".join(f'"{s}"' for s in SEMANTIC_SAMPLES)
+def _rag_fallback(_messages: list[BaseMessage]) -> str:
+    listed = "; ".join(f'"{s}"' for s in RAG_SAMPLES)
     return _fallback(f"I answer questions about Paradise Lost from passages I search for. Try: {listed}.")
 
 
-SEMANTIC = Script(
-    rules=(Rule(match=lambda _text: True, reply=_semantic_step, kind="tools"),),
-    fallback=_semantic_fallback,
+RAG = Script(
+    rules=(Rule(match=lambda _text: True, reply=_rag_step, kind="tools"),),
+    fallback=_rag_fallback,
 )
 
 SCRIPTS: dict[str, Script] = {
@@ -419,5 +419,5 @@ SCRIPTS: dict[str, Script] = {
     "chat_loop": CHAT_LOOP,
     "guardrail": GUARDRAIL,
     "approval": APPROVAL,
-    "semantic": SEMANTIC,
+    "rag": RAG,
 }

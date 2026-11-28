@@ -14,7 +14,7 @@ EXPECTED = {
     "collaboration/hierarchy": ('Hierarchy', 'Teams of agents led by supervisors', ('hierarchical teams', 'nested supervisors')),
     "memory/session": ('Session', 'Remember the current conversation', ('short-term memory', 'thread', 'conversation history', 'checkpointer')),
     "memory/episodic": ('Episodic', 'Recall past interactions with this user', ('long-term memory', 'user memory', 'experiences')),
-    "memory/semantic": ('Semantic (RAG)', 'Look up facts from a document store', ('RAG', 'retrieval', 'vector search', 'knowledge base')),
+    "memory/rag": ('Retrieval Augmented Generation (RAG)', 'Look up facts from a document store', ('RAG', 'retrieval', 'vector search', 'knowledge base')),
     "memory/knowledge-graph": ('Knowledge Graph', 'Reason over entities and relationships', ('graph RAG', 'entity memory', 'ontology')),
     "execution/tool-use": ('Tool Use', 'Call functions and APIs', ('function calling', 'tools', 'actions')),
     "execution/routing": ('Routing', 'Send each request to the right specialist', ('router', 'classifier', 'intent routing', 'dispatch')),
@@ -41,7 +41,7 @@ def test_twenty_one_patterns_in_spec_order():
     assert [p.route for k in c.CATALOG for p in k.patterns] == [
         "cognitive/react", "cognitive/reflection", "cognitive/planning", "cognitive/search",
         "collaboration/single-agent", "collaboration/supervisor", "collaboration/swarm", "collaboration/hierarchy",
-        "memory/session", "memory/episodic", "memory/semantic", "memory/knowledge-graph",
+        "memory/session", "memory/episodic", "memory/rag", "memory/knowledge-graph",
         "execution/tool-use", "execution/routing", "execution/workflow", "execution/event-driven", "execution/autonomous",
         "governance/guardrails", "governance/approval", "governance/audit", "governance/review"]
 
@@ -225,10 +225,10 @@ def test_empty_use_case_fails(tmp_path):
           "use_case")
 
 
-def test_semantic_is_named_rag_everywhere_it_is_written():
+def test_rag_name_matches_everywhere_it_is_written():
     from pathlib import Path
 
-    assert c.entry("memory/semantic").name == "Semantic (RAG)"
-    guide = Path("src/agentic_solutions/agents/semantic_memory_agent/explanation.md").read_text()
-    assert guide.startswith("# Semantic (RAG)\n")
-    assert "The Semantic (RAG) pattern" in guide
+    assert c.entry("memory/rag").name == "Retrieval Augmented Generation (RAG)"
+    guide = Path("src/agentic_solutions/agents/rag_agent/explanation.md").read_text()
+    assert guide.startswith("# Retrieval Augmented Generation (RAG)\n")
+    assert "The Retrieval Augmented Generation (RAG) pattern" in guide

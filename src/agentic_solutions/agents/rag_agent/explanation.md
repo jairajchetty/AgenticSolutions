@@ -1,7 +1,7 @@
-# Semantic (RAG)
+# Retrieval Augmented Generation (RAG)
 
 ## What it is
-The Semantic (RAG) pattern answers questions from a trusted set of documents, not from what the model learned in training.
+The Retrieval Augmented Generation (RAG) pattern answers questions from a trusted set of documents, not from what the model learned in training.
 
 The documents are prepared in advance: split into passages and stored in a searchable index. For each question, the agent searches the index, answers only from the passages it finds, and cites them. This is often called retrieval-augmented generation (RAG).
 
@@ -44,8 +44,8 @@ Flow:
 - Retrieved text is untrusted input to the model and can carry injected instructions.
 
 ## Related patterns
-- The dividing line with [[memory/knowledge-graph]]: Semantic (RAG) retrieves passages of text that resemble the question. Knowledge Graph retrieves entities and the relationships between them, so it can follow a chain of facts that no single passage states.
-- [[memory/episodic]] recalls one user's past interactions. Semantic (RAG) looks up knowledge shared by all users.
+- The dividing line with [[memory/knowledge-graph]]: RAG retrieves passages of text that resemble the question. Knowledge Graph retrieves entities and the relationships between them, so it can follow a chain of facts that no single passage states.
+- [[memory/episodic]] recalls one user's past interactions. RAG looks up knowledge shared by all users.
 - [[cognitive/reflection]] critiques a draft answer. The grading step here checks the evidence before any answer is drafted.
 - [[cognitive/react]] is the loop to use when search is one of several tools the agent calls as needed. This Studio's demo is built on it.
 

@@ -68,12 +68,12 @@ def test_approval_layout_places_every_node():
 
 
 def test_fixed_layouts():
-    # Approval and Semantic are hand-placed: their labelled edges collide in the automatic layout.
-    assert {pid for pid, s in PATTERNS.items() if s.layout} == {"approval", "semantic"}
+    # Approval and RAG are hand-placed: their labelled edges collide in the automatic layout.
+    assert {pid for pid, s in PATTERNS.items() if s.layout} == {"approval", "rag"}
 
 
-def test_semantic_layout_places_every_node_and_bends_both_pairs():
-    t = topology("semantic")
+def test_rag_layout_places_every_node_and_bends_both_pairs():
+    t = topology("rag")
     assert all(n["position"] for n in t["nodes"]), [n["id"] for n in t["nodes"] if not n["position"]]
     edges = by_edge(t)
     for pair in (("ask", "agent"), ("agent", "ask")):

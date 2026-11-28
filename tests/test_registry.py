@@ -32,7 +32,7 @@ EXPECTED_EDGES = {
         ("approval", "submit_po"), ("approval", "policy"), ("approval", "agent"),
         ("submit_po", "ask"), ("submit_po", "agent"),
     },
-    "semantic": {("__start__", "ask"), ("ask", "agent"), ("ask", "ask"), ("ask", "__end__"),
+    "rag": {("__start__", "ask"), ("ask", "agent"), ("ask", "ask"), ("ask", "__end__"),
                  ("agent", "tools"), ("agent", "ask"), ("tools", "grade"), ("grade", "agent"),
                  ("grade", "rewrite_query"), ("rewrite_query", "tools"), ("rewrite_query", "agent")},
 }
@@ -47,7 +47,7 @@ def ctx(pid):
 def test_catalog_order_and_modes():
     assert [(p.id, p.mode) for p in PATTERNS.values()] == [
         ("qa", "trigger"), ("chat_loop", "chat"), ("guardrail", "chat"), ("approval", "chat"),
-        ("semantic", "chat")]
+        ("rag", "chat")]
 
 def test_topology_matches_expected_edges_for_every_pattern():
     for pid, spec in PATTERNS.items():
@@ -61,7 +61,7 @@ def test_every_sample_hits_a_specific_rule():
             if pid == "guardrail" and "ignore previous instructions" in sample.lower():
                 continue  # refused by the guard; the LLM is never called
             m = ScriptedChatModel(script=script, latency=(0, 0), tokens_per_second=0)
-            if pid in ("approval", "semantic"):
+            if pid in ("approval", "rag"):
                 m = m.bind_tools([])  # these agents always call a tool-bound model
             m.invoke([("user", sample)])
             assert m.matched_rule is not None, (pid, sample)
@@ -106,7 +106,7 @@ def test_titles_match_spec():
         "Loop with conditional routing and memory",
         "Input guardrail (embedding threat screen)",
         "Approval: propose, approve, then act",
-        "Semantic (RAG): answers from a vector database",
+        "RAG: answers from a vector database",
     ]
 
 
