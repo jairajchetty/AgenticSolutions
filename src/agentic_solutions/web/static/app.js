@@ -11,7 +11,7 @@
 import {
   ApiError, createThread as postThread, getCatalog, getCatalogPage, getPattern, getSession, getState, streamRun,
 } from "./api.js";
-import { renderGuide, renderInlineCode, renderPurpose, splitPurpose, useCaseParagraphs } from "./guide.js";
+import { renderGuide, renderInlineCode, splitPurpose, useCaseParagraphs } from "./guide.js";
 import { renderHome } from "./catalog.js";
 import { ABOUT, bindContact } from "./about.js";
 import { buildHero, playHero } from "./hero.js";
@@ -203,18 +203,15 @@ function renderPageChrome(page) {
   document.title = `${listed} · ${page.category.name} · Agentic Patterns Studio`;
 }
 
-// The Guide, split once (Blueprint spec §9.4): "What it is" and "When to use
-// it" go in the purpose sheet under the h1, the rest in the sheet below the
-// bench. A guide missing either heading leaves the purpose sheet with just
-// the h1 and renders in full below (Review Focus 5).
+// The Guide (minus its title, which the purpose sheet shows) goes in the
+// Pattern guide sheet below the bench: "What it is" and "When to use it" first,
+// side by side, then the remaining sections. The purpose sheet holds only the
+// pattern's name and the owner's use case.
 function renderPageGuide(page) {
   const { purpose, rest } = splitPurpose(page.explanation_md);
-  const box = $("purpose-body");
-  if (purpose !== "") renderPurpose(box, purpose, { linkFor: nameFor });
-  else box.replaceChildren();
-  box.hidden = purpose === "";
-  renderGuide($("guide-body"), rest, { linkFor: nameFor });
-  $("guide-rest").hidden = rest.trim() === "";
+  const guide = purpose ? `${purpose}\n\n${rest}` : rest;
+  renderGuide($("guide-body"), guide, { linkFor: nameFor });
+  $("guide-rest").hidden = guide.trim() === "";
 }
 
 // A live demo: the M1 workbench, unchanged, for the registry pattern `demo`.
